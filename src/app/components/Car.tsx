@@ -9,12 +9,14 @@ import { MTLLoader, OBJLoader } from "three/examples/jsm/Addons.js";
 
 type CarProps = {
     key: number;
-    position?: [number, number, number];
-    scale?: number,
+    position: [number, number, number];
+    scale: number,
+    selected: boolean;
+    onSelect: () => void;
 };
 
 
-export default function Car({position = [0, 0, 0], scale = 1}: CarProps) {
+export default function Car(carProps: CarProps) {
     const groupRef = useRef<THREE.Group>(null);
     const materials = useLoader(MTLLoader, "/models/car-microcargo-red.mtl");
 
@@ -81,24 +83,26 @@ export default function Car({position = [0, 0, 0], scale = 1}: CarProps) {
             return;
         }
 
-        if (left) {
-            groupRef.current.rotation.y += 0.03;
-        }
-        if (right) {
-            groupRef.current.rotation.y -= 0.03;
-        }
+        if (carProps.selected) {
 
-        const forwardVector = new THREE.Vector3(0, 0, -1);
-        forwardVector.applyQuaternion(groupRef.current.quaternion);
+            if (left) {
+                groupRef.current.rotation.y += 0.03;
+            }
+            if (right) {
+                groupRef.current.rotation.y -= 0.03;
+            }
 
-        if (forward) {
-            groupRef.current.position.addScaledVector(forwardVector, -0.03);
-        }
-        if (backward) {
-            groupRef.current.position.addScaledVector(forwardVector, 0.03);
-        }
+            const forwardVector = new THREE.Vector3(0, 0, -1);
+            forwardVector.applyQuaternion(groupRef.current.quaternion);
 
-        
+            if (forward) {
+                groupRef.current.position.addScaledVector(forwardVector, -0.03);
+            }
+            if (backward) {
+                groupRef.current.position.addScaledVector(forwardVector, 0.03);
+            }
+
+        }
     });
 
     const cloneObj = obj.clone();
@@ -106,10 +110,17 @@ export default function Car({position = [0, 0, 0], scale = 1}: CarProps) {
     return (
         <group 
             ref={groupRef} 
-            position={position} 
-            scale={[scale, scale, scale]}
+            position={carProps.position} 
+            scale={[carProps.scale, carProps.scale, carProps.scale]}
+            onClick={carProps.onSelect}
         >
             <primitive object={cloneObj} />
+            { carProps.selected && (
+                <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]}>
+                    <ringGeometry args={[1.2, 1.5, 32]} />
+                    <meshBasicMaterial color="black" side={2} />
+                </mesh>
+            )}
         </group>
     );
 
