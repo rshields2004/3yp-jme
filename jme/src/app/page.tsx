@@ -1,9 +1,11 @@
-import ThreeCanvas from "./canvas";
+import Scene from "./components/Scene";
 
-export default function Home() {
+export default function Page() {
+
     return (
-        <main className="flex min-h-screen items-center justify-center">
-            <ThreeCanvas />
+        <main>
+            <Scene />
         </main>
-    )
-}
+    );
+
+};
