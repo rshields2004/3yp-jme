@@ -6,19 +6,11 @@ import * as THREE from "three";
 import { MTLLoader, OBJLoader } from "three/examples/jsm/Addons.js";
 import { SpotLightHelper } from "three";
 import { useHelper } from "@react-three/drei";
-
-type CarProps = {
-    key: number;
-    position: [number, number, number];
-    scale: number,
-    selected: boolean;
-    colour: string;
-    type: string;
-    onSelect: () => void;
-};
+import { CarProperties } from "../includes/types";
 
 
-export default function Car(carProps: CarProps) {
+
+export default function Car(carProps: CarProperties) {
     const groupRef = useRef<THREE.Group>(null);
     const spotLightRef = useRef<THREE.SpotLight>(null);
     useHelper(spotLightRef as React.RefObject<THREE.Object3D>, SpotLightHelper);

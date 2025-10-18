@@ -5,15 +5,18 @@ import { OrbitControls } from "@react-three/drei";
 import Car from "./Car";
 import { useState, useEffect } from "react";
 import { Bloom, EffectComposer } from "@react-three/postprocessing";
+import { useJunction } from "../context/JunctionContext";
+import { Line } from "@react-three/drei";
+import { Exit, Lane } from "../includes/types";
 
 export default function Scene() {
-    
-    const [cars, setCars] = useState<{ id: number; position: [number, number, number] }[]>([{ id: -1, position: [0, -1000, 0]}]);
+
+    const { junctionConfig } = useJunction();
+    const [cars, setCars] = useState<{ id: number; position: [number, number, number] }[]>([{ id: -1, position: [0, -1000, 0] }]);
     const [selectedCarId, setSelectedCarId] = useState(-1);
-    
-    
+
     const addCar = () => {
-        setCars( (previousArray) => [
+        setCars((previousArray) => [
             ...previousArray,
             {
                 id: Date.now(),
@@ -30,14 +33,15 @@ export default function Scene() {
         return () => window.removeEventListener("keydown", handleKeyDown);
     }, []);
 
+
     return (
         <div style={{ width: "100vw", height: "100vh" }}>
-            <Canvas 
-                camera={{ position: [5, 5, 5], fov: 60  }}
-                style={{ background: "#0a0a0a", width: "100vw", height: "100vh"}}
+            <Canvas
+                camera={{ position: [5, 5, 5], fov: 60 }}
+                style={{ background: "#0a0a0a", width: "100vw", height: "100vh" }}
             >
-                
-                <OrbitControls 
+
+                <OrbitControls
                     minPolarAngle={Math.PI / 6}
                     maxPolarAngle={Math.PI / 2}
                     minDistance={5}
@@ -61,18 +65,31 @@ export default function Scene() {
                 </EffectComposer>
 
 
-                { cars.map((car) => (
-                    <Car 
-                        key={car.id} 
-                        position={car.position} 
-                        scale={0.5} 
+                {junctionConfig.flatMap((exit, exitIdx) => {
+                    return exit.lanes.map((lane, laneIdx) => {
+                        return (
+                            <Line
+                                key={`${exitIdx}-${laneIdx}`}
+                                points={[lane.start, lane.end]} // or [0,0] placeholder
+                                color={lane.properties.colour}
+                                lineWidth={lane.properties.thickness * 10}
+                                dashed={lane.properties.pattern === "dashed"}
+                            />
+                        );
+                    });
+                })}
+
+                {cars.map((car) => (
+                    <Car
+                        key={car.id}
+                        position={car.position}
+                        scale={0.5}
                         selected={car.id === selectedCarId}
                         colour="red"
                         type="microcargo"
                         onSelect={() => setSelectedCarId(car.id)}
                     />
                 ))}
-
             </Canvas>
         </div>
     );
