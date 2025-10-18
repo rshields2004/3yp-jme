@@ -1,37 +1,46 @@
 "use client";
 
 import { useFrame, useLoader } from "@react-three/fiber";
-import { group } from "console";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { MTLLoader, OBJLoader } from "three/examples/jsm/Addons.js";
-
+import { SpotLightHelper } from "three";
+import { useHelper } from "@react-three/drei";
 
 type CarProps = {
     key: number;
     position: [number, number, number];
     scale: number,
     selected: boolean;
+    colour: string;
+    type: string;
     onSelect: () => void;
 };
 
 
 export default function Car(carProps: CarProps) {
     const groupRef = useRef<THREE.Group>(null);
-    const materials = useLoader(MTLLoader, "/models/car-microcargo-red.mtl");
+    const spotLightRef = useRef<THREE.SpotLight>(null);
+    useHelper(spotLightRef as React.RefObject<THREE.Object3D>, SpotLightHelper);
+
+    let carMaterial = "/models/car-" + carProps.type + "-" + carProps.colour + ".mtl";
+    let carObject = "/models/car-" + carProps.type + "-" + carProps.colour + ".obj";
+
+    const materials = useLoader(MTLLoader, carMaterial);
 
     const [forward, setForward] = useState(false);
     const [backward, setBackward] = useState(false);
     const [left, setLeft] = useState(false);
     const [right, setRight] = useState(false);
 
+    
 
     useEffect(() => {
         materials.preload();
     }, [materials]);
 
 
-    const obj = useLoader(OBJLoader, "/models/car-microcargo-red.obj", (loader) => {
+    const obj = useLoader(OBJLoader, carObject, (loader) => {
         const objloader = loader;
         objloader.setMaterials(materials);
     });
@@ -69,6 +78,11 @@ export default function Car(carProps: CarProps) {
             window.addEventListener("keydown", handleKeyDown);
             window.addEventListener("keyup", handleKeyUp);
 
+            if (spotLightRef.current && groupRef.current) {
+                spotLightRef.current.target = groupRef.current;
+            } 
+
+
         return () => {
             window.removeEventListener("keydown", handleKeyDown);
             window.removeEventListener("keyup", handleKeyUp);
@@ -105,7 +119,7 @@ export default function Car(carProps: CarProps) {
         }
     });
 
-    const cloneObj = obj.clone();
+    const carObj = useMemo(() => obj.clone(), [obj]);
 
     return (
         <group 
@@ -114,7 +128,17 @@ export default function Car(carProps: CarProps) {
             scale={[carProps.scale, carProps.scale, carProps.scale]}
             onClick={carProps.onSelect}
         >
-            <primitive object={cloneObj} />
+            <primitive object={carObj} />
+            <spotLight
+                ref={spotLightRef}
+                position={[0, 5, 0]}              
+                angle={Math.PI / 6}
+                penumbra={0.7}
+                intensity={5}
+                distance={20}
+                color="white"
+                castShadow
+            />
             { carProps.selected && (
                 <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]}>
                     <ringGeometry args={[1.2, 1.5, 32]} />
