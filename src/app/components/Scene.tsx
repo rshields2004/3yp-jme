@@ -73,7 +73,7 @@ export default function Scene() {
                             start={[lane.start[0], 0.02, lane.start[2]]}
                             end={[lane.end[0], 0.02, lane.end[2]]}
                             colour={lane.properties.colour}
-                            dashed={lane.properties.pattern === "solid"}
+                            dashed={lane.properties.pattern}
                         />
                     ))
                 )}
@@ -85,7 +85,7 @@ export default function Scene() {
                             start={[lane.start[0], 0.02, lane.start[2]]}
                             end={[lane.end[0], 0.02, lane.end[2]]}
                             colour={lane.properties.colour}
-                            dashed={lane.properties.pattern === "dashed"}
+                            dashed={lane.properties.pattern}
                         />
                     ))
                 )}

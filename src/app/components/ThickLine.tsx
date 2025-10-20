@@ -5,7 +5,7 @@ type ThickLineProps = {
     start: [number, number, number];
     end: [number, number, number];
     colour?: string;
-    dashed?: boolean;
+    dashed?: string;
     dashSize?: number;
     gapSize?: number;
 };
@@ -41,7 +41,7 @@ export const ThickLine: React.FC<ThickLineProps> = ({
         return g;
     }, [startVec, endVec, dashed]);
 
-    return dashed ? (
+    return (dashed === "dashed") ? (
         <line geometry={geometry}>
             <lineDashedMaterial color={colour} dashSize={dashSize} gapSize={gapSize} />
         </line>
