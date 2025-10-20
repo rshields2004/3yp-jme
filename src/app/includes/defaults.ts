@@ -28,6 +28,6 @@ export const defaultJunctionConfig: JunctionConfig = {
     exitConfig: Array.from({ length: 3 }, () => ({
         laneCount: 2,
         laneWidth: 1.5,
-        exitLength: 400,
+        exitLength: 40,
     })),
 };

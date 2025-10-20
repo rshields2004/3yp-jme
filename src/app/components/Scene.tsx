@@ -33,11 +33,27 @@ export default function Scene() {
     }, []);
 
 
+    const numRows = 5;
+    const numCols = 5;
+    const spacing = 1;
 
+    const offsetX = (numCols - 1) * spacing / 2;
+    const offsetZ = (numRows - 1) * spacing / 2;
+
+    const carsTest = Array.from({ length: numRows * numCols }, (_, i) => {
+        const row = Math.floor(i / numCols);
+        const col = i % numCols;
+
+        return {
+            id: i,
+            position: [col * spacing - offsetX, 0, row * spacing - offsetZ] as [number, number, number],
+        };
+    });
 
 
     return (
         <div style={{ width: "100vw", height: "100vh" }}>
+
             <Canvas
                 camera={{ position: [5, 5, 5], fov: 60 }}
                 style={{ background: "#0a0a0a", width: "100vw", height: "100vh" }}
@@ -49,7 +65,6 @@ export default function Scene() {
                     minDistance={5}
                     maxDistance={100}
                 />
-                <axesHelper args={[50]} />
 
                 <fog attach="fog" args={["#0a0a0a", 100, 150]} />
 
@@ -97,7 +112,7 @@ export default function Scene() {
                         position={[0, 0, 0]}
                     >
                         <meshStandardMaterial
-                            color={"grey"}       
+                            color={"grey"}
                             emissive={"black"}
                             emissiveIntensity={0.3}
                         />
@@ -105,6 +120,18 @@ export default function Scene() {
                 )}
 
                 {cars.map((car) => (
+                    <Car
+                        key={car.id}
+                        position={car.position}
+                        scale={0.5}
+                        selected={car.id === selectedCarId}
+                        colour="red"
+                        type="microcargo"
+                        onSelect={() => setSelectedCarId(car.id)}
+                    />
+                ))}
+
+                {carsTest.map((car) => (
                     <Car
                         key={car.id}
                         position={car.position}

@@ -25,7 +25,7 @@ export default function Car(carProps: CarProperties) {
     const [left, setLeft] = useState(false);
     const [right, setRight] = useState(false);
 
-    
+
 
     useEffect(() => {
         materials.preload();
@@ -38,41 +38,41 @@ export default function Car(carProps: CarProperties) {
     });
 
     useEffect(() => {
-            const handleKeyDown = (e: KeyboardEvent) => {
-                if (e.key === "w") {
-                    setForward(true);
-                } 
-                if (e.key === "s") {
-                    setBackward(true);
-                }
-                if (e.key === "a") {
-                    setLeft(true);
-                }
-                if (e.key === "d") {
-                    setRight(true);
-                }
-            };
-            const handleKeyUp = (e: KeyboardEvent) => {
-                if (e.key === "w") {
-                    setForward(false);
-                } 
-                if (e.key === "s") {
-                    setBackward(false);
-                }
-                if (e.key === "a") {
-                    setLeft(false);
-                }
-                if (e.key === "d") {
-                    setRight(false);
-                }
-            };
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === "w") {
+                setForward(true);
+            }
+            if (e.key === "s") {
+                setBackward(true);
+            }
+            if (e.key === "a") {
+                setLeft(true);
+            }
+            if (e.key === "d") {
+                setRight(true);
+            }
+        };
+        const handleKeyUp = (e: KeyboardEvent) => {
+            if (e.key === "w") {
+                setForward(false);
+            }
+            if (e.key === "s") {
+                setBackward(false);
+            }
+            if (e.key === "a") {
+                setLeft(false);
+            }
+            if (e.key === "d") {
+                setRight(false);
+            }
+        };
 
-            window.addEventListener("keydown", handleKeyDown);
-            window.addEventListener("keyup", handleKeyUp);
+        window.addEventListener("keydown", handleKeyDown);
+        window.addEventListener("keyup", handleKeyUp);
 
-            if (spotLightRef.current && groupRef.current) {
-                spotLightRef.current.target = groupRef.current;
-            } 
+        if (spotLightRef.current && groupRef.current) {
+            spotLightRef.current.target = groupRef.current;
+        }
 
 
         return () => {
@@ -114,24 +114,24 @@ export default function Car(carProps: CarProperties) {
     const carObj = useMemo(() => obj.clone(), [obj]);
 
     return (
-        <group 
-            ref={groupRef} 
-            position={carProps.position} 
+        <group
+            ref={groupRef}
+            position={carProps.position}
             scale={[carProps.scale, carProps.scale, carProps.scale]}
             onClick={carProps.onSelect}
         >
-            <primitive object={carObj} />
             <spotLight
                 ref={spotLightRef}
-                position={[0, 5, 0]}              
+                position={[0, 5, 0]}     
                 angle={Math.PI / 6}
-                penumbra={0.7}
+                penumbra={0.5}
                 intensity={5}
-                distance={20}
-                color="white"
+                distance={15}
                 castShadow
             />
-            { carProps.selected && (
+            <primitive object={carObj} />
+
+            {carProps.selected && (
                 <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]}>
                     <ringGeometry args={[1.2, 1.5, 32]} />
                     <meshBasicMaterial color="black" side={2} />
