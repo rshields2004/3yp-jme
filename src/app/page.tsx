@@ -6,11 +6,10 @@ export default function Page() {
 
     return (
         <JunctionProvider>
-      <div style={{ width: "100vw", height: "100vh", position: "relative" }}>
-        <Scene />
-        <ControlPanel />
-      </div>
-    </JunctionProvider>
+            <div style={{ width: "100vw", height: "100vh", position: "relative" }}>
+                <Scene />
+                <ControlPanel />
+            </div>
+        </JunctionProvider>
     );
-
 };

@@ -6,12 +6,11 @@ import Car from "./Car";
 import { useState, useEffect } from "react";
 import { Bloom, EffectComposer } from "@react-three/postprocessing";
 import { useJunction } from "../context/JunctionContext";
-import { Line } from "@react-three/drei";
-import { Exit, Lane } from "../includes/types";
+import { ThickLine } from "./ThickLine";
 
 export default function Scene() {
 
-    const { junctionConfig } = useJunction();
+    const { junctionStructure } = useJunction();
     const [cars, setCars] = useState<{ id: number; position: [number, number, number] }[]>([{ id: -1, position: [0, -1000, 0] }]);
     const [selectedCarId, setSelectedCarId] = useState(-1);
 
@@ -34,6 +33,9 @@ export default function Scene() {
     }, []);
 
 
+
+
+
     return (
         <div style={{ width: "100vw", height: "100vh" }}>
             <Canvas
@@ -45,13 +47,13 @@ export default function Scene() {
                     minPolarAngle={Math.PI / 6}
                     maxPolarAngle={Math.PI / 2}
                     minDistance={5}
-                    maxDistance={50}
+                    maxDistance={100}
                 />
                 <axesHelper args={[50]} />
 
-                <fog attach="fog" args={["#0a0a0a", 50, 150]} />
+                <fog attach="fog" args={["#0a0a0a", 100, 150]} />
 
-                <ambientLight intensity={0.1} />
+                <ambientLight intensity={1} />
                 <directionalLight position={[20, 50, 20]} intensity={0.6} />
                 <pointLight position={[0, 5, 0]} intensity={2} color="#ffaa00" />
 
@@ -64,20 +66,43 @@ export default function Scene() {
                     <Bloom intensity={1.5} luminanceThreshold={0.2} luminanceSmoothing={0.9} />
                 </EffectComposer>
 
+                {junctionStructure.exitInfo.flatMap((exit, exitIdx) =>
+                    exit.stopLines.map((lane, laneIdx) => (
+                        <ThickLine
+                            key={`${exitIdx}-${laneIdx}`}
+                            start={[lane.start[0], 0.02, lane.start[2]]}
+                            end={[lane.end[0], 0.02, lane.end[2]]}
+                            colour={lane.properties.colour}
+                            dashed={lane.properties.pattern === "solid"}
+                        />
+                    ))
+                )}
 
-                {junctionConfig.flatMap((exit, exitIdx) => {
-                    return exit.lanes.map((lane, laneIdx) => {
-                        return (
-                            <Line
-                                key={`${exitIdx}-${laneIdx}`}
-                                points={[lane.start, lane.end]} // or [0,0] placeholder
-                                color={lane.properties.colour}
-                                lineWidth={lane.properties.thickness * 10}
-                                dashed={lane.properties.pattern === "dashed"}
-                            />
-                        );
-                    });
-                })}
+                {junctionStructure.exitInfo.flatMap((exit, exitIdx) =>
+                    exit.laneLines.map((lane, laneIdx) => (
+                        <ThickLine
+                            key={`${exitIdx}-${laneIdx}`}
+                            start={[lane.start[0], 0.02, lane.start[2]]}
+                            end={[lane.end[0], 0.02, lane.end[2]]}
+                            colour={lane.properties.colour}
+                            dashed={lane.properties.pattern === "dashed"}
+                        />
+                    ))
+                )}
+
+                {junctionStructure.edgeTubes.flatMap((tubeGeom, tubeIdx) =>
+                    <mesh
+                        key={`${tubeIdx}`}
+                        geometry={tubeGeom}
+                        position={[0, 0, 0]}
+                    >
+                        <meshStandardMaterial
+                            color={"grey"}       
+                            emissive={"black"}
+                            emissiveIntensity={0.3}
+                        />
+                    </mesh>
+                )}
 
                 {cars.map((car) => (
                     <Car
