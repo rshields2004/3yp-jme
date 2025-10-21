@@ -1,15 +1,15 @@
-import ControlPanel from "./components/ControlPanel";
+import DebugPanel from "./components/DebugPanel";
 import Scene from "./components/Scene";
-import { JunctionProvider } from "./context/JunctionContext";
+import { JModellerProvider } from "./context/JModellerContext";
 
 export default function Page() {
 
     return (
-        <JunctionProvider>
+        <JModellerProvider>
             <div style={{ width: "100vw", height: "100vh", position: "relative" }}>
                 <Scene />
-                <ControlPanel />
+                <DebugPanel />
             </div>
-        </JunctionProvider>
+        </JModellerProvider>
     );
 };

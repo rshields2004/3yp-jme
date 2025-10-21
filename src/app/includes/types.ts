@@ -39,19 +39,28 @@ export type Exit = {
     stopLines: LaneLine[];
 };
 
-export type JunctionStructure = {
+export type IntersectionStructure = {
     exitInfo: Exit[];
     edgeTubes: THREE.TubeGeometry[];
 }
 
-export type JunctionConfig = {
+export type IntersectionConfig = {
     numExits: number;
+    origin: [number, number, number];
     exitConfig: ExitConfig[];
 };
 
-export type JunctionState = {
-    junctionStructure: JunctionStructure;
-    setJunctionStructure: (junctionStructure: JunctionStructure) => void;
-    junctionConfig: JunctionConfig,
-    setJunctionConfig: (junctionConfig: JunctionConfig) => void;
+export type Intersection = {
+    intersectionStructure: IntersectionStructure;
+    intersectionConfig: IntersectionConfig;
 };
+
+export type Junction = {
+    intersections: Intersection[];
+}
+
+export type JModellerState = {
+    junction: Junction;
+    setJunction: (junction: Junction) => void;
+};
+

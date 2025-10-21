@@ -7,6 +7,7 @@ import { MTLLoader, OBJLoader } from "three/examples/jsm/Addons.js";
 import { SpotLightHelper } from "three";
 import { useHelper } from "@react-three/drei";
 import { CarProperties } from "../includes/types";
+import { carCache } from "./Scene";
 
 
 
@@ -15,10 +16,11 @@ export default function Car(carProps: CarProperties) {
     const spotLightRef = useRef<THREE.SpotLight>(null);
     useHelper(spotLightRef as React.RefObject<THREE.Object3D>, SpotLightHelper);
 
-    let carMaterial = "/models/car-" + carProps.type + "-" + carProps.colour + ".mtl";
-    let carObject = "/models/car-" + carProps.type + "-" + carProps.colour + ".obj";
+    const key = `${carProps.type}-${carProps.colour}`;
+    const carObj = useMemo(() => carCache.get(key)?.clone(), [key]);
 
-    const materials = useLoader(MTLLoader, carMaterial);
+    if (!carObj) return null; // still loading
+
 
     const [forward, setForward] = useState(false);
     const [backward, setBackward] = useState(false);
@@ -26,16 +28,7 @@ export default function Car(carProps: CarProperties) {
     const [right, setRight] = useState(false);
 
 
-
-    useEffect(() => {
-        materials.preload();
-    }, [materials]);
-
-
-    const obj = useLoader(OBJLoader, carObject, (loader) => {
-        const objloader = loader;
-        objloader.setMaterials(materials);
-    });
+    
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -111,7 +104,6 @@ export default function Car(carProps: CarProperties) {
         }
     });
 
-    const carObj = useMemo(() => obj.clone(), [obj]);
 
     return (
         <group
@@ -120,7 +112,7 @@ export default function Car(carProps: CarProperties) {
             scale={[carProps.scale, carProps.scale, carProps.scale]}
             onClick={carProps.onSelect}
         >
-            <spotLight
+            {/* <spotLight
                 ref={spotLightRef}
                 position={[0, 5, 0]}     
                 angle={Math.PI / 6}
@@ -128,7 +120,7 @@ export default function Car(carProps: CarProperties) {
                 intensity={5}
                 distance={15}
                 castShadow
-            />
+            /> */}
             <primitive object={carObj} />
 
             {carProps.selected && (

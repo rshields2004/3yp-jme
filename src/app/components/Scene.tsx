@@ -5,14 +5,64 @@ import { OrbitControls } from "@react-three/drei";
 import Car from "./Car";
 import { useState, useEffect } from "react";
 import { Bloom, EffectComposer } from "@react-three/postprocessing";
-import { useJunction } from "../context/JunctionContext";
-import { ThickLine } from "./ThickLine";
+import { useJModellerContext } from "../context/JModellerContext";
+import { IntersectionComponent } from "./IntersectionComponent";
+import { carColours, carTypes } from "../includes/defaults";
+import * as THREE from "three";
+import { MTLLoader, OBJLoader } from "three/examples/jsm/Addons.js";
+
+
+export const carCache = new Map<string, THREE.Group>();
+
+export async function preloadCars() {
+  const loadPromises: Promise<void>[] = [];
+
+  for (const type of carTypes) {
+    for (const colour of carColours) {
+      const key = `${type}-${colour}`;
+      if (!carCache.has(key)) {
+        loadPromises.push((async () => {
+          try {
+            const materials = await new Promise<MTLLoader.MaterialCreator>((resolve, reject) => {
+              new MTLLoader().load(`/models/car-${type}-${colour}.mtl`, resolve, undefined, reject);
+            });
+            materials.preload();
+
+            const obj = await new Promise<THREE.Group>((resolve, reject) => {
+              new OBJLoader().setMaterials(materials).load(`/models/car-${type}-${colour}.obj`, resolve, undefined, reject);
+            });
+
+            carCache.set(key, obj);
+            console.log(`Successfully loaded car: ${key}`);
+          } catch (err) {
+            console.error(`Failed to load car ${key}`, err);
+          }
+        })());
+      }
+    }
+  }
+
+  await Promise.all(loadPromises);
+}
+
 
 export default function Scene() {
 
-    const { junctionStructure } = useJunction();
+    const { junction } = useJModellerContext();
     const [cars, setCars] = useState<{ id: number; position: [number, number, number] }[]>([{ id: -1, position: [0, -1000, 0] }]);
     const [selectedCarId, setSelectedCarId] = useState(-1);
+
+    const [carsLoaded, setCarsLoaded] = useState<boolean>(false);
+
+    useEffect(() => {
+    const loadAllCars = async () => {
+        await preloadCars(); // waits for all cars to finish loading
+        setCarsLoaded(true); // now safe to render all <Car> components
+    };
+    loadAllCars();
+}, []);
+
+    
 
     const addCar = () => {
         setCars((previousArray) => [
@@ -33,23 +83,23 @@ export default function Scene() {
     }, []);
 
 
-    const numRows = 5;
-    const numCols = 5;
-    const spacing = 1;
+    const spacing = 1.2;
 
-    const offsetX = (numCols - 1) * spacing / 2;
-    const offsetZ = (numRows - 1) * spacing / 2;
+    const offsetX = (carColours.length - 1) * spacing / 2;
+    const offsetZ = (carTypes.length - 1) * spacing / 2;
 
-    const carsTest = Array.from({ length: numRows * numCols }, (_, i) => {
-        const row = Math.floor(i / numCols);
-        const col = i % numCols;
-
-        return {
-            id: i,
-            position: [col * spacing - offsetX, 0, row * spacing - offsetZ] as [number, number, number],
-        };
-    });
-
+    const carsTest = carTypes.flatMap((type, typeIndex) =>
+        carColours.map((colour, colourIndex) => {
+            const x = colourIndex * spacing - offsetX; // center on x-axis
+            const z = typeIndex * spacing - offsetZ;   // center on z-axis
+            return {
+                id: typeIndex * carColours.length + colourIndex,
+                type,
+                colour,
+                position: [x, 0, z] as [number, number, number],
+            };
+        })
+    );
 
     return (
         <div style={{ width: "100vw", height: "100vh" }}>
@@ -66,6 +116,8 @@ export default function Scene() {
                     maxDistance={100}
                 />
 
+                <axesHelper args={[50]} />
+
                 <fog attach="fog" args={["#0a0a0a", 100, 150]} />
 
                 <ambientLight intensity={1} />
@@ -81,67 +133,26 @@ export default function Scene() {
                     <Bloom intensity={1.5} luminanceThreshold={0.2} luminanceSmoothing={0.9} />
                 </EffectComposer>
 
-                {junctionStructure.exitInfo.flatMap((exit, exitIdx) =>
-                    exit.stopLines.map((lane, laneIdx) => (
-                        <ThickLine
-                            key={`${exitIdx}-${laneIdx}`}
-                            start={[lane.start[0], 0.02, lane.start[2]]}
-                            end={[lane.end[0], 0.02, lane.end[2]]}
-                            colour={lane.properties.colour}
-                            dashed={lane.properties.pattern}
+                {
+                    junction.intersections.map((intersection, intersectionIndex) => (
+                        <IntersectionComponent
+                            key={intersectionIndex}
+                            intersection={intersection}
                         />
                     ))
-                )}
 
-                {junctionStructure.exitInfo.flatMap((exit, exitIdx) =>
-                    exit.laneLines.map((lane, laneIdx) => (
-                        <ThickLine
-                            key={`${exitIdx}-${laneIdx}`}
-                            start={[lane.start[0], 0.02, lane.start[2]]}
-                            end={[lane.end[0], 0.02, lane.end[2]]}
-                            colour={lane.properties.colour}
-                            dashed={lane.properties.pattern}
-                        />
-                    ))
-                )}
-
-                {junctionStructure.edgeTubes.flatMap((tubeGeom, tubeIdx) =>
-                    <mesh
-                        key={`${tubeIdx}`}
-                        geometry={tubeGeom}
-                        position={[0, 0, 0]}
-                    >
-                        <meshStandardMaterial
-                            color={"grey"}
-                            emissive={"black"}
-                            emissiveIntensity={0.3}
-                        />
-                    </mesh>
-                )}
-
-                {cars.map((car) => (
-                    <Car
-                        key={car.id}
-                        position={car.position}
-                        scale={0.5}
-                        selected={car.id === selectedCarId}
-                        colour="red"
-                        type="microcargo"
-                        onSelect={() => setSelectedCarId(car.id)}
-                    />
-                ))}
-
-                {carsTest.map((car) => (
-                    <Car
-                        key={car.id}
-                        position={car.position}
-                        scale={0.5}
-                        selected={car.id === selectedCarId}
-                        colour="red"
-                        type="microcargo"
-                        onSelect={() => setSelectedCarId(car.id)}
-                    />
-                ))}
+                }
+                {carsLoaded && carsTest.map((car) => (
+    <Car
+        key={car.id}
+        position={car.position}
+        scale={0.5}
+        selected={car.id === selectedCarId}
+        colour={car.colour}
+        type={car.type}
+        onSelect={() => setSelectedCarId(car.id)}
+    />
+))}
             </Canvas>
         </div>
     );

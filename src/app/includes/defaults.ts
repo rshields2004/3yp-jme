@@ -1,4 +1,5 @@
-import { LaneLine, LaneLineProperties, Exit, JunctionConfig, JunctionStructure } from "./types";
+import { LaneLine, LaneLineProperties, Exit, Intersection, IntersectionStructure, IntersectionConfig } from "./types";
+import * as THREE from "three";
 
 export const defaultLaneProperties: LaneLineProperties = {
     pattern: "solid",
@@ -18,16 +19,30 @@ export const defaultExit: Exit = {
     stopLines: [],
 }
 
-export const defaultJunctionStructure: JunctionStructure = {
+export const defaultIntersectionStructure: IntersectionStructure = {
     exitInfo: Array.from({ length: 4 }, () => (defaultExit)),
     edgeTubes: [],
 };
 
-export const defaultJunctionConfig: JunctionConfig = {
+export const defaultIntersectionConfig: IntersectionConfig = {
     numExits: 3,
+    origin: [0, 10, 0],
     exitConfig: Array.from({ length: 3 }, () => ({
         laneCount: 2,
         laneWidth: 1.5,
         exitLength: 40,
     })),
 };
+
+export const defaultIntersection: Intersection = {
+    intersectionStructure: defaultIntersectionStructure,
+    intersectionConfig: defaultIntersectionConfig,
+};
+
+export const defaultJunction = {
+    intersections: [defaultIntersection],
+};
+
+export const carTypes = ["coupe", "hatchback", "micro", "microcargo", "microtransport", "minibus", "mpv", "normal", "pickup", "pickup-small", "station", "van"];
+export const carColours = ["blue", "citrus", "green", "orange", "red", "silver", "violet"];
+

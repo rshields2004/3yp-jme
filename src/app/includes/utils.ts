@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { Exit, ExitConfig, LaneLine } from "./types";
+import { Exit, LaneLine } from "./types";
 import { defaultLaneProperties } from "./defaults";
 
 
@@ -8,8 +8,8 @@ const getDirection = (angle: number) => {
 }
 
 
-export function generateStopLines(laneCount: number, laneWidth: number, stopLineOffset: number, angle: number): LaneLine[] {
-    const origin = new THREE.Vector3(0, 0, 0);
+export function generateStopLines(laneCount: number, laneWidth: number, stopLineOffset: number, angle: number, originRaw: [number, number, number]): LaneLine[] {
+    const origin = new THREE.Vector3().fromArray(originRaw);
     const direction = getDirection(angle);
     const perp = new THREE.Vector3(-direction.z, 0, direction.x);
 
@@ -22,23 +22,19 @@ export function generateStopLines(laneCount: number, laneWidth: number, stopLine
 
     return [
         {
-            start: [leftPoint.x, leftPoint.y, leftPoint.z],
-            end: [rightPoint.x, rightPoint.y, rightPoint.z],
-            properties: defaultLaneProperties
-        },
-        {
-            start: [leftPoint.x, leftPoint.y, leftPoint.z],
-            end: [rightPoint.x, rightPoint.y, rightPoint.z],
+            start: [leftPoint.x, origin.y, leftPoint.z],
+            end: [rightPoint.x, origin.y, rightPoint.z],
             properties: defaultLaneProperties
         },
     ];
 }
 
 
-export function generateLaneLines(stopLines: LaneLine[], length: number, numLanes: number): LaneLine[] {
+export function generateLaneLines(stopLines: LaneLine[], length: number, numLanes: number, originRaw: [number, number, number]): LaneLine[] {
 
     const laneLines: LaneLine[] = [];
     stopLines.forEach((stopLine) => {
+        const origin = new THREE.Vector3(...originRaw);
         const startVec = new THREE.Vector3(...stopLine.start);
         const endVec = new THREE.Vector3(...stopLine.end);
 
@@ -58,11 +54,11 @@ export function generateLaneLines(stopLines: LaneLine[], length: number, numLane
             const fractionAlong = (i / numLanes); // 0 -> left edge, 1 -> right edge
             const laneStart = leftEdge.clone().add(stopVec.clone().multiplyScalar(fractionAlong));
             const laneEnd = laneStart.clone().add(laneDir.clone().multiplyScalar(-length));
-
+            console.log(origin.y);
             laneLines.push({
-                start: [laneStart.x, laneStart.y, laneStart.z],
-                end: [laneEnd.x, laneEnd.y, laneEnd.z],
-                properties: {...defaultLaneProperties, pattern: (i == 0 || i == numLanes) ? "solid" : "dashed" },
+                start: [laneStart.x, origin.y, laneStart.z],
+                end: [laneEnd.x, origin.y, laneEnd.z],
+                properties: { ...defaultLaneProperties, pattern: (i == 0 || i == numLanes) ? "solid" : "dashed" },
             });
         }
     });
@@ -125,5 +121,3 @@ export function generateEdgeTubes(
 
     return tubeGeometries;
 }
-
-
