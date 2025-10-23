@@ -11,10 +11,6 @@ export type CarProperties = {
     onSelect: () => void;
 };
 
-export type LanePattern = "solid" | "dashed";
-
-export type LaneColour = "white" | "green" | "red";
-
 export type LaneLineProperties = {
     pattern: "solid" | "dashed";
     colour: "white" | "green" | "red";
@@ -23,8 +19,7 @@ export type LaneLineProperties = {
 };
 
 export type LaneLine = {
-    start: [number, number, number];
-    end: [number, number, number];
+    line: THREE.Line3;
     properties: LaneLineProperties;
 };
 
@@ -46,7 +41,7 @@ export type IntersectionStructure = {
 
 export type IntersectionConfig = {
     numExits: number;
-    origin: [number, number, number];
+    origin: THREE.Vector3;
     exitConfig: ExitConfig[];
 };
 

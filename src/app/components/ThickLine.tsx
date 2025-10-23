@@ -2,8 +2,7 @@ import * as THREE from "three";
 import { useMemo } from "react";
 
 type ThickLineProps = {
-    start: [number, number, number];
-    end: [number, number, number];
+    line: THREE.Line3
     colour?: string;
     dashed?: string;
     dashSize?: number;
@@ -11,15 +10,15 @@ type ThickLineProps = {
 };
 
 export const ThickLine: React.FC<ThickLineProps> = ({
-    start,
-    end,
+    line,
     colour = "white",
     dashed = false,
     dashSize = 0.2,
     gapSize = 0.1,
 }) => {
-    const startVec = useMemo(() => new THREE.Vector3(...start), [start]);
-    const endVec = useMemo(() => new THREE.Vector3(...end), [end]);
+    const startVec = useMemo(() => line.start.clone(), [line]);
+    const endVec = useMemo(() => line.end.clone(), [line]);
+
 
     const geometry = useMemo(() => {
         const g = new THREE.BufferGeometry().setFromPoints([startVec, endVec]);

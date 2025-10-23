@@ -38,7 +38,7 @@ export default function DebugPanel() {
                         <h4>Config</h4>
                         <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
                             <span>Exits: {intersectionConfig.numExits}</span>
-                            <span>Origin: [{intersectionConfig.origin.join(", ")}]</span>
+                            <span>Origin: {intersectionConfig.origin.toArray()}</span>
                         </div>
 
                         {intersectionConfig.exitConfig.map((exitConfig, exitConfigIndex) => (
@@ -72,8 +72,8 @@ export default function DebugPanel() {
                                                 style={{ display: "flex", gap: "1rem", flexWrap: "wrap", paddingLeft: "1rem" }}
                                             >
                                                 <strong>{`StopLine #${laneIndex}`}</strong>
-                                                <span>Start: [{lane.start.map(n => n.toFixed(2)).join(", ")}]</span>
-                                                <span>End: [{lane.end.map(n => n.toFixed(2)).join(", ")}]</span>
+                                                <span>Start: {lane.line.start.toArray()}</span>
+                                                <span>End: {lane.line.end.toArray()}</span>
                                                 <span>Pattern: {lane.properties.pattern}</span>
                                                 <span>Colour: {lane.properties.colour}</span>
                                                 <span>Thickness: {lane.properties.thickness}</span>
@@ -88,8 +88,8 @@ export default function DebugPanel() {
                                                 style={{ display: "flex", gap: "1rem", flexWrap: "wrap", paddingLeft: "1rem" }}
                                             >
                                                 <strong>{`LaneLine #${laneIndex}`}</strong>
-                                                <span>Start: [{lane.start.map(n => n.toFixed(2)).join(", ")}]</span>
-                                                <span>End: [{lane.end.map(n => n.toFixed(2)).join(", ")}]</span>
+                                                <span>Start: {lane.line.start.toArray()}</span>
+                                                <span>End: {lane.line.end.toArray()}</span>
                                                 <span>Pattern: {lane.properties.pattern}</span>
                                                 <span>Colour: {lane.properties.colour}</span>
                                                 <span>Thickness: {lane.properties.thickness}</span>

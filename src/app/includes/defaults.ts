@@ -9,8 +9,7 @@ export const defaultLaneProperties: LaneLineProperties = {
 };
 
 export const defaultLane: LaneLine = {
-    start: [0, 0, 0],
-    end: [0, 0, 0],
+    line: new THREE.Line3(),
     properties: { ...defaultLaneProperties },
 };
 
@@ -26,7 +25,7 @@ export const defaultIntersectionStructure: IntersectionStructure = {
 
 export const defaultIntersectionConfig: IntersectionConfig = {
     numExits: 3,
-    origin: [0, 10, 0],
+    origin: new THREE.Vector3(0, 10, 0),
     exitConfig: Array.from({ length: 3 }, () => ({
         laneCount: 2,
         laneWidth: 1.5,
