@@ -24,9 +24,9 @@ export const defaultIntersectionStructure: IntersectionStructure = {
 };
 
 export const defaultIntersectionConfig: IntersectionConfig = {
-    numExits: 3,
+    numExits: 4,
     origin: new THREE.Vector3(0, 10, 0),
-    exitConfig: Array.from({ length: 3 }, () => ({
+    exitConfig: Array.from({ length: 4 }, () => ({
         laneCount: 2,
         laneWidth: 1.5,
         exitLength: 40,

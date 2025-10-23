@@ -5,8 +5,59 @@ import { Exit, LaneLine } from "../includes/types";
 import * as THREE from "three";
 
 export default function DebugPanel() {
-    const { junction } = useJModellerContext();
+    const { junction, setJunction } = useJModellerContext();
 
+
+    const handleExitNumChange = (intersectionIndex: number, newExitNum: number) => {
+        setJunction((prevJunction) => ({
+            ...prevJunction,
+            intersections: prevJunction.intersections.map((intersection, index) => {
+                if (index === intersectionIndex) {
+                    return {
+                        ...intersection,
+                        intersectionConfig: {
+                            ...intersection.intersectionConfig,
+                            numExits: newExitNum,
+                            exitConfig: Array.from({ length: newExitNum }, () => ({
+                                laneCount: 2,
+                                laneWidth: 1.5,
+                                exitLength: 40,
+                            })),
+                        },
+                    };
+                }
+                return intersection;
+            }),
+        }));
+    };
+
+    const handleLaneNumChange = (intersectionIndex: number, exitIndex: number, newLaneNum: number) => {
+        setJunction((prevJunction) => ({
+            ...prevJunction,
+            intersections: prevJunction.intersections.map((intersection, i) => {
+                if (i === intersectionIndex) {
+                    return {
+                        ...intersection,
+                        intersectionConfig: {
+                            ...intersection.intersectionConfig,
+                            exitConfig: intersection.intersectionConfig.exitConfig.map(
+                                (exit, j) => {
+                                    if (j === exitIndex) {
+                                        return {
+                                            ...exit,
+                                            laneCount: newLaneNum, // update the lane count
+                                        };
+                                    }
+                                    return exit;
+                                }
+                            ),
+                        },
+                    };
+                }
+                return intersection;
+            }),
+        }));
+    };
 
     return (
         <div
@@ -36,80 +87,29 @@ export default function DebugPanel() {
 
                         {/* Intersection Config */}
                         <h4>Config</h4>
-                        <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-                            <span>Exits: {intersectionConfig.numExits}</span>
-                            <span>Origin: {intersectionConfig.origin.toArray()}</span>
-                        </div>
+                        <span># Exit: </span><input
+                            type="number"
+                            value={junction.intersections[intersectionIndex].intersectionConfig.numExits}
+                            onChange={(e) => handleExitNumChange(intersectionIndex, Number(e.target.value))}
+                        />
 
-                        {intersectionConfig.exitConfig.map((exitConfig, exitConfigIndex) => (
-                            <div
-                                key={`intersection-${intersectionIndex}-exitConfig-${exitConfigIndex}`}
-                                style={{ paddingLeft: "1rem", display: "flex", gap: "1rem", flexWrap: "wrap" }}
-                            >
-                                <strong>{`ExitConfig #${exitConfigIndex}`}</strong>
-                                <span>Lanes: {exitConfig.laneCount}</span>
-                                <span>Width: {exitConfig.laneWidth}</span>
-                                <span>Length: {exitConfig.exitLength}</span>
-                            </div>
-                        ))}
 
                         {/* Intersection Structure */}
                         {intersectionStructure && (
                             <>
                                 <h4>Structure</h4>
 
-                                {intersectionStructure.exitInfo.map((exit: Exit, exitIndex: number) => (
-                                    <div
-                                        key={`intersection-${intersectionIndex}-exit-${exitIndex}`}
-                                        style={{ paddingLeft: "1rem", marginBottom: "0.5rem" }}
-                                    >
-                                        <h5>{`Exit #${exitIndex}`}</h5>
-
-                                        {/* Stop Lines */}
-                                        {exit.stopLines.map((lane: LaneLine, laneIndex: number) => (
-                                            <div
-                                                key={`intersection-${intersectionIndex}-exit-${exitIndex}-stop-${laneIndex}`}
-                                                style={{ display: "flex", gap: "1rem", flexWrap: "wrap", paddingLeft: "1rem" }}
-                                            >
-                                                <strong>{`StopLine #${laneIndex}`}</strong>
-                                                <span>Start: {lane.line.start.toArray()}</span>
-                                                <span>End: {lane.line.end.toArray()}</span>
-                                                <span>Pattern: {lane.properties.pattern}</span>
-                                                <span>Colour: {lane.properties.colour}</span>
-                                                <span>Thickness: {lane.properties.thickness}</span>
-                                                <span>Glow: {lane.properties.glow}</span>
-                                            </div>
-                                        ))}
-
-                                        {/* Lane Lines */}
-                                        {exit.laneLines.map((lane: LaneLine, laneIndex: number) => (
-                                            <div
-                                                key={`intersection-${intersectionIndex}-exit-${exitIndex}-lane-${laneIndex}`}
-                                                style={{ display: "flex", gap: "1rem", flexWrap: "wrap", paddingLeft: "1rem" }}
-                                            >
-                                                <strong>{`LaneLine #${laneIndex}`}</strong>
-                                                <span>Start: {lane.line.start.toArray()}</span>
-                                                <span>End: {lane.line.end.toArray()}</span>
-                                                <span>Pattern: {lane.properties.pattern}</span>
-                                                <span>Colour: {lane.properties.colour}</span>
-                                                <span>Thickness: {lane.properties.thickness}</span>
-                                                <span>Glow: {lane.properties.glow}</span>
-                                            </div>
-                                        ))}
+                                {intersectionStructure.exitInfo.map((_: Exit, exitIndex: number) => (
+                                    <div key={`intersection-${intersectionIndex}-exit-${exitIndex}`}>
+                                        <h3>Exit {exitIndex}</h3>
+                                        <span># Lanes: </span>
+                                        <input
+                                            type="number"
+                                            value={junction.intersections[intersectionIndex].intersectionConfig.exitConfig[exitIndex].laneCount}
+                                            onChange={(e) => handleLaneNumChange(intersectionIndex, exitIndex, Number(e.target.value))}
+                                        />
                                     </div>
                                 ))}
-
-                                {/* Edge Tubes */}
-                                {/* {intersectionStructure.edgeTubes.map((tube: THREE.TubeGeometry, tubeIndex: number) => (
-                                    <div
-                                        key={`intersection-${intersectionIndex}-tube-${tubeIndex}`}
-                                        style={{ paddingLeft: "1rem", display: "flex", gap: "1rem", flexWrap: "wrap" }}
-                                    >
-                                        <strong>{`EdgeTube #${tubeIndex}`}</strong>
-                                        <span>Type: THREE.TubeGeometry</span>
-                                        <span>Parameters: {JSON.stringify(tube.parameters)}</span>
-                                    </div>
-                                ))} */}
                             </>
                         )}
                     </div>

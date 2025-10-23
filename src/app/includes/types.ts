@@ -56,6 +56,6 @@ export type Junction = {
 
 export type JModellerState = {
     junction: Junction;
-    setJunction: (junction: Junction) => void;
+    setJunction: (junction: Junction | ((prev: Junction) => Junction)) => void;
 };
 

@@ -19,33 +19,33 @@ export const IntersectionComponent: React.FC<IntersectionProps> = ({intersection
 
 
     const floorMesh = useMemo(() => {
-    const shape = new THREE.Shape();
+        const shape = new THREE.Shape();
 
-    intersectionStructure.exitInfo.forEach((exit, _) => {
-        const stopLine = exit.stopLines[0].line;
-        const firstLane = exit.laneLines[0].line;
-        const lastLane = exit.laneLines[exit.laneLines.length - 1].line;
+        intersectionStructure.exitInfo.forEach((exit, _) => {
+            const stopLine = exit.stopLines[0].line;
+            const firstLane = exit.laneLines[0].line;
+            const lastLane = exit.laneLines[exit.laneLines.length - 1].line;
 
-        // Start at the start of the stop line
-        const startPoint = stopLine.start;
-        shape.moveTo(startPoint.x, startPoint.z);
+            // Start at the start of the stop line
+            const startPoint = stopLine.start;
+            shape.moveTo(startPoint.x, startPoint.z);
 
-        // End of first lane line
-        const endFirstLane = firstLane.end;
-        shape.lineTo(endFirstLane.x, endFirstLane.z);
+            // End of first lane line
+            const endFirstLane = firstLane.end;
+            shape.lineTo(endFirstLane.x, endFirstLane.z);
 
-        // End of last lane line
-        const endLastLane = lastLane.end;
-        shape.lineTo(endLastLane.x, endLastLane.z);
+            // End of last lane line
+            const endLastLane = lastLane.end;
+            shape.lineTo(endLastLane.x, endLastLane.z);
 
-        // End of stop line
-        const endStop = stopLine.end;
-        shape.lineTo(endStop.x, endStop.z);
-    });
+            // End of stop line
+            const endStop = stopLine.end;
+            shape.lineTo(endStop.x, endStop.z);
+        });
 
-    shape.closePath();
-    return new THREE.ShapeGeometry(shape);
-}, [intersectionStructure]);
+        shape.closePath();
+        return new THREE.ShapeGeometry(shape);
+    }, [intersectionStructure]);
 
     return (
         <group>
