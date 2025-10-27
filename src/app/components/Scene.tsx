@@ -3,7 +3,7 @@
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import Car from "./Car";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Bloom, EffectComposer } from "@react-three/postprocessing";
 import { useJModellerContext } from "../context/JModellerContext";
 import { IntersectionComponent } from "./IntersectionComponent";
@@ -15,34 +15,34 @@ import { MTLLoader, OBJLoader } from "three/examples/jsm/Addons.js";
 export const carCache = new Map<string, THREE.Group>();
 
 export async function preloadCars() {
-  const loadPromises: Promise<void>[] = [];
+    const loadPromises: Promise<void>[] = [];
 
-  for (const type of carTypes) {
-    for (const colour of carColours) {
-      const key = `${type}-${colour}`;
-      if (!carCache.has(key)) {
-        loadPromises.push((async () => {
-          try {
-            const materials = await new Promise<MTLLoader.MaterialCreator>((resolve, reject) => {
-              new MTLLoader().load(`/models/car-${type}-${colour}.mtl`, resolve, undefined, reject);
-            });
-            materials.preload();
+    for (const type of carTypes) {
+        for (const colour of carColours) {
+            const key = `${type}-${colour}`;
+            if (!carCache.has(key)) {
+                loadPromises.push((async () => {
+                    try {
+                        const materials = await new Promise<MTLLoader.MaterialCreator>((resolve, reject) => {
+                            new MTLLoader().load(`/models/car-${type}-${colour}.mtl`, resolve, undefined, reject);
+                        });
+                        materials.preload();
 
-            const obj = await new Promise<THREE.Group>((resolve, reject) => {
-              new OBJLoader().setMaterials(materials).load(`/models/car-${type}-${colour}.obj`, resolve, undefined, reject);
-            });
+                        const obj = await new Promise<THREE.Group>((resolve, reject) => {
+                            new OBJLoader().setMaterials(materials).load(`/models/car-${type}-${colour}.obj`, resolve, undefined, reject);
+                        });
 
-            carCache.set(key, obj);
-            console.log(`Successfully loaded car: ${key}`);
-          } catch (err) {
-            console.error(`Failed to load car ${key}`, err);
-          }
-        })());
-      }
+                        carCache.set(key, obj);
+                        console.log(`Successfully loaded car: ${key}`);
+                    } catch (err) {
+                        console.error(`Failed to load car ${key}`, err);
+                    }
+                })());
+            }
+        }
     }
-  }
 
-  await Promise.all(loadPromises);
+    await Promise.all(loadPromises);
 }
 
 
@@ -54,15 +54,17 @@ export default function Scene() {
 
     const [carsLoaded, setCarsLoaded] = useState<boolean>(false);
 
-    useEffect(() => {
-    const loadAllCars = async () => {
-        await preloadCars(); // waits for all cars to finish loading
-        setCarsLoaded(true); // now safe to render all <Car> components
-    };
-    loadAllCars();
-}, []);
+    const controlsRef = useRef<any>(null);
 
-    
+    useEffect(() => {
+        const loadAllCars = async () => {
+            await preloadCars(); // waits for all cars to finish loading
+            setCarsLoaded(true); // now safe to render all <Car> components
+        };
+        loadAllCars();
+    }, []);
+
+
 
     const addCar = () => {
         setCars((previousArray) => [
@@ -114,6 +116,7 @@ export default function Scene() {
                     maxPolarAngle={Math.PI / 2}
                     minDistance={5}
                     maxDistance={100}
+                    ref={controlsRef}
                 />
 
                 <axesHelper args={[50]} />
@@ -138,21 +141,22 @@ export default function Scene() {
                         <IntersectionComponent
                             key={intersectionIndex}
                             intersection={intersection}
+                            controlsRef={controlsRef}
                         />
                     ))
 
                 }
                 {carsLoaded && carsTest.map((car) => (
-    <Car
-        key={car.id}
-        position={car.position}
-        scale={0.5}
-        selected={car.id === selectedCarId}
-        colour={car.colour}
-        type={car.type}
-        onSelect={() => setSelectedCarId(car.id)}
-    />
-))}
+                    <Car
+                        key={car.id}
+                        position={car.position}
+                        scale={0.5}
+                        selected={car.id === selectedCarId}
+                        colour={car.colour}
+                        type={car.type}
+                        onSelect={() => setSelectedCarId(car.id)}
+                    />
+                ))}
             </Canvas>
         </div>
     );

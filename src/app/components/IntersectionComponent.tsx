@@ -1,22 +1,54 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Intersection } from "../includes/types";
 import { ThickLine } from "./ThickLine";
 import * as THREE from "three";
+import { useDrag } from "@use-gesture/react";
+import { useThree } from "@react-three/fiber";
+
 
 type IntersectionProps = {
     intersection: Intersection;
+    controlsRef?: React.RefObject<any>; 
 };
 
-export const IntersectionComponent: React.FC<IntersectionProps> = ({intersection}: IntersectionProps) => {
+export const IntersectionComponent: React.FC<IntersectionProps> = ({intersection, controlsRef}: IntersectionProps) => {
 
     const { intersectionStructure } = intersection;
-
+    const [selected, setSelected] = useState<boolean>(false);
+    const groupRef = useRef<THREE.Group>(null);
+    const { camera, gl, scene } = useThree();
     const maxExitLength = Math.max(...intersection.intersectionConfig.exitConfig.map(config => config.exitLength));
     const midPointStop = new THREE.Vector3();
     intersection.intersectionStructure.exitInfo[0].stopLines[0].line.getCenter(midPointStop);
     const distanceToStopLine = maxExitLength + midPointStop.distanceTo(intersection.intersectionConfig.origin) + 1;
 
 
+    const handlePointerDown = (e: any) => {
+        e.stopPropagation(); // Prevent deselection when clicking on this mesh
+        setSelected(true);
+    };
+
+    useEffect(() => {
+        const handlePointerMissed = () => setSelected(false);
+        gl.domElement.addEventListener("pointerdown", handlePointerMissed);
+        return () => gl.domElement.removeEventListener("pointerdown", handlePointerMissed);
+    }, [gl]);
+
+    useEffect(() => {
+        if (!controlsRef?.current) return;
+        controlsRef.current.enabled = !selected;
+    }, [selected, controlsRef]);
+
+    // Handle dragging
+    const dragBind = useDrag(
+        ({ offset: [x, y] }) => {
+            if (selected && groupRef.current) {
+                groupRef.current.position.x = x / 50; // adjust sensitivity
+                groupRef.current.position.z = -y / 50;
+            }
+        },
+        { enabled: selected }
+    );
 
     const floorMesh = useMemo(() => {
         const shape = new THREE.Shape();
@@ -48,14 +80,26 @@ export const IntersectionComponent: React.FC<IntersectionProps> = ({intersection
     }, [intersectionStructure]);
 
     return (
-        <group>
-            <mesh rotation={[-Math.PI / 2, 0, 0]} position={intersection.intersectionConfig.origin}>
+        <group
+            ref={groupRef}
+            {...dragBind()} onPointerMissed={() => setSelected(false)}
+        >
+            {selected && (
+                <mesh rotation={[-Math.PI / 2, 0, 0]} position={intersection.intersectionConfig.origin}>
                     <ringGeometry args={[distanceToStopLine, distanceToStopLine + 0.5, 32]} />
                     <meshBasicMaterial color="black" side={2} />
-            </mesh>
-            <mesh geometry={floorMesh} rotation={[-Math.PI / 2, 0, Math.PI]} position={intersection.intersectionConfig.origin}>
+                </mesh>
+            )}
+            
+            
+            <mesh geometry={floorMesh} 
+                rotation={[-Math.PI / 2, 0, Math.PI]} 
+                position={intersection.intersectionConfig.origin}
+                onPointerDown={handlePointerDown}
+            >
                 <meshStandardMaterial color="darkgrey" side={THREE.DoubleSide} />
             </mesh>
+
             {intersectionStructure.exitInfo.flatMap((exit, exitIndex) =>
                 exit.stopLines.map((lane, laneIdx) => (
                     <ThickLine
