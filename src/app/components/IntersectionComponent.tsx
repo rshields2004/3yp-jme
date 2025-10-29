@@ -2,29 +2,30 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Intersection } from "../includes/types";
 import { ThickLine } from "./ThickLine";
 import * as THREE from "three";
-import { useDrag } from "@use-gesture/react";
 import { useThree } from "@react-three/fiber";
-
+import { DragControls, TransformControls } from "@react-three/drei";
+import { useJModellerContext } from "../context/JModellerContext";
 
 type IntersectionProps = {
     intersection: Intersection;
-    controlsRef?: React.RefObject<any>; 
+    controlsRef?: React.RefObject<any>;
 };
 
-export const IntersectionComponent: React.FC<IntersectionProps> = ({intersection, controlsRef}: IntersectionProps) => {
-
+export const IntersectionComponent: React.FC<IntersectionProps> = ({ intersection, controlsRef }) => {
     const { intersectionStructure } = intersection;
-    const [selected, setSelected] = useState<boolean>(false);
+    const [selected, setSelected] = useState(false);
     const groupRef = useRef<THREE.Group>(null);
-    const { camera, gl, scene } = useThree();
-    const maxExitLength = Math.max(...intersection.intersectionConfig.exitConfig.map(config => config.exitLength));
+    const transformRef = useRef<any>(null);
+    const { camera, gl } = useThree();
+    const { setJunction } = useJModellerContext();
+
+    const maxExitLength = Math.max(...intersection.intersectionConfig.exitConfig.map(c => c.exitLength));
     const midPointStop = new THREE.Vector3();
-    intersection.intersectionStructure.exitInfo[0].stopLines[0].line.getCenter(midPointStop);
+    intersectionStructure.exitInfo[0].stopLines[0].line.getCenter(midPointStop);
     const distanceToStopLine = maxExitLength + midPointStop.distanceTo(intersection.intersectionConfig.origin) + 1;
 
-
     const handlePointerDown = (e: any) => {
-        e.stopPropagation(); // Prevent deselection when clicking on this mesh
+        e.stopPropagation(); // Prevent deselection
         setSelected(true);
     };
 
@@ -34,107 +35,129 @@ export const IntersectionComponent: React.FC<IntersectionProps> = ({intersection
         return () => gl.domElement.removeEventListener("pointerdown", handlePointerMissed);
     }, [gl]);
 
-    useEffect(() => {
-        if (!controlsRef?.current) return;
-        controlsRef.current.enabled = !selected;
-    }, [selected, controlsRef]);
 
-    // Handle dragging
-    const dragBind = useDrag(
-        ({ offset: [x, y] }) => {
-            if (selected && groupRef.current) {
-                groupRef.current.position.x = x / 50; // adjust sensitivity
-                groupRef.current.position.z = -y / 50;
+
+
+    
+    useEffect(() => {
+        const controls = transformRef.current;
+        if (!controls) {
+            return;
+        }
+
+        
+
+        const handleObjectChange = () => {
+            const obj = controls.object;
+            if (obj) {
+                const newOrigin = new THREE.Vector3(
+                    obj.position.x,
+                    obj.position.y,
+                    obj.position.z
+                );
+
+                setJunction((prevJunction) => {
+                    const updatedIntersections = prevJunction.intersections.map((int) => {
+                        if (int === intersection) {
+                            // Update only this intersection
+                            return {
+                                ...int,
+                                intersectionConfig: {
+                                    ...int.intersectionConfig,
+                                    origin: newOrigin,
+                                },
+                            };
+                        }
+                        return int; // leave others unchanged
+                    });
+
+                    return {
+                        ...prevJunction,
+                        intersections: updatedIntersections,
+                    };
+                });
             }
-        },
-        { enabled: selected }
-    );
+        };
+
+        controls.addEventListener("objectChange", handleObjectChange);
+        return () => controls.removeEventListener("objectChange", handleObjectChange);
+    }, []);
 
     const floorMesh = useMemo(() => {
         const shape = new THREE.Shape();
-
-        intersectionStructure.exitInfo.forEach((exit, _) => {
+        intersectionStructure.exitInfo.forEach(exit => {
             const stopLine = exit.stopLines[0].line;
             const firstLane = exit.laneLines[0].line;
             const lastLane = exit.laneLines[exit.laneLines.length - 1].line;
 
-            // Start at the start of the stop line
-            const startPoint = stopLine.start;
-            shape.moveTo(startPoint.x, startPoint.z);
-
-            // End of first lane line
-            const endFirstLane = firstLane.end;
-            shape.lineTo(endFirstLane.x, endFirstLane.z);
-
-            // End of last lane line
-            const endLastLane = lastLane.end;
-            shape.lineTo(endLastLane.x, endLastLane.z);
-
-            // End of stop line
-            const endStop = stopLine.end;
-            shape.lineTo(endStop.x, endStop.z);
+            shape.moveTo(stopLine.start.x, stopLine.start.z);
+            shape.lineTo(firstLane.end.x, firstLane.end.z);
+            shape.lineTo(lastLane.end.x, lastLane.end.z);
+            shape.lineTo(stopLine.end.x, stopLine.end.z);
         });
-
         shape.closePath();
         return new THREE.ShapeGeometry(shape);
     }, [intersectionStructure]);
 
     return (
-        <group
-            ref={groupRef}
-            {...dragBind()} onPointerMissed={() => setSelected(false)}
+        <TransformControls
+            ref={transformRef}
+            mode="translate"
+            enabled={selected} // only draggable when selected
         >
-            {selected && (
-                <mesh rotation={[-Math.PI / 2, 0, 0]} position={intersection.intersectionConfig.origin}>
-                    <ringGeometry args={[distanceToStopLine, distanceToStopLine + 0.5, 32]} />
-                    <meshBasicMaterial color="black" side={2} />
-                </mesh>
-            )}
-            
-            
-            <mesh geometry={floorMesh} 
-                rotation={[-Math.PI / 2, 0, Math.PI]} 
-                position={intersection.intersectionConfig.origin}
-                onPointerDown={handlePointerDown}
+            <group
+                ref={groupRef}
             >
-                <meshStandardMaterial color="darkgrey" side={THREE.DoubleSide} />
-            </mesh>
 
-            {intersectionStructure.exitInfo.flatMap((exit, exitIndex) =>
-                exit.stopLines.map((lane, laneIdx) => (
-                    <ThickLine
-                        key={`${exitIndex}-${laneIdx}`}
-                        line={lane.line}
-                        colour={lane.properties.colour}
-                        dashed={lane.properties.pattern}
-                    />
-                ))
-            )}
+                {/* Selection ring */}
+                {selected && (
+                    <mesh rotation={[-Math.PI / 2, 0, 0]} position={intersection.intersectionConfig.origin}>
+                        <ringGeometry args={[distanceToStopLine, distanceToStopLine + 0.5, 32]} />
+                        <meshBasicMaterial color="black" side={2} />
+                    </mesh>
+                )}
 
-            {intersectionStructure.exitInfo.flatMap((exit, exitIndex) =>
-                exit.laneLines.map((lane, laneIdx) => (
-                    <ThickLine
-                        key={`${exitIndex}-${laneIdx}`}
-                        line={lane.line}
-                        colour={lane.properties.colour}
-                        dashed={lane.properties.pattern}
-                    />
-                ))
-            )}
-
-            {intersectionStructure.edgeTubes.flatMap((tubeGeom, tubeIndex) =>
+                {/* Floor */}
                 <mesh
-                    key={`${tubeIndex}`}
-                    geometry={tubeGeom}
-                    position={[0, 0, 0]}
+                    geometry={floorMesh}
+                    rotation={[-Math.PI / 2, 0, Math.PI]}
+                    position={intersection.intersectionConfig.origin}
+                    onPointerDown={handlePointerDown}
                 >
-                    <meshStandardMaterial
-                        color={"grey"}
-                        emissive={"black"}
-                        emissiveIntensity={0.3}
-                    />
+                    <meshStandardMaterial color="darkgrey" side={THREE.DoubleSide} />
                 </mesh>
-            )}
-        </group>
+
+                {/* Stop lines */}
+                {intersectionStructure.exitInfo.flatMap((exit, exitIndex) =>
+                    exit.stopLines.map((lane, laneIdx) => (
+                        <ThickLine
+                            key={`${exitIndex}-${laneIdx}`}
+                            line={lane.line}
+                            colour={lane.properties.colour}
+                            dashed={lane.properties.pattern}
+                        />
+                    ))
+                )}
+
+                {/* Lane lines */}
+                {intersectionStructure.exitInfo.flatMap((exit, exitIndex) =>
+                    exit.laneLines.map((lane, laneIdx) => (
+                        <ThickLine
+                            key={`${exitIndex}-${laneIdx}`}
+                            line={lane.line}
+                            colour={lane.properties.colour}
+                            dashed={lane.properties.pattern}
+                        />
+                    ))
+                )}
+
+                {/* Edge tubes */}
+                {intersectionStructure.edgeTubes.flatMap((tubeGeom, tubeIndex) => (
+                    <mesh key={`${tubeIndex}`} geometry={tubeGeom} position={[0, 0, 0]}>
+                        <meshStandardMaterial color="grey" emissive="black" emissiveIntensity={0.3} />
+                    </mesh>
+                ))}
+            </group>
+        </TransformControls>
     );
 };
