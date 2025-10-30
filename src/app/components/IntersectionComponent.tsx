@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { SetStateAction, useEffect, useRef, useState } from "react";
 import { ThickLine } from "./ThickLine";
 import * as THREE from "three";
 import { useFrame, useThree } from "@react-three/fiber";
@@ -9,11 +9,12 @@ import { group } from "console";
 
 type IntersectionProps = {
     intersectionStructure: IntersectionStructure;
+    index: number;
+    selected: number;
+    setSelected: (value: SetStateAction<number>) => void;
 };
 
-export const IntersectionComponent: React.FC<IntersectionProps> = ({ intersectionStructure }) => {
-    const [selected, setSelected] = useState(false);
-
+export const IntersectionComponent: React.FC<IntersectionProps> = ({ intersectionStructure, index, selected, setSelected }) => {
 
     return (
         <>
@@ -22,13 +23,13 @@ export const IntersectionComponent: React.FC<IntersectionProps> = ({ intersectio
                     position={intersectionStructure.origin}
                     onPointerMissed={(event) => {
                         if (event.button === 0) {
-                            setSelected(false);
+                            setSelected(-1);
                         }
                     }}
                 >
 
                     {/* Selection ring */}
-                    {selected && (
+                    {selected == index && (
                         <mesh rotation={[-Math.PI / 2, 0, 0]} position={intersectionStructure.origin}>
                             <ringGeometry args={[intersectionStructure.maxDistanceToStopLine, intersectionStructure.maxDistanceToStopLine + 0.5, 100]} />
                             <meshBasicMaterial color="black" side={2} />
@@ -42,7 +43,7 @@ export const IntersectionComponent: React.FC<IntersectionProps> = ({ intersectio
                         position={intersectionStructure.origin}
                         onPointerDown={(event) => {
                             event.stopPropagation(); // Prevent bubbling up to parent
-                            setSelected(true);
+                            setSelected(index);
                         }}
                     >
                         <meshStandardMaterial color="darkgrey" side={THREE.DoubleSide} />
@@ -91,13 +92,7 @@ export const IntersectionComponent: React.FC<IntersectionProps> = ({ intersectio
                     ))}
                 </group>
             </DragControls>
-            <OrbitControls
-                enabled={!selected}
-                minPolarAngle={Math.PI / 6}
-                maxPolarAngle={Math.PI / 2}
-                minDistance={5}
-                maxDistance={100}
-            />
+
         </>
     );
 };

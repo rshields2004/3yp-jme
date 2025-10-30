@@ -53,8 +53,7 @@ export default function Scene() {
     const [selectedCarId, setSelectedCarId] = useState(-1);
 
     const [carsLoaded, setCarsLoaded] = useState<boolean>(false);
-
-    const controlsRef = useRef<any>(null);
+    const [selected, setSelected] = useState(-1);
 
     useEffect(() => {
         const loadAllCars = async () => {
@@ -127,11 +126,22 @@ export default function Scene() {
                     <Bloom intensity={1.5} luminanceThreshold={0.2} luminanceSmoothing={0.9} />
                 </EffectComposer>
 
+                <OrbitControls
+                    enabled={selected == -1}
+                    minPolarAngle={Math.PI / 6}
+                    maxPolarAngle={Math.PI / 2}
+                    minDistance={5}
+                    maxDistance={100}
+                />
+
                 {
                     junctionStructure.intersectionStructures.map((intersectionStructure, structureIndex) => (
-                        <IntersectionComponent
+                         <IntersectionComponent
                             key={structureIndex}
+                            index={structureIndex} // add an index prop
                             intersectionStructure={intersectionStructure}
+                            selected={selected}
+                            setSelected={setSelected}
                         />
                     ))
 
