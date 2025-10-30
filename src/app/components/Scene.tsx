@@ -48,7 +48,7 @@ export async function preloadCars() {
 
 export default function Scene() {
 
-    const { junction } = useJModellerContext();
+    const { junctionStructure } = useJModellerContext();
     const [cars, setCars] = useState<{ id: number; position: [number, number, number] }[]>([{ id: -1, position: [0, -1000, 0] }]);
     const [selectedCarId, setSelectedCarId] = useState(-1);
 
@@ -110,15 +110,6 @@ export default function Scene() {
                 camera={{ position: [5, 5, 5], fov: 60 }}
                 style={{ background: "#0a0a0a", width: "100vw", height: "100vh" }}
             >
-
-                <OrbitControls
-                    minPolarAngle={Math.PI / 6}
-                    maxPolarAngle={Math.PI / 2}
-                    minDistance={5}
-                    maxDistance={100}
-                    ref={controlsRef}
-                />
-
                 <axesHelper args={[50]} />
 
                 <fog attach="fog" args={["#0a0a0a", 100, 150]} />
@@ -137,11 +128,10 @@ export default function Scene() {
                 </EffectComposer>
 
                 {
-                    junction.intersections.map((intersection, intersectionIndex) => (
+                    junctionStructure.intersectionStructures.map((intersectionStructure, structureIndex) => (
                         <IntersectionComponent
-                            key={intersectionIndex}
-                            intersection={intersection}
-                            controlsRef={controlsRef}
+                            key={structureIndex}
+                            intersectionStructure={intersectionStructure}
                         />
                     ))
 

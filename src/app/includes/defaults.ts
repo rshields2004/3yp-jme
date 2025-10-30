@@ -1,4 +1,4 @@
-import { LaneLine, LaneLineProperties, Exit, Intersection, IntersectionStructure, IntersectionConfig } from "./types";
+import {LaneLineProperties, IntersectionStructure, IntersectionConfig, LaneStructure, ExitStructure } from "./types";
 import * as THREE from "three";
 
 export const defaultLaneProperties: LaneLineProperties = {
@@ -8,12 +8,12 @@ export const defaultLaneProperties: LaneLineProperties = {
     glow: 0.3,
 };
 
-export const defaultLane: LaneLine = {
+export const defaultLane: LaneStructure = {
     line: new THREE.Line3(),
     properties: { ...defaultLaneProperties },
 };
 
-export const defaultExit: Exit = {
+export const defaultExit: ExitStructure = {
     laneLines: [],
     stopLines: [],
 }
@@ -21,6 +21,9 @@ export const defaultExit: Exit = {
 export const defaultIntersectionStructure: IntersectionStructure = {
     exitInfo: Array.from({ length: 4 }, () => (defaultExit)),
     edgeTubes: [],
+    intersectionFloor: new THREE.ShapeGeometry(),
+    maxDistanceToStopLine: 40,
+    origin: new THREE.Vector3(),
 };
 
 export const defaultIntersectionConfig: IntersectionConfig = {
@@ -33,13 +36,9 @@ export const defaultIntersectionConfig: IntersectionConfig = {
     })),
 };
 
-export const defaultIntersection: Intersection = {
-    intersectionStructure: defaultIntersectionStructure,
-    intersectionConfig: defaultIntersectionConfig,
-};
 
-export const defaultJunction = {
-    intersections: [defaultIntersection],
+export const defaultJunctionConfig = {
+    intersections: [defaultIntersectionConfig],
 };
 
 export const carTypes = ["coupe", "hatchback", "micro", "microcargo", "microtransport", "minibus", "mpv", "normal", "pickup", "pickup-small", "station", "van"];

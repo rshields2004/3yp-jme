@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { Exit, Intersection, LaneLine } from "./types";
 import { defaultLaneProperties } from "./defaults";
+import { ExitStructure, LaneStructure } from "./types";
 
 
 const getDirection = (
@@ -16,7 +16,7 @@ export function generateStopLines(
     stopLineOffset: number, 
     angle: number, 
     originRaw: THREE.Vector3
-): LaneLine[] {
+): LaneStructure[] {
     const origin = originRaw.clone();
     const direction = getDirection(angle);
     const perp = new THREE.Vector3(-direction.z, 0, direction.x);
@@ -30,7 +30,7 @@ export function generateStopLines(
 
     return [
         {
-            line: new THREE.Line3(leftPoint, rightPoint),
+            line: new THREE.Line3(leftPoint.clone(), rightPoint.clone()),
             properties: defaultLaneProperties
         },
     ];
@@ -38,15 +38,13 @@ export function generateStopLines(
 
 
 export function generateLaneLines(
-    stopLines: LaneLine[], 
+    stopLines: LaneStructure[], 
     length: number, 
     numLanes: number, 
-    originRaw: THREE.Vector3
-): LaneLine[] {
+): LaneStructure[] {
 
-    const laneLines: LaneLine[] = [];
+    const laneLines: LaneStructure[] = [];
     stopLines.forEach((stopLine) => {
-        const origin = originRaw.clone();
         const startVec = stopLine.line.start.clone();
         const endVec = stopLine.line.end.clone();
 
@@ -66,9 +64,8 @@ export function generateLaneLines(
             const fractionAlong = (i / numLanes); // 0 -> left edge, 1 -> right edge
             const laneStart = leftEdge.clone().add(stopVec.clone().multiplyScalar(fractionAlong));
             const laneEnd = laneStart.clone().add(laneDir.clone().multiplyScalar(-length));
-            console.log(origin.y);
             laneLines.push({
-                line: new THREE.Line3(laneStart, laneEnd),
+                line: new THREE.Line3(laneStart.clone(), laneEnd.clone()),
                 properties: { ...defaultLaneProperties, pattern: (i == 0 || i == numLanes) ? "solid" : "dashed" },
             });
         }
@@ -80,7 +77,7 @@ export function generateLaneLines(
 
 
 export function generateEdgeTubes(
-    exits: Exit[],
+    exits: ExitStructure[],
     radius = 0.1,
     segments = 500
 ): THREE.TubeGeometry[] {
@@ -132,3 +129,22 @@ export function generateEdgeTubes(
 
     return tubeGeometries;
 }
+
+
+export function generateFloorMesh(
+    exits: ExitStructure[]
+): THREE.ShapeGeometry {
+    const shape = new THREE.Shape();
+        exits.forEach(exit => {
+            const stopLine = exit.stopLines[0].line;
+            const firstLane = exit.laneLines[0].line;
+            const lastLane = exit.laneLines[exit.laneLines.length - 1].line;
+
+            shape.moveTo(stopLine.start.x, stopLine.start.z);
+            shape.lineTo(firstLane.end.x, firstLane.end.z);
+            shape.lineTo(lastLane.end.x, lastLane.end.z);
+            shape.lineTo(stopLine.end.x, stopLine.end.z);
+        });
+        shape.closePath();
+    return new THREE.ShapeGeometry(shape);
+};
