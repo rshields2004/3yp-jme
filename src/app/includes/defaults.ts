@@ -22,7 +22,7 @@ export const defaultIntersectionStructure: IntersectionStructure = {
     exitInfo: Array.from({ length: 4 }, () => (defaultExit)),
     edgeTubes: [],
     intersectionFloor: new THREE.ShapeGeometry(),
-    maxDistanceToStopLine: 40,
+    maxDistanceToStopLine: 20,
     origin: new THREE.Vector3(),
 };
 
