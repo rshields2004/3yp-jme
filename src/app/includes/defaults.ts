@@ -4,8 +4,8 @@ import * as THREE from "three";
 export const defaultLaneProperties: LaneLineProperties = {
     pattern: "solid",
     colour: "white",
-    thickness: 0.05,
-    glow: 0.3,
+    thickness: 0.5,
+    glow: 1.3,
 };
 
 export const defaultLane: LaneStructure = {
@@ -23,12 +23,11 @@ export const defaultIntersectionStructure: IntersectionStructure = {
     edgeTubes: [],
     intersectionFloor: new THREE.ShapeGeometry(),
     maxDistanceToStopLine: 20,
-    origin: new THREE.Vector3(),
 };
 
 export const defaultIntersectionConfig: IntersectionConfig = {
     numExits: 4,
-    origin: new THREE.Vector3(0, 10, 0),
+    origin: new THREE.Vector3(0, 1, 0),
     exitConfig: Array.from({ length: 4 }, () => ({
         laneCount: 2,
         laneWidth: 1.5,

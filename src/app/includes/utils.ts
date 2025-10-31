@@ -15,9 +15,8 @@ export function generateStopLines(
     laneWidth: number, 
     stopLineOffset: number, 
     angle: number, 
-    originRaw: THREE.Vector3
 ): LaneStructure[] {
-    const origin = originRaw.clone();
+    const origin = new THREE.Vector3(0, 0, 0);
     const direction = getDirection(angle);
     const perp = new THREE.Vector3(-direction.z, 0, direction.x);
 

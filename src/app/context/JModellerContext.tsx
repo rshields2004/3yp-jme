@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useMemo } from "react";
-import { IntersectionConfig, IntersectionStructure, JModellerState, JunctionConfig, JunctionStructure, LaneStructure } from "../includes/types";
+import { IntersectionConfig, IntersectionStructure, JModellerState, JunctionConfig, JunctionObjectRef, JunctionStructure, LaneStructure } from "../includes/types";
 import { generateEdgeTubes, generateFloorMesh, generateLaneLines, generateStopLines } from "../includes/utils";
 import { defaultJunctionConfig } from "../includes/defaults";
 import * as THREE from "three";
@@ -12,7 +12,8 @@ const JModellerContext = createContext<JModellerState | undefined>(undefined);
 export const JModellerProvider = ({ children }: { children: ReactNode }) => {
 
     const [junction, setJunction] = useState<JunctionConfig>(defaultJunctionConfig);
-
+    const [selectedJunctionObjectRef, setSelectedJunctionObjectRef] = useState<JunctionObjectRef | null>(null);
+    
 
     const junctionStructure: JunctionStructure = useMemo(() => {
         
@@ -27,7 +28,7 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
                 const angleStep = (2 * Math.PI) / config.numExits;
                 const angle = angleStep * exitIndex;
                 
-                const stopLines = generateStopLines(exitConfig.laneCount, exitConfig.laneWidth, adjustedOffset, angle, config.origin);
+                const stopLines = generateStopLines(exitConfig.laneCount, exitConfig.laneWidth, adjustedOffset, angle);
                 
                 const laneLines = generateLaneLines(stopLines, exitConfig.exitLength, exitConfig.laneCount);
 
@@ -41,15 +42,15 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
             const maxExitLength = Math.max(...config.exitConfig.map(c => c.exitLength));
             const midPointStop = new THREE.Vector3();
             exitInfo[0].stopLines[0].line.getCenter(midPointStop);
-            const maxDistanceToStopLine = maxExitLength + midPointStop.distanceTo(config.origin) + 1;
+            const maxDistanceToStopLine = maxExitLength + midPointStop.distanceTo(new THREE.Vector3(0, 0, 0)) + 1;
 
             const origin = config.origin.clone();
-
             return { exitInfo, edgeTubes, maxDistanceToStopLine, intersectionFloor, origin };
-        });
 
+        });
         return { intersectionStructures };
     }, [junction]);
+
 
     
 
@@ -58,6 +59,8 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
             junction,
             setJunction,
             junctionStructure,
+            selectedJunctionObjectRef,
+            setSelectedJunctionObjectRef
         }}>
             {children}
         </JModellerContext.Provider>

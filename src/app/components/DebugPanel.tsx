@@ -5,7 +5,7 @@ import { defaultIntersectionConfig } from "../includes/defaults";
 import { ExitConfig } from "../includes/types";
 
 export default function DebugPanel() {
-    const { junction, setJunction } = useJModellerContext();
+    const { junction, setJunction, setSelectedJunctionObjectRef } = useJModellerContext();
 
 
     const handleExitNumChange = (intersectionIndex: number, newExitNum: number) => {
@@ -86,6 +86,16 @@ export default function DebugPanel() {
         }));
     }
 
+    const handleRemoveIntersection = (intersectionIndex: number) => {
+        setJunction((prevJunction) => ({
+            ...prevJunction,
+            intersections: prevJunction.intersections.filter(
+                (_, index) => index !== intersectionIndex
+            )
+        }));
+        setSelectedJunctionObjectRef(null);
+    };
+
     return (
         <>
         <div
@@ -143,6 +153,9 @@ export default function DebugPanel() {
                                 value={intersection.numExits}
                                 onChange={(e) => handleExitNumChange(intersectionIndex, Number(e.target.value))}
                             />
+                            <button
+                                onClick={() => handleRemoveIntersection(intersectionIndex)}
+                            >Delete Intersection</button>
 
                             {/* Intersection Structure */}
 

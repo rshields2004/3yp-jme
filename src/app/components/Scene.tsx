@@ -1,6 +1,6 @@
 "use client";
 
-import { Canvas } from "@react-three/fiber";
+import { useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import Car from "./Car";
 import { useState, useEffect, useRef } from "react";
@@ -10,13 +10,15 @@ import { IntersectionComponent } from "./IntersectionComponent";
 import { carColours, carTypes } from "../includes/defaults";
 import * as THREE from "three";
 import { MTLLoader, OBJLoader } from "three/examples/jsm/Addons.js";
+import { DragControls } from 'three/addons/controls/DragControls.js';
+import { JunctionObjectRef } from "../includes/types";
+
+
 
 
 export const carCache = new Map<string, THREE.Group>();
-
 export async function preloadCars() {
     const loadPromises: Promise<void>[] = [];
-
     for (const type of carTypes) {
         for (const colour of carColours) {
             const key = `${type}-${colour}`;
@@ -33,7 +35,7 @@ export async function preloadCars() {
                         });
 
                         carCache.set(key, obj);
-                        console.log(`Successfully loaded car: ${key}`);
+
                     } catch (err) {
                         console.error(`Failed to load car ${key}`, err);
                     }
@@ -46,25 +48,55 @@ export async function preloadCars() {
 }
 
 
+
 export default function Scene() {
 
-    const { junctionStructure } = useJModellerContext();
-    const [cars, setCars] = useState<{ id: number; position: [number, number, number] }[]>([{ id: -1, position: [0, -1000, 0] }]);
+    const { junctionStructure, selectedJunctionObjectRef } = useJModellerContext();
     const [selectedCarId, setSelectedCarId] = useState(-1);
     const [carsLoaded, setCarsLoaded] = useState<boolean>(false);
-    
-    
-    const [selected, setSelected] = useState(-1);
 
-    const intersectionRefs = useRef<(THREE.Group | null)[]>([]);
+
+    const junctionObjectRefs = useRef<JunctionObjectRef[]>([]);
+    const controlRef = useRef<DragControls | null>(null);
+
+
+    const registerJunctionObject = (group: THREE.Group, type: string) => {
+        junctionObjectRefs.current.push({ group, type });
+    };
+
+    const unregisterJunctionObject = (group: THREE.Group) => {
+        junctionObjectRefs.current = junctionObjectRefs.current.filter(obj => obj.group !== group);
+    };
+
+
+    const { camera, gl } = useThree();
 
     useEffect(() => {
-        const count = junctionStructure.intersectionStructures.length;
-        intersectionRefs.current = Array(count).fill(null).map((_, i) => intersectionRefs.current[i] || null);
-    }, [junctionStructure.intersectionStructures.length]);
+        if (!camera || !gl) return;
+        const controls = new DragControls([], camera, gl.domElement);
+        controls.transformGroup = true;
+
+        controlRef.current = controls;
+
+        return () => controls.dispose();
+    }, [camera, gl]);
+
+    useEffect(() => {
+        const controls = controlRef.current;
+        if (!controls) return;
+
+        // Clear old objects
+        controls.objects = [];
+
+        // Add the currently selected junction object
+        if (selectedJunctionObjectRef?.group) {
+            controls.objects.push(selectedJunctionObjectRef.group);
+        }
+    }, [selectedJunctionObjectRef]);
 
 
-    const currentDraggable = selected >= 0 ? [intersectionRefs.current[selected]] : [];
+
+
 
     // Jonnys Dealership
     useEffect(() => {
@@ -85,7 +117,7 @@ export default function Scene() {
                 id: typeIndex * carColours.length + colourIndex,
                 type,
                 colour,
-                position: [x, 0, z] as [number, number, number],
+                position: [x, 3, z] as [number, number, number],
             };
         })
     );
@@ -93,63 +125,59 @@ export default function Scene() {
 
 
 
+
     return (
-        <div style={{ width: "100vw", height: "100vh" }}>
+        <>
 
-            <Canvas
-                camera={{ position: [5, 5, 5], fov: 60 }}
-                style={{ background: "#0a0a0a", width: "100vw", height: "100vh" }}
-            >
-                <axesHelper args={[50]} />
+            <axesHelper args={[50]} />
 
-                <fog attach="fog" args={["#0a0a0a", 100, 150]} />
+            <fog attach="fog" args={["#0a0a0a", 100, 150]} />
 
-                <ambientLight intensity={1} />
-                <directionalLight position={[20, 50, 20]} intensity={0.6} />
-                <pointLight position={[0, 5, 0]} intensity={2} color="#ffaa00" />
+            <ambientLight intensity={1} />
+            <directionalLight position={[20, 50, 20]} intensity={0.6} />
+            <pointLight position={[0, 5, 0]} intensity={2} color="#ffaa00" />
 
-                <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-                    <planeGeometry args={[500, 500]} />
-                    <meshStandardMaterial color="#1c1c1c" />
-                </mesh>
+            <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+                <planeGeometry args={[500, 500]} />
+                <meshStandardMaterial color="#1c1c1c" />
+            </mesh>
 
-                <EffectComposer>
-                    <Bloom intensity={1.5} luminanceThreshold={0.2} luminanceSmoothing={0.9} />
-                </EffectComposer>
+            <EffectComposer>
+                <Bloom intensity={1.5} luminanceThreshold={0.2} luminanceSmoothing={0.9} />
+            </EffectComposer>
 
-                <OrbitControls
-                    enabled={selected == -1}
-                    minPolarAngle={Math.PI / 6}
-                    maxPolarAngle={Math.PI / 2}
-                    minDistance={5}
-                    maxDistance={100}
-                />
+            <OrbitControls
+                enabled={selectedJunctionObjectRef == null}
+                minPolarAngle={Math.PI / 6}
+                maxPolarAngle={Math.PI / 2}
+                minDistance={5}
+                maxDistance={100}
+            />
 
-                {
-                    junctionStructure.intersectionStructures.map((intersectionStructure, structureIndex) => (
-                         <IntersectionComponent
-                            key={structureIndex}
-                            ref={(el) => { intersectionRefs.current[structureIndex] = el; }}
-                            index={structureIndex}
-                            intersectionStructure={intersectionStructure}
-                            selected={selected}
-                            setSelected={setSelected}
-                        />
-                    ))
-
-                }
-                {carsLoaded && carsTest.map((car) => (
-                    <Car
-                        key={car.id}
-                        position={car.position}
-                        scale={0.5}
-                        selected={car.id === selectedCarId}
-                        colour={car.colour}
-                        type={car.type}
-                        onSelect={() => setSelectedCarId(car.id)}
+            {
+                junctionStructure.intersectionStructures.map((intersectionStructure, structureIndex) => (
+                    <IntersectionComponent
+                        key={structureIndex}
+                        structureIndex={structureIndex}
+                        registerJunctionObject={registerJunctionObject}
+                        unregisterJunctionObject={unregisterJunctionObject}
+                        intersectionStructure={intersectionStructure}
+                        controlRef={controlRef}
                     />
-                ))}
-            </Canvas>
-        </div>
+                ))
+
+            }
+            {carsLoaded && carsTest.map((car) => (
+                <Car
+                    key={car.id}
+                    position={car.position}
+                    scale={0.5}
+                    selected={car.id === selectedCarId}
+                    colour={car.colour}
+                    type={car.type}
+                    onSelect={() => setSelectedCarId(car.id)}
+                />
+            ))}
+        </>
     );
 }
