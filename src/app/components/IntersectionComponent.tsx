@@ -32,8 +32,10 @@ export const IntersectionComponent = ({ structureIndex, intersectionStructure, r
     useEffect(() => {
         const controls = controlRef.current;
         const group = groupRef.current;
-        if (!group || !controls) return;
-
+        if (!group || !controls)  {
+            return;
+        }
+        
         const onDrag = (event: any) => {
             const draggedGroup = event.object as THREE.Group;
             draggedGroup.position.copy(draggedGroup.position);
