@@ -38,7 +38,7 @@ export const defaultIntersectionConfig: IntersectionConfig = {
 
 
 export const defaultJunctionConfig = {
-    intersections: [defaultIntersectionConfig],
+    intersections: [],
 };
 
 export const carTypes = ["coupe", "hatchback", "micro", "microcargo", "microtransport", "minibus", "mpv", "normal", "pickup", "pickup-small", "station", "van"];

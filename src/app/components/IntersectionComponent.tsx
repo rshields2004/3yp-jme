@@ -1,4 +1,4 @@
-import { SetStateAction, useEffect, useRef, useState } from "react";
+import { forwardRef, SetStateAction, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { ThickLine } from "./ThickLine";
 import * as THREE from "three";
 import { useFrame, useThree } from "@react-three/fiber";
@@ -14,85 +14,88 @@ type IntersectionProps = {
     setSelected: (value: SetStateAction<number>) => void;
 };
 
-export const IntersectionComponent: React.FC<IntersectionProps> = ({ intersectionStructure, index, selected, setSelected }) => {
+export const IntersectionComponent = forwardRef<THREE.Group, IntersectionProps>(
+  ({ intersectionStructure, index, selected, setSelected }, ref) => {
+
+    const groupRef = useRef<THREE.Group>(null);
+    useImperativeHandle(ref, () => groupRef.current!);
 
     return (
         <>
-            <DragControls>
-                <group
+            <group
+                ref={groupRef}
+                position={intersectionStructure.origin}
+                onPointerMissed={(event) => {
+                    if (event.button === 0) {
+                        setSelected(-1);
+                    }
+                }}
+            >
+
+                {/* Selection ring */}
+                {selected == index && (
+                    <mesh rotation={[-Math.PI / 2, 0, 0]} position={intersectionStructure.origin}>
+                        <ringGeometry args={[intersectionStructure.maxDistanceToStopLine, intersectionStructure.maxDistanceToStopLine + 0.5, 100]} />
+                        <meshBasicMaterial color="black" side={2} />
+                    </mesh>
+                )}
+
+                {/* Floor */}
+                <mesh
+                    geometry={intersectionStructure.intersectionFloor}
+                    rotation={[-Math.PI / 2, Math.PI, Math.PI]}
                     position={intersectionStructure.origin}
-                    onPointerMissed={(event) => {
-                        if (event.button === 0) {
-                            setSelected(-1);
-                        }
+                    onPointerDown={(event) => {
+                        event.stopPropagation(); // Prevent bubbling up to parent
+                        setSelected(index);
                     }}
                 >
+                    <meshStandardMaterial color="darkgrey" side={THREE.DoubleSide} />
+                </mesh>
 
-                    {/* Selection ring */}
-                    {selected == index && (
-                        <mesh rotation={[-Math.PI / 2, 0, 0]} position={intersectionStructure.origin}>
-                            <ringGeometry args={[intersectionStructure.maxDistanceToStopLine, intersectionStructure.maxDistanceToStopLine + 0.5, 100]} />
-                            <meshBasicMaterial color="black" side={2} />
-                        </mesh>
-                    )}
+                {intersectionStructure.exitInfo.flatMap((exit, exitIndex) =>
+                    exit.stopLines.map((lane, laneIdx) => (
+                        <ThickLine
+                            key={`${exitIndex}-${laneIdx}`}
+                            line={lane.line}
+                            colour={lane.properties.colour}
+                            dashed={lane.properties.pattern}
+                        />
+                    ))
+                )}
 
-                    {/* Floor */}
-                    <mesh
-                        geometry={intersectionStructure.intersectionFloor}
-                        rotation={[-Math.PI / 2, Math.PI, Math.PI]}
-                        position={intersectionStructure.origin}
-                        onPointerDown={(event) => {
-                            event.stopPropagation(); // Prevent bubbling up to parent
-                            setSelected(index);
-                        }}
-                    >
-                        <meshStandardMaterial color="darkgrey" side={THREE.DoubleSide} />
+                {/* Stop lines */}
+                {intersectionStructure.exitInfo.flatMap((exit, exitIndex) =>
+                    exit.stopLines.map((lane, laneIdx) => (
+                        <ThickLine
+                            key={`${exitIndex}-${laneIdx}`}
+                            line={lane.line}
+                            colour={lane.properties.colour}
+                            dashed={lane.properties.pattern}
+                        />
+                    ))
+                )}
+
+                {/* Lane lines */}
+                {intersectionStructure.exitInfo.flatMap((exit, exitIndex) =>
+                    exit.laneLines.map((lane, laneIdx) => (
+                        <ThickLine
+                            key={`${exitIndex}-${laneIdx}`}
+                            line={lane.line}
+                            colour={lane.properties.colour}
+                            dashed={lane.properties.pattern}
+                        />
+                    ))
+                )}
+
+                {/* Edge tubes */}
+                {intersectionStructure.edgeTubes.flatMap((tubeGeom, tubeIndex) => (
+                    <mesh key={`${tubeIndex}`} geometry={tubeGeom} position={[0, 0, 0]}>
+                        <meshStandardMaterial color="grey" emissive="black" emissiveIntensity={0.3} />
                     </mesh>
-
-                    {intersectionStructure.exitInfo.flatMap((exit, exitIndex) =>
-                        exit.stopLines.map((lane, laneIdx) => (
-                            <ThickLine
-                                key={`${exitIndex}-${laneIdx}`}
-                                line={lane.line}
-                                colour={lane.properties.colour}
-                                dashed={lane.properties.pattern}
-                            />
-                        ))
-                    )}
-
-                    {/* Stop lines */}
-                    {intersectionStructure.exitInfo.flatMap((exit, exitIndex) =>
-                        exit.stopLines.map((lane, laneIdx) => (
-                            <ThickLine
-                                key={`${exitIndex}-${laneIdx}`}
-                                line={lane.line}
-                                colour={lane.properties.colour}
-                                dashed={lane.properties.pattern}
-                            />
-                        ))
-                    )}
-
-                    {/* Lane lines */}
-                    {intersectionStructure.exitInfo.flatMap((exit, exitIndex) =>
-                        exit.laneLines.map((lane, laneIdx) => (
-                            <ThickLine
-                                key={`${exitIndex}-${laneIdx}`}
-                                line={lane.line}
-                                colour={lane.properties.colour}
-                                dashed={lane.properties.pattern}
-                            />
-                        ))
-                    )}
-
-                    {/* Edge tubes */}
-                    {intersectionStructure.edgeTubes.flatMap((tubeGeom, tubeIndex) => (
-                        <mesh key={`${tubeIndex}`} geometry={tubeGeom} position={[0, 0, 0]}>
-                            <meshStandardMaterial color="grey" emissive="black" emissiveIntensity={0.3} />
-                        </mesh>
-                    ))}
-                </group>
-            </DragControls>
+                ))}
+            </group>
 
         </>
     );
-};
+});

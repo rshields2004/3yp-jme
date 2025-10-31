@@ -51,10 +51,22 @@ export default function Scene() {
     const { junctionStructure } = useJModellerContext();
     const [cars, setCars] = useState<{ id: number; position: [number, number, number] }[]>([{ id: -1, position: [0, -1000, 0] }]);
     const [selectedCarId, setSelectedCarId] = useState(-1);
-
     const [carsLoaded, setCarsLoaded] = useState<boolean>(false);
+    
+    
     const [selected, setSelected] = useState(-1);
 
+    const intersectionRefs = useRef<(THREE.Group | null)[]>([]);
+
+    useEffect(() => {
+        const count = junctionStructure.intersectionStructures.length;
+        intersectionRefs.current = Array(count).fill(null).map((_, i) => intersectionRefs.current[i] || null);
+    }, [junctionStructure.intersectionStructures.length]);
+
+
+    const currentDraggable = selected >= 0 ? [intersectionRefs.current[selected]] : [];
+
+    // Jonnys Dealership
     useEffect(() => {
         const loadAllCars = async () => {
             await preloadCars(); // waits for all cars to finish loading
@@ -62,33 +74,9 @@ export default function Scene() {
         };
         loadAllCars();
     }, []);
-
-
-
-    const addCar = () => {
-        setCars((previousArray) => [
-            ...previousArray,
-            {
-                id: Date.now(),
-                position: [0, 0, 0],
-            },
-        ])
-    }
-
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === "Shift") addCar();
-        };
-        window.addEventListener("keydown", handleKeyDown);
-        return () => window.removeEventListener("keydown", handleKeyDown);
-    }, []);
-
-
     const spacing = 1.2;
-
     const offsetX = (carColours.length - 1) * spacing / 2;
     const offsetZ = (carTypes.length - 1) * spacing / 2;
-
     const carsTest = carTypes.flatMap((type, typeIndex) =>
         carColours.map((colour, colourIndex) => {
             const x = colourIndex * spacing - offsetX; // center on x-axis
@@ -101,6 +89,9 @@ export default function Scene() {
             };
         })
     );
+
+
+
 
     return (
         <div style={{ width: "100vw", height: "100vh" }}>
@@ -138,7 +129,8 @@ export default function Scene() {
                     junctionStructure.intersectionStructures.map((intersectionStructure, structureIndex) => (
                          <IntersectionComponent
                             key={structureIndex}
-                            index={structureIndex} // add an index prop
+                            ref={(el) => { intersectionRefs.current[structureIndex] = el; }}
+                            index={structureIndex}
                             intersectionStructure={intersectionStructure}
                             selected={selected}
                             setSelected={setSelected}
