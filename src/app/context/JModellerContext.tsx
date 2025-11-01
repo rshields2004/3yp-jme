@@ -1,7 +1,7 @@
 "use client";
 
-import React, { createContext, useContext, useState, ReactNode, useEffect, useMemo } from "react";
-import { IntersectionConfig, IntersectionStructure, JModellerState, JunctionConfig, JunctionObjectRef, JunctionStructure, LaneStructure } from "../includes/types";
+import React, { createContext, useContext, useState, ReactNode, useEffect, useMemo, useRef } from "react";
+import { ExitRef, IntersectionConfig, IntersectionStructure, JModellerState, JunctionConfig, JunctionObjectRef, JunctionStructure, LaneStructure } from "../includes/types";
 import { generateEdgeTubes, generateFloorMesh, generateLaneLines, generateStopLines } from "../includes/utils";
 import { defaultJunctionConfig } from "../includes/defaults";
 import * as THREE from "three";
@@ -12,8 +12,18 @@ const JModellerContext = createContext<JModellerState | undefined>(undefined);
 export const JModellerProvider = ({ children }: { children: ReactNode }) => {
 
     const [junction, setJunction] = useState<JunctionConfig>(defaultJunctionConfig);
-    const [selectedJunctionObjectRef, setSelectedJunctionObjectRef] = useState<JunctionObjectRef | null>(null);
+    const [selectedJunctionObjectRefs, setSelectedJunctionObjectRefs] = useState<JunctionObjectRef[]>([]);
+    const [selectedExits, setSelectedExits] = useState<ExitRef[]>([]);
+    const junctionObjectRefs = useRef<JunctionObjectRef[]>([]);
     
+    const registerJunctionObject = (group: THREE.Group, type: string) => {
+        junctionObjectRefs.current.push({ group, type });
+    };
+    const unregisterJunctionObject = (group: THREE.Group) => {
+        junctionObjectRefs.current = junctionObjectRefs.current.filter(obj => obj.group !== group);
+    };
+
+
 
     const junctionStructure: JunctionStructure = useMemo(() => {
         
@@ -59,8 +69,13 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
             junction,
             setJunction,
             junctionStructure,
-            selectedJunctionObjectRef,
-            setSelectedJunctionObjectRef
+            selectedJunctionObjectRefs,
+            setSelectedJunctionObjectRefs,
+            junctionObjectRefs,
+            registerJunctionObject,
+            unregisterJunctionObject,
+            selectedExits,
+            setSelectedExits,
         }}>
             {children}
         </JModellerContext.Provider>

@@ -2,10 +2,16 @@
 
 import { useJModellerContext } from "../context/JModellerContext";
 import { defaultIntersectionConfig } from "../includes/defaults";
-import { ExitConfig } from "../includes/types";
+import { ExitConfig, ExitRef } from "../includes/types";
 
 export default function DebugPanel() {
-    const { junction, setJunction, setSelectedJunctionObjectRef } = useJModellerContext();
+    const { 
+        junction, 
+        setJunction, 
+        setSelectedJunctionObjectRefs, 
+        selectedExits,
+        setSelectedExits
+    } = useJModellerContext();
 
 
     const handleExitNumChange = (intersectionIndex: number, newExitNum: number) => {
@@ -93,7 +99,52 @@ export default function DebugPanel() {
                 (_, index) => index !== intersectionIndex
             )
         }));
-        setSelectedJunctionObjectRef(null);
+        setSelectedJunctionObjectRefs([]);
+    };
+
+    const addNewLink = () => {
+        if (selectedExits.length < 2) return;
+
+        const newLink: [ExitRef, ExitRef] = [selectedExits[0], selectedExits[1]];
+
+        setJunction(prev => {
+           const exists = prev.junctionLinks.some(([a, b]) =>
+                (
+                    (a.junctionGroup === newLink[0].junctionGroup &&
+                        a.exitIndex === newLink[0].exitIndex &&
+                        b.junctionGroup === newLink[1].junctionGroup &&
+                        b.exitIndex === newLink[1].exitIndex)
+                ) ||
+                (
+                    (a.junctionGroup === newLink[1].junctionGroup &&
+                        a.exitIndex === newLink[1].exitIndex &&
+                        b.junctionGroup === newLink[0].junctionGroup &&
+                        b.exitIndex === newLink[0].exitIndex)
+                )
+            );
+            const conflicts = prev.junctionLinks.some(([a, b]) =>
+                [a, b].some(linkExit =>
+                    linkExit.junctionGroup === newLink[0].junctionGroup && linkExit.exitIndex === newLink[0].exitIndex ||
+                    linkExit.junctionGroup === newLink[1].junctionGroup && linkExit.exitIndex === newLink[1].exitIndex
+                )
+            );
+            if (exists || conflicts) return prev; // don't add duplicate
+
+            return {
+                ...prev,
+                junctionLinks: [...prev.junctionLinks, newLink],
+            };
+        });
+
+        setSelectedExits([]);
+
+    };
+
+    const handleRemoveLink = (linkIndex: number) => {
+        setJunction(prev => ({
+            ...prev,
+            junctionLinks: prev.junctionLinks.filter((_, i) => i !== linkIndex)
+        }));
     };
 
     return (
@@ -119,6 +170,44 @@ export default function DebugPanel() {
                 >
                     Add new intersection
                 </button>
+        </div>
+        <div
+            style={{
+                position: "absolute",
+                bottom: 10,
+                right: 10,
+                padding: 10,
+                background: "rgba(0,0,0,0.7)",
+                color: "white",
+                borderRadius: 8,
+                maxHeight: "40vh",
+                overflowY: "auto",
+                fontFamily: "sans-serif",
+                minWidth: 400,
+            }}
+            >
+                <h1>Exit Links</h1>
+                <button
+                    onClick={() => addNewLink()}
+                    disabled={selectedExits.length !== 2}
+                >Add new link</button>
+                {junction.junctionLinks.map((link, linkIndex) => {
+                    return (
+                        <div
+                            key={`link-${linkIndex}`}
+                        >
+                            <p
+                                key={`link-${linkIndex}`}
+                            >
+                                {link[0].structureType} {link[0].structureIndex}, Exit {link[0].exitIndex} - {link[1].structureType} {link[1].structureIndex}, Exit {link[1].exitIndex}
+                            </p>
+                            <button
+                                onClick={() => handleRemoveLink(linkIndex)}
+                            >Remove Link</button>
+                        </div>
+                    )
+                })}
+                
         </div>
             <div
                 style={{

@@ -134,16 +134,42 @@ export function generateFloorMesh(
     exits: ExitStructure[]
 ): THREE.ShapeGeometry {
     const shape = new THREE.Shape();
-        exits.forEach(exit => {
-            const stopLine = exit.stopLines[0].line;
-            const firstLane = exit.laneLines[0].line;
-            const lastLane = exit.laneLines[exit.laneLines.length - 1].line;
+    exits.forEach(exit => {
+        const stopLine = exit.stopLines[0].line;
+        const firstLane = exit.laneLines[0].line;
+        const lastLane = exit.laneLines[exit.laneLines.length - 1].line;
 
-            shape.moveTo(stopLine.start.x, stopLine.start.z);
-            shape.lineTo(firstLane.end.x, firstLane.end.z);
-            shape.lineTo(lastLane.end.x, lastLane.end.z);
-            shape.lineTo(stopLine.end.x, stopLine.end.z);
-        });
-        shape.closePath();
+        shape.moveTo(stopLine.start.x, stopLine.start.z);
+        shape.lineTo(firstLane.end.x, firstLane.end.z);
+        shape.lineTo(lastLane.end.x, lastLane.end.z);
+        shape.lineTo(stopLine.end.x, stopLine.end.z);
+    });
+    shape.closePath();
+    return new THREE.ShapeGeometry(shape);
+};
+
+export function generateExitMesh(
+    exit: ExitStructure
+): THREE.ShapeGeometry {
+    const distanceFromEdge = 0.90;
+    const shape = new THREE.Shape();
+    
+    const leftStart = exit.laneLines[0].line.end;
+    const rightStart = exit.laneLines[exit.laneLines.length - 1].line.end;
+
+    const leftEnd = new THREE.Vector3();
+    const rightEnd = new THREE.Vector3();
+
+    exit.laneLines[0].line.at(distanceFromEdge, leftEnd);
+    exit.laneLines[exit.laneLines.length - 1].line.at(distanceFromEdge, rightEnd);
+
+
+    // Make sure points are ordered clockwise around the rectangle
+    shape.moveTo(leftStart.x, leftStart.z);
+    shape.lineTo(rightStart.x, rightStart.z);
+    shape.lineTo(rightEnd.x, rightEnd.z);
+    shape.lineTo(leftEnd.x, leftEnd.z);
+    shape.closePath();
+
     return new THREE.ShapeGeometry(shape);
 };

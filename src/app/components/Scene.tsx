@@ -12,6 +12,7 @@ import * as THREE from "three";
 import { MTLLoader, OBJLoader } from "three/examples/jsm/Addons.js";
 import { DragControls } from 'three/addons/controls/DragControls.js';
 import { JunctionObjectRef } from "../includes/types";
+import { JunctionComponents } from "./JunctionComponents";
 
 
 
@@ -51,53 +52,11 @@ export async function preloadCars() {
 
 export default function Scene() {
 
-    const { junctionStructure, selectedJunctionObjectRef } = useJModellerContext();
+    const { selectedJunctionObjectRefs } = useJModellerContext();
     const [selectedCarId, setSelectedCarId] = useState(-1);
     const [carsLoaded, setCarsLoaded] = useState<boolean>(false);
 
-
-    const junctionObjectRefs = useRef<JunctionObjectRef[]>([]);
-    const controlRef = useRef<DragControls | null>(null);
-
-
-    const registerJunctionObject = (group: THREE.Group, type: string) => {
-        junctionObjectRefs.current.push({ group, type });
-    };
-
-    const unregisterJunctionObject = (group: THREE.Group) => {
-        junctionObjectRefs.current = junctionObjectRefs.current.filter(obj => obj.group !== group);
-    };
-
-
-    const { camera, gl } = useThree();
-
-    useEffect(() => {
-        if (!camera || !gl) return;
-        const controls = new DragControls([], camera, gl.domElement);
-        controls.transformGroup = true;
-
-        controlRef.current = controls;
-
-        return () => controls.dispose();
-    }, [camera, gl]);
-
-    useEffect(() => {
-        const controls = controlRef.current;
-        if (!controls) return;
-
-        // Clear old objects
-        controls.objects = [];
-
-        // Add the currently selected junction object
-        if (selectedJunctionObjectRef?.group) {
-            controls.objects.push(selectedJunctionObjectRef.group);
-        }
-    }, [selectedJunctionObjectRef]);
-
-
-
-
-
+    
     // Jonnys Dealership
     useEffect(() => {
         const loadAllCars = async () => {
@@ -123,15 +82,11 @@ export default function Scene() {
     );
 
 
-
-
-
     return (
         <>
-
             <axesHelper args={[50]} />
 
-            <fog attach="fog" args={["#0a0a0a", 100, 150]} />
+            <fog attach="fog" args={["#0a0a0a", 100, 250]} />
 
             <ambientLight intensity={1} />
             <directionalLight position={[20, 50, 20]} intensity={0.6} />
@@ -147,26 +102,14 @@ export default function Scene() {
             </EffectComposer>
 
             <OrbitControls
-                enabled={selectedJunctionObjectRef == null}
+                enabled={selectedJunctionObjectRefs.length === 0}
                 minPolarAngle={Math.PI / 6}
-                maxPolarAngle={Math.PI / 2}
+                maxPolarAngle={Math.PI / 2.1}
                 minDistance={5}
                 maxDistance={100}
             />
 
-            {
-                junctionStructure.intersectionStructures.map((intersectionStructure, structureIndex) => (
-                    <IntersectionComponent
-                        key={structureIndex}
-                        structureIndex={structureIndex}
-                        registerJunctionObject={registerJunctionObject}
-                        unregisterJunctionObject={unregisterJunctionObject}
-                        intersectionStructure={intersectionStructure}
-                        controlRef={controlRef}
-                    />
-                ))
-
-            }
+            <JunctionComponents />
             {carsLoaded && carsTest.map((car) => (
                 <Car
                     key={car.id}

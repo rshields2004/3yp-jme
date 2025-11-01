@@ -31,15 +31,18 @@ export const defaultIntersectionConfig: IntersectionConfig = {
     exitConfig: Array.from({ length: 4 }, () => ({
         laneCount: 2,
         laneWidth: 1.5,
-        exitLength: 40,
+        exitLength: 20,
     })),
 };
 
 
 export const defaultJunctionConfig = {
     intersections: [],
+    junctionLinks: [],
 };
 
 export const carTypes = ["coupe", "hatchback", "micro", "microcargo", "microtransport", "minibus", "mpv", "normal", "pickup", "pickup-small", "station", "van"];
 export const carColours = ["blue", "citrus", "green", "orange", "red", "silver", "violet"];
+
+export const FLOOR_Y = 1;
 
