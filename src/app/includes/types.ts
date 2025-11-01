@@ -29,6 +29,7 @@ export type ExitStructure = {
 };
 
 export type IntersectionStructure = {
+    id: string;
     exitInfo: ExitStructure[];
     edgeTubes: THREE.TubeGeometry[];
     intersectionFloor: THREE.ShapeGeometry;
@@ -38,8 +39,6 @@ export type IntersectionStructure = {
 export type JunctionStructure = {
     intersectionStructures: IntersectionStructure[];
 }
-
-
 
 
 export type ExitConfig = {
@@ -54,11 +53,26 @@ export type IntersectionConfig = {
     exitConfig: ExitConfig[];
 };
 
-export type JunctionConfig = {
-    intersections: IntersectionConfig[];
-    junctionLinks: [ExitRef, ExitRef][];
-}
+export type IntersectionObject = {
+    id: string;
+    type: "intersection"
+    config: IntersectionConfig;
+};
 
+export type JunctionObject = IntersectionObject; // Later on a | would go here with the other types of object
+
+export type JunctionConfig = {
+    junctionObjects: JunctionObject[];
+    junctionLinks: JunctionLink[];
+};
+
+export type JunctionObjectTypes = "intersection" | "roundabout";
+
+
+export type JunctionLink = {
+    id: string;
+    objectPair: [ExitRef, ExitRef];
+}
 
 export type JModellerState = {
     junction: JunctionConfig;
@@ -67,21 +81,23 @@ export type JModellerState = {
     selectedJunctionObjectRefs: JunctionObjectRef[];
     setSelectedJunctionObjectRefs: React.Dispatch<React.SetStateAction<JunctionObjectRef[]>>;
     junctionObjectRefs: React.RefObject<JunctionObjectRef[]>;
-    registerJunctionObject: (group: THREE.Group<THREE.Object3DEventMap>, type: string) => void;
+    registerJunctionObject: (group: THREE.Group, id: string, type: JunctionObjectTypes) => void;
     unregisterJunctionObject: (group: THREE.Group<THREE.Object3DEventMap>) => void;
     selectedExits: ExitRef[];
     setSelectedExits: React.Dispatch<React.SetStateAction<ExitRef[]>>;
 };
 
+
 // This exists for the drag controls to be able to attach themselves to any object
 export type JunctionObjectRef = {
     group: THREE.Group;
-    type: string;
+    structureID: string;
+    type: JunctionObjectTypes;
 };
 
 export type ExitRef = {
     junctionGroup: THREE.Group;
     exitIndex: number;
     structureType: string;
-    structureIndex: number;
+    structureID: string;
 };

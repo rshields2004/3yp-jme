@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useMemo, useRef } from "react";
-import { ExitRef, IntersectionConfig, IntersectionStructure, JModellerState, JunctionConfig, JunctionObjectRef, JunctionStructure, LaneStructure } from "../includes/types";
+import { ExitRef, IntersectionConfig, IntersectionStructure, JModellerState, JunctionConfig, JunctionObjectRef, JunctionObjectTypes, JunctionStructure, LaneStructure } from "../includes/types";
 import { generateEdgeTubes, generateFloorMesh, generateLaneLines, generateStopLines } from "../includes/utils";
 import { defaultJunctionConfig } from "../includes/defaults";
 import * as THREE from "three";
@@ -16,8 +16,11 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
     const [selectedExits, setSelectedExits] = useState<ExitRef[]>([]);
     const junctionObjectRefs = useRef<JunctionObjectRef[]>([]);
     
-    const registerJunctionObject = (group: THREE.Group, type: string) => {
-        junctionObjectRefs.current.push({ group, type });
+    const registerJunctionObject = (group: THREE.Group, id: string, type: JunctionObjectTypes) => {
+        const exists = junctionObjectRefs.current.some(obj => obj.structureID === id);
+        if (!exists) {
+            junctionObjectRefs.current.push({ group, structureID: id, type });
+        }
     };
     const unregisterJunctionObject = (group: THREE.Group) => {
         junctionObjectRefs.current = junctionObjectRefs.current.filter(obj => obj.group !== group);
@@ -27,8 +30,11 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
 
     const junctionStructure: JunctionStructure = useMemo(() => {
         
-        const intersectionStructures: IntersectionStructure[] = junction.intersections.map((config: IntersectionConfig) => {
-            
+        
+        // First we calculate intersections
+        const intersectionStructures: IntersectionStructure[] = junction.junctionObjects.filter((obj) => obj.type === "intersection").map((obj) => {
+            const id = obj.id;
+            const config = obj.config;
             const maxExitSpan = Math.max(...config.exitConfig.map(e => e.laneCount * e.laneWidth));
             const adjustedOffset = maxExitSpan / (2 * Math.sin(Math.PI / config.numExits));
 
@@ -55,10 +61,18 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
             const maxDistanceToStopLine = maxExitLength + midPointStop.distanceTo(new THREE.Vector3(0, 0, 0)) + 1;
 
             const origin = config.origin.clone();
-            return { exitInfo, edgeTubes, maxDistanceToStopLine, intersectionFloor, origin };
+            return { id, exitInfo, edgeTubes, maxDistanceToStopLine, intersectionFloor, origin };
 
         });
         return { intersectionStructures };
+
+
+
+        // const roundaboutStructures
+
+
+
+
     }, [junction]);
 
 

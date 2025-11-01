@@ -8,11 +8,11 @@ import { Text } from "@react-three/drei";
 
 
 type IntersectionProps = {
-    structureIndex: number;
+    id: string;
     intersectionStructure: IntersectionStructure;
 };
 
-export const IntersectionComponent = ({ structureIndex, intersectionStructure }: IntersectionProps) => {
+export const IntersectionComponent = ({ id, intersectionStructure }: IntersectionProps) => {
 
     const groupRef = useRef<THREE.Group>(null);
     const { 
@@ -36,7 +36,7 @@ export const IntersectionComponent = ({ structureIndex, intersectionStructure }:
                 return prev.filter(obj => obj.group !== groupRef.current);
             } else {
                 // Add it to the selection
-                return [...prev, { group: groupRef.current!, type: "intersection", selectedExit: null }];
+                return [...prev, { group: groupRef.current!, structureID: id, type: "intersection" }];
             }
         });
     };
@@ -54,7 +54,7 @@ export const IntersectionComponent = ({ structureIndex, intersectionStructure }:
                     newPrev = newPrev.slice(1);
                 }
 
-                return [...newPrev, { junctionGroup, exitIndex, structureType: "intersection", structureIndex }];
+                return [...newPrev, { junctionGroup, exitIndex, structureType: "intersection", structureID: id }];
             }
         })
     }
@@ -64,8 +64,7 @@ export const IntersectionComponent = ({ structureIndex, intersectionStructure }:
         if (!groupRef.current) {
             return;
         }
-        groupRef.current.userData = { structureIndex, type: "intersection" };
-        registerJunctionObject(groupRef.current, "intersection");
+        registerJunctionObject(groupRef.current, id, "intersection");
         return () => {
             unregisterJunctionObject(groupRef.current!);
         };
@@ -79,11 +78,13 @@ export const IntersectionComponent = ({ structureIndex, intersectionStructure }:
         exitRefs.current = intersectionStructure.exitInfo.map(() => null);
     }
 
+    const junctionObject = junction.junctionObjects.find((jObj) => jObj.id === id);
+    const origin = junctionObject ? junctionObject.config.origin : new THREE.Vector3(0, 0, 0);
 
     return (
         <group
             ref={groupRef}
-            position={junction.intersections[structureIndex].origin}
+            position={origin}
         >
 
             {/* Selection ring */}
@@ -139,6 +140,11 @@ export const IntersectionComponent = ({ structureIndex, intersectionStructure }:
             {intersectionStructure.exitInfo.map((exit, exitIndex) => {
                 
                 const isSelectedExit = selectedExits.some(e => e.junctionGroup === groupRef.current && e.exitIndex === exitIndex);
+                const inALink = junction.junctionLinks.some(link =>
+                    link.objectPair.some(linkExit =>
+                        linkExit.junctionGroup === groupRef.current && linkExit.exitIndex === exitIndex
+                    )
+                );
 
                 return (
                     <mesh
@@ -152,9 +158,9 @@ export const IntersectionComponent = ({ structureIndex, intersectionStructure }:
                         }}
                     >
                         <meshBasicMaterial
-                            color={isSelectedExit ? "red" : "blue"}
+                            color={inALink ? "green" : (isSelectedExit ? "red" :  "blue")}
                             transparent
-                            opacity={isSelected ? 0.3 : 0} // keep visible if junction is selected
+                            opacity={(isSelected || inALink ) ? 0.5 : 0} // keep visible if junction is selected
                             side={THREE.DoubleSide}
                         />
                     </mesh>

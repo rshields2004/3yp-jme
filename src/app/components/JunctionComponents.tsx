@@ -37,17 +37,29 @@ export const JunctionComponents = () => {
             if (!controls) return;
 
             controls.objects.forEach(obj => {
-                const { structureIndex, type } = obj.userData;
-                if (type === "intersection") {
-                    setJunction(prev => {
-                        const newIntersections = [...prev.intersections];
-                        newIntersections[structureIndex] = {
-                            ...newIntersections[structureIndex],
-                            origin: obj.position.clone(),
-                        };
-                        return { ...prev, intersections: newIntersections };
-                    });
+                const { id } = obj.userData;
+                if (!id) {
+                    return;
                 }
+                setJunction(prev => {
+                    // Find the junction object by id
+                    const newJunctionObjects = prev.junctionObjects.map(jObj => {
+                        if (jObj.id === id) {
+                            return {
+                                ...jObj,
+                                object: {
+                                    ...jObj,
+                                    config: {
+                                        ...jObj.config,
+                                        origin: obj.position.clone(), // update position
+                                    },
+                                },
+                            };
+                        }
+                        return jObj;
+                    });
+                    return { ...prev, junctionObjects: newJunctionObjects };
+                });
             });
         };
 
@@ -76,10 +88,10 @@ export const JunctionComponents = () => {
 
     return (
         <>
-            {junctionStructure.intersectionStructures.map((intersectionStructure, i) => (
+            {junctionStructure.intersectionStructures.map((intersectionStructure, _) => (
                 <IntersectionComponent
-                    key={i}
-                    structureIndex={i}
+                    key={intersectionStructure.id}
+                    id={intersectionStructure.id}
                     intersectionStructure={intersectionStructure}
                 />
             ))}

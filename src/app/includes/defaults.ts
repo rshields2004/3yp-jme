@@ -8,22 +8,6 @@ export const defaultLaneProperties: LaneLineProperties = {
     glow: 1.3,
 };
 
-export const defaultLane: LaneStructure = {
-    line: new THREE.Line3(),
-    properties: { ...defaultLaneProperties },
-};
-
-export const defaultExit: ExitStructure = {
-    laneLines: [],
-    stopLines: [],
-}
-
-export const defaultIntersectionStructure: IntersectionStructure = {
-    exitInfo: Array.from({ length: 4 }, () => (defaultExit)),
-    edgeTubes: [],
-    intersectionFloor: new THREE.ShapeGeometry(),
-    maxDistanceToStopLine: 20,
-};
 
 export const defaultIntersectionConfig: IntersectionConfig = {
     numExits: 4,
@@ -35,9 +19,14 @@ export const defaultIntersectionConfig: IntersectionConfig = {
     })),
 };
 
+export const defaultJunctionObject = {
+    id: crypto.randomUUID(),
+    type: "intersection",
+    config: defaultIntersectionConfig,
+}
 
 export const defaultJunctionConfig = {
-    intersections: [],
+    junctionObjects: [],
     junctionLinks: [],
 };
 
