@@ -61,18 +61,18 @@ export type IntersectionObject = {
 
 export type JunctionObject = IntersectionObject; // Later on a | would go here with the other types of object
 
-export type JunctionConfig = {
-    junctionObjects: JunctionObject[];
-    junctionLinks: JunctionLink[];
-};
-
 export type JunctionObjectTypes = "intersection" | "roundabout";
-
 
 export type JunctionLink = {
     id: string;
     objectPair: [ExitRef, ExitRef];
 }
+
+export type JunctionConfig = {
+    junctionObjects: JunctionObject[];
+    junctionLinks: JunctionLink[];
+};
+
 
 export type JModellerState = {
     junction: JunctionConfig;

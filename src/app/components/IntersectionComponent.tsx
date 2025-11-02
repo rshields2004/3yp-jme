@@ -43,21 +43,33 @@ export const IntersectionComponent = ({ id, intersectionStructure }: Intersectio
 
     const handleExitClick = (junctionGroup: THREE.Group, exitIndex: number) => {
         setSelectedExits(prev => {
-            const exists = prev.some(e => e.junctionGroup === junctionGroup && e.exitIndex === exitIndex);
-            
-            if (exists) {
-                return prev.filter(e => !(e.junctionGroup === junctionGroup && e.exitIndex === exitIndex));
-            }
-            else {
-                let newPrev = prev.filter(e => e.junctionGroup !== junctionGroup);
-                if (newPrev.length >= 2) {
-                    newPrev = newPrev.slice(1);
-                }
+            const selectedAlready = prev.some(exit => exit.junctionGroup === junctionGroup && exit.exitIndex === exitIndex);
+            const inALink = junction.junctionLinks.some(link =>
+                link.objectPair.some(linkExit =>
+                    linkExit.junctionGroup === junctionGroup && linkExit.exitIndex === exitIndex
+                )
+            );
 
-                return [...newPrev, { junctionGroup, exitIndex, structureType: "intersection", structureID: id }];
+            if (selectedAlready) {
+                return prev.filter(exit => !(exit.junctionGroup === junctionGroup && exit.exitIndex === exitIndex));
             }
-        })
-    }
+
+            if (inALink) {
+                return prev;
+            }
+
+            let newLinks = prev.filter(exit => exit.junctionGroup !== junctionGroup);
+
+            if (newLinks.length >= 2) {
+                newLinks = newLinks.slice(1);
+            }
+
+            return [
+                ...newLinks,
+                { junctionGroup, exitIndex, structureType: "intersection", structureID: id }
+            ];
+        });
+    };
 
     // Upon intersection being initialised, register the object
     useEffect(() => {
