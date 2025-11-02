@@ -1,7 +1,7 @@
 "use client";
 
-import React, { createContext, useContext, useState, ReactNode, useEffect, useMemo, useRef } from "react";
-import { ExitRef, IntersectionConfig, IntersectionStructure, JModellerState, JunctionConfig, JunctionObjectRef, JunctionObjectTypes, JunctionStructure, LaneStructure } from "../includes/types";
+import React, { createContext, useContext, useState, ReactNode, useMemo, useRef } from "react";
+import { ExitRef, IntersectionStructure, JModellerState, JunctionConfig, JunctionObjectRef, JunctionObjectTypes, JunctionStructure } from "../includes/types";
 import { generateEdgeTubes, generateFloorMesh, generateLaneLines, generateStopLines } from "../includes/utils";
 import { defaultJunctionConfig } from "../includes/defaults";
 import * as THREE from "three";

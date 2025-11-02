@@ -1,4 +1,4 @@
-import {LaneLineProperties, IntersectionStructure, IntersectionConfig, LaneStructure, ExitStructure } from "./types";
+import { LaneLineProperties, IntersectionConfig } from "./types";
 import * as THREE from "three";
 
 export const defaultLaneProperties: LaneLineProperties = {

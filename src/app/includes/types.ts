@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import { DragControls } from "three/examples/jsm/controls/DragControls.js";
 
 export type CarProperties = {
     key: number;

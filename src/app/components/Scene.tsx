@@ -1,17 +1,13 @@
 "use client";
 
-import { useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import Car from "./Car";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Bloom, EffectComposer } from "@react-three/postprocessing";
 import { useJModellerContext } from "../context/JModellerContext";
-import { IntersectionComponent } from "./IntersectionComponent";
 import { carColours, carTypes } from "../includes/defaults";
 import * as THREE from "three";
 import { MTLLoader, OBJLoader } from "three/examples/jsm/Addons.js";
-import { DragControls } from 'three/addons/controls/DragControls.js';
-import { JunctionObjectRef } from "../includes/types";
 import { JunctionComponents } from "./JunctionComponents";
 
 

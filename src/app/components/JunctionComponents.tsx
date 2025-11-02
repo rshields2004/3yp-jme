@@ -1,4 +1,4 @@
-import {useEffect, useRef, useState } from "react";
+import {useEffect, useRef } from "react";
 import * as THREE from "three";
 import { DragControls } from "three/examples/jsm/controls/DragControls.js";
 import { useJModellerContext } from "../context/JModellerContext";
@@ -30,8 +30,6 @@ export const JunctionComponents = () => {
             if (draggedGroup.position.y != FLOOR_Y) {
                 draggedGroup.position.y = FLOOR_Y;
             }
-            
-            
         };
 
         const onDragEnd = (event: any) => {
@@ -82,7 +80,6 @@ export const JunctionComponents = () => {
         if (!controls)  {
             return;
         }
-
         controls.objects = selectedJunctionObjectRefs.map(obj => obj.group);
 
     }, [selectedJunctionObjectRefs]);
