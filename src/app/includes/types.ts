@@ -99,5 +99,6 @@ export type ExitRef = {
     junctionGroup: THREE.Group;
     exitIndex: number;
     structureType: string;
+    structureIndex: number;
     structureID: string;
 };

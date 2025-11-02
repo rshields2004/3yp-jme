@@ -235,7 +235,7 @@ export default function DebugPanel() {
                             <p
                                 key={`link-${link.id}`}
                             >
-                                {link.objectPair[0].structureType} {link.objectPair[0].structureID}, Exit {link.objectPair[0].exitIndex} - {link.objectPair[1].structureType} {link.objectPair[1].structureID}, Exit {link.objectPair[1].exitIndex}
+                                {link.objectPair[0].structureType} {link.objectPair[0].structureIndex}, Exit {link.objectPair[0].exitIndex} - {link.objectPair[1].structureType} {link.objectPair[1].structureIndex}, Exit {link.objectPair[1].exitIndex}
                             </p>
                             <button
                                 onClick={() => handleRemoveLink(link.id)}

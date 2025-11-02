@@ -5,14 +5,16 @@ import { IntersectionStructure } from "../includes/types";
 import { useJModellerContext } from "../context/JModellerContext";
 import { generateExitMesh } from "../includes/utils";
 import { Text } from "@react-three/drei";
+import React from "react";
 
 
 type IntersectionProps = {
     id: string;
     intersectionStructure: IntersectionStructure;
+    index: number;
 };
 
-export const IntersectionComponent = ({ id, intersectionStructure }: IntersectionProps) => {
+export const IntersectionComponent = ({ id, intersectionStructure, index }: IntersectionProps) => {
 
     const groupRef = useRef<THREE.Group>(null);
     const { 
@@ -29,14 +31,14 @@ export const IntersectionComponent = ({ id, intersectionStructure }: Intersectio
         if (event.button !== 2) return;
         event.stopPropagation();
 
+        // Since only 2 can be selected at a time, we remove the earliest selected and select the new one
         setSelectedJunctionObjectRefs(prev => {
             const exists = prev.some(obj => obj.group === groupRef.current);
             if (exists) {
-                // Remove it from the selection
                 return prev.filter(obj => obj.group !== groupRef.current);
-            } else {
-                // Add it to the selection
-                return [...prev, { group: groupRef.current!, structureID: id, type: "intersection" }];
+            } 
+            else {
+                return [...prev, { group: groupRef.current!, refID: id, type: "intersection" }];
             }
         });
     };
@@ -66,7 +68,7 @@ export const IntersectionComponent = ({ id, intersectionStructure }: Intersectio
 
             return [
                 ...newLinks,
-                { junctionGroup, exitIndex, structureType: "intersection", structureID: id }
+                { junctionGroup, exitIndex, structureType: "intersection", structureIndex: index, structureID: id }
             ];
         });
     };
@@ -98,6 +100,18 @@ export const IntersectionComponent = ({ id, intersectionStructure }: Intersectio
             ref={groupRef}
             position={origin}
         >
+
+            <Text
+                font="/fonts/Electrolize-Regular.ttf"
+                position={[0, 0.1, 0]}
+                rotation={[-Math.PI / 2, 0, 0]}
+                fontSize={0.5}             
+                color="white"            
+                anchorX="center"         
+                anchorY="middle"         
+            >
+                Intersection {index}
+            </Text>
 
             {/* Selection ring */}
             {isSelected && (
@@ -157,25 +171,60 @@ export const IntersectionComponent = ({ id, intersectionStructure }: Intersectio
                         linkExit.junctionGroup === groupRef.current && linkExit.exitIndex === exitIndex
                     )
                 );
+                
+                
+                const end = exit.laneLines[0].line.end;
+                const start = exit.laneLines[exit.laneLines.length - 1].line.end;
 
+                const end2 = exit.laneLines[0].line.start;
+                const start2 = exit.laneLines[exit.laneLines.length - 1].line.start;
+
+
+                const midpoint = new THREE.Vector3().addVectors(end, start).multiplyScalar(0.5);
+                const midpoint2 = new THREE.Vector3().addVectors(end2, start2).multiplyScalar(0.5);
+
+                const position = new THREE.Vector3().lerpVectors(midpoint, midpoint2, 1 / midpoint.distanceTo(midpoint2)).add(new THREE.Vector3(0, 0.1, 0));
+
+                const dir = new THREE.Vector3().subVectors(new THREE.Vector3(0, 0, 0), position).normalize();
+                const angleY = Math.atan2(dir.x, dir.z);
+
+                
                 return (
-                    <mesh
+                    <React.Fragment
                         key={exitIndex}
-                        geometry={generateExitMesh(exit)}
-                        rotation={[-Math.PI / 2, Math.PI, Math.PI]}
-                        position={[0, 0.01, 0]}
-                        onPointerDown={(event) => {
-                            event.stopPropagation();
-                            handleExitClick(groupRef.current!, exitIndex);
-                        }}
                     >
-                        <meshBasicMaterial
-                            color={inALink ? "green" : (isSelectedExit ? "red" :  "blue")}
-                            transparent
-                            opacity={(isSelected || inALink ) ? 0.5 : 0} // keep visible if junction is selected
-                            side={THREE.DoubleSide}
-                        />
-                    </mesh>
+                        <Text
+                            font="/fonts/Electrolize-Regular.ttf"
+                            position={position}
+                            rotation={[-Math.PI / 2, 0, angleY]}
+                            fontSize={0.5}         
+                            fontStyle="normal"
+                            fontWeight={1}    
+                            color="white"            
+                            anchorX="center"         
+                            anchorY="middle"  
+                            strokeColor="black"       
+                        >
+                            Exit {exitIndex}
+                        </Text>
+                        <mesh
+                            key={exitIndex}
+                            geometry={generateExitMesh(exit)}
+                            rotation={[-Math.PI / 2, Math.PI, Math.PI]}
+                            position={[0, 0.01, 0]}
+                            onPointerDown={(event) => {
+                                event.stopPropagation();
+                                handleExitClick(groupRef.current!, exitIndex);
+                            }}
+                        >
+                            <meshBasicMaterial
+                                color={inALink ? "green" : (isSelectedExit ? "red" :  "blue")}
+                                transparent
+                                opacity={(isSelected || inALink ) ? 0.5 : 0} // keep visible if junction is selected
+                                side={THREE.DoubleSide}
+                            />
+                        </mesh>
+                    </React.Fragment>
                 );
             })}
         </group>

@@ -76,7 +76,7 @@ export default function Scene() {
                 id: typeIndex * carColours.length + colourIndex,
                 type,
                 colour,
-                position: [x, 3, z] as [number, number, number],
+                position: [x - 30, 3, z] as [number, number, number],
             };
         })
     );

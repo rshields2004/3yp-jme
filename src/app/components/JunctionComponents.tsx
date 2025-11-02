@@ -30,6 +30,8 @@ export const JunctionComponents = () => {
             if (draggedGroup.position.y != FLOOR_Y) {
                 draggedGroup.position.y = FLOOR_Y;
             }
+            
+            
         };
 
         const onDragEnd = (event: any) => {
@@ -88,11 +90,12 @@ export const JunctionComponents = () => {
 
     return (
         <>
-            {junctionStructure.intersectionStructures.map((intersectionStructure, _) => (
+            {junctionStructure.intersectionStructures.map((intersectionStructure, i) => (
                 <IntersectionComponent
                     key={intersectionStructure.id}
                     id={intersectionStructure.id}
                     intersectionStructure={intersectionStructure}
+                    index={i}
                 />
             ))}
 
