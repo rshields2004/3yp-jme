@@ -8,15 +8,16 @@ export const defaultLaneProperties: LaneLineProperties = {
     glow: 1.3,
 };
 
+export const defaultExitConfig = {
+    laneCount: 2,
+    laneWidth: 1.5,
+    exitLength: 20,
+};
 
 export const defaultIntersectionConfig: IntersectionConfig = {
     numExits: 4,
     origin: new THREE.Vector3(0, 1, 0),
-    exitConfig: Array.from({ length: 4 }, () => ({
-        laneCount: 2,
-        laneWidth: 1.5,
-        exitLength: 20,
-    })),
+    exitConfig: Array.from({ length: 4 }, () => (defaultExitConfig)),
 };
 
 export const defaultJunctionObject = {

@@ -91,7 +91,7 @@ export type JModellerState = {
 // This exists for the drag controls to be able to attach themselves to any object
 export type JunctionObjectRef = {
     group: THREE.Group;
-    structureID: string;
+    refID: string;
     type: JunctionObjectTypes;
 };
 

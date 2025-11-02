@@ -1,7 +1,7 @@
 "use client";
 
 import { useJModellerContext } from "../context/JModellerContext";
-import { defaultIntersectionConfig } from "../includes/defaults";
+import { defaultExitConfig, defaultIntersectionConfig } from "../includes/defaults";
 import { ExitConfig, ExitRef, IntersectionConfig, JunctionLink } from "../includes/types";
 
 export default function DebugPanel() {
@@ -15,31 +15,53 @@ export default function DebugPanel() {
 
 
     const handleExitNumChange = (objID: string, newExitNum: number) => {
-        if (newExitNum <= 1) {
-            return;
-        }
-        console.log(objID);
-        setJunction(prevJunction => ({
-            ...prevJunction,
-            junctionObjects: prevJunction.junctionObjects.map(jObj => {
-                if (jObj.id === objID && jObj.type === "intersection") {
-                    return {
-                        ...jObj,
-                        config: {
-                            ...jObj.config,
-                            numExits: newExitNum,
-                            exitConfig: Array.from({ length: newExitNum }, () => ({
-                                laneCount: 2,
-                                laneWidth: 1.5,
-                                exitLength: 40,
-                            })),
-                        },
-                    };
+    if (newExitNum <= 1) return;
+
+    setJunction(prevJunction => {
+        const updatedJunctionObjects = prevJunction.junctionObjects.map(obj => {
+            if (obj.id === objID && obj.type === "intersection") {
+                const oldExits = obj.config.exitConfig;
+
+                let newExitConfig: ExitConfig[];
+                
+                if (newExitNum > oldExits.length) {
+                    const additionalExits = Array.from({ length: newExitNum - oldExits.length }, () => (defaultExitConfig));
+                    newExitConfig = [...oldExits, ...additionalExits];
+                } 
+                
+                else {
+                    newExitConfig = oldExits.slice(0, newExitNum);
                 }
-                return jObj;
-            }),
-        }));
-    };
+
+                return {
+                    ...obj,
+                    config: {
+                        ...obj.config,
+                        numExits: newExitNum,
+                        exitConfig: newExitConfig,
+                    },
+                };
+            }
+            return obj;
+        });
+
+        // Remove links that reference removed exits
+        const updatedJunctionLinks = prevJunction.junctionLinks.filter(link =>
+            link.objectPair.every(exitRef => {
+                const obj = updatedJunctionObjects.find(o => o.id === exitRef.structureID);
+                if (!obj) return false;
+
+                return exitRef.exitIndex < obj.config.exitConfig.length;
+            })
+        );
+
+        return {
+            ...prevJunction,
+            junctionObjects: updatedJunctionObjects,
+            junctionLinks: updatedJunctionLinks,
+        };
+    });
+};
 
     const handleLaneNumChange = (objID: string, exitIndex: number, newLaneNum: number) => {
         

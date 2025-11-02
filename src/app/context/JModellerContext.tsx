@@ -17,9 +17,9 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
     const junctionObjectRefs = useRef<JunctionObjectRef[]>([]);
     
     const registerJunctionObject = (group: THREE.Group, id: string, type: JunctionObjectTypes) => {
-        const exists = junctionObjectRefs.current.some(obj => obj.structureID === id);
+        const exists = junctionObjectRefs.current.some(obj => obj.refID === id);
         if (!exists) {
-            junctionObjectRefs.current.push({ group, structureID: id, type });
+            junctionObjectRefs.current.push({ group, refID: id, type });
         }
     };
     const unregisterJunctionObject = (group: THREE.Group) => {
