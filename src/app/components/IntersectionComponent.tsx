@@ -24,7 +24,8 @@ export const IntersectionComponent = ({ id, intersectionStructure, index }: Inte
         registerJunctionObject, 
         unregisterJunctionObject,
         selectedExits,
-        setSelectedExits
+        setSelectedExits,
+        snapToValidPosition
     } = useJModellerContext();
 
     const handleIntersectionClick = (event: { button: number; stopPropagation: () => void }) => {
@@ -78,7 +79,13 @@ export const IntersectionComponent = ({ id, intersectionStructure, index }: Inte
         if (!groupRef.current) {
             return;
         }
+        
+        //Actually added the id to the group userdata so THREE group can be linked to array ref object
+        groupRef.current.userData.id = id;
         registerJunctionObject(groupRef.current, id, "intersection");
+        
+        snapToValidPosition(groupRef.current);
+        
         return () => {
             unregisterJunctionObject(groupRef.current!);
         };

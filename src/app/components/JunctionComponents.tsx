@@ -9,12 +9,11 @@ import { IntersectionComponent } from "./IntersectionComponent";
 
 export const JunctionComponents = () => {
 
-    const { setJunction, selectedJunctionObjectRefs, junctionStructure } = useJModellerContext();
+    const { selectedJunctionObjectRefs, junctionStructure, snapToValidPosition } = useJModellerContext();
 
     // We define our drag controls for all components
     const { camera, gl } = useThree();
     const controlRef = useRef<DragControls | null>(null);
-
 
     useEffect(() => {
         if (!camera || !gl) return;
@@ -27,40 +26,16 @@ export const JunctionComponents = () => {
         // Drag listener
         const onDrag = (event: any) => {
             const draggedGroup = event.object as THREE.Group;
+            if (!draggedGroup) {
+                return;
+            }
             if (draggedGroup.position.y != FLOOR_Y) {
                 draggedGroup.position.y = FLOOR_Y;
             }
         };
 
         const onDragEnd = (event: any) => {
-            const controls = controlRef.current;
-            if (!controls) return;
-
-            controls.objects.forEach(obj => {
-                const { id } = obj.userData;
-                if (!id) {
-                    return;
-                }
-                setJunction(prev => {
-                    // Find the junction object by id
-                    const newJunctionObjects = prev.junctionObjects.map(jObj => {
-                        if (jObj.id === id) {
-                            return {
-                                ...jObj,
-                                object: {
-                                    ...jObj,
-                                    config: {
-                                        ...jObj.config,
-                                        origin: obj.position.clone(), // update position
-                                    },
-                                },
-                            };
-                        }
-                        return jObj;
-                    });
-                    return { ...prev, junctionObjects: newJunctionObjects };
-                });
-            });
+            snapToValidPosition(event.object as THREE.Group);
         };
 
         controls.addEventListener("drag", onDrag);

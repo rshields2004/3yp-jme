@@ -1,9 +1,9 @@
 "use client";
 
-import React, { createContext, useContext, useState, ReactNode, useMemo, useRef } from "react";
+import React, { createContext, useContext, useState, ReactNode, useMemo, useRef, useEffect } from "react";
 import { ExitRef, IntersectionStructure, JModellerState, JunctionConfig, JunctionObjectRef, JunctionObjectTypes, JunctionStructure } from "../includes/types";
 import { generateEdgeTubes, generateFloorMesh, generateLaneLines, generateStopLines } from "../includes/utils";
-import { defaultJunctionConfig } from "../includes/defaults";
+import { defaultJunctionConfig, FLOOR_Y } from "../includes/defaults";
 import * as THREE from "three";
 
 
@@ -24,6 +24,72 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
     };
     const unregisterJunctionObject = (group: THREE.Group) => {
         junctionObjectRefs.current = junctionObjectRefs.current.filter(obj => obj.group !== group);
+    };
+    const snapToValidPosition = (draggedGroup: THREE.Group) => {
+        if (!draggedGroup) return;
+
+        const draggedID = draggedGroup.userData.id;
+        const draggedStructure = junctionStructureRef.current.intersectionStructures.find(s => s.id === draggedID);
+        if (!draggedStructure) return;
+
+        const draggedRadius = draggedStructure.maxDistanceToStopLine;
+
+        // Get live positions of all other junctions
+        const otherRefs = junctionObjectRefs.current.filter(obj => obj.refID !== draggedID);
+
+        let newPos = draggedGroup.position.clone();
+
+        let safe = false;
+        let maxIterations = 50;
+        while (!safe && maxIterations-- > 0) {
+            safe = true;
+
+            for (const ref of otherRefs) {
+                const otherPos = ref.group.position;
+                const otherRadius = junctionStructureRef.current.intersectionStructures.find(s => s.id === ref.refID)?.maxDistanceToStopLine || 0;
+
+                const dist = newPos.distanceTo(otherPos);
+                const minDist = draggedRadius + otherRadius;
+
+                if (dist < minDist) {
+                    safe = false;
+                    let pushDir = newPos.clone().sub(otherPos).normalize();
+
+                    if (pushDir.lengthSq() === 0) {
+                        pushDir.set(1, 0, 0);
+                    }
+                    else {
+                        pushDir.normalize();
+                    }
+
+                    newPos.add(pushDir.multiplyScalar(minDist - dist + 0.01));
+                }
+            }
+        }
+
+        // Snap to the valid position
+        draggedGroup.position.copy(newPos);
+        draggedGroup.position.y = FLOOR_Y;
+
+        // Update state
+        setJunction(prev => {
+            const newJunctionObjects = prev.junctionObjects.map(jObj => {
+                if (jObj.id === draggedID) {
+                    return {
+                        ...jObj,
+                        object: {
+                            ...jObj,
+                            config: {
+                                ...jObj.config,
+                                origin: newPos.clone(),
+                            },
+                        },
+                    };
+                }
+                return jObj;
+            });
+            return { ...prev, junctionObjects: newJunctionObjects };
+        });
     };
 
 
@@ -75,9 +141,12 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
 
     }, [junction]);
 
+    const junctionStructureRef = useRef<JunctionStructure>(junctionStructure);
 
+    useEffect(() => {
+        junctionStructureRef.current = junctionStructure;
+    }, [junctionStructure]);
     
-
     return (
         <JModellerContext.Provider value={{
             junction,
@@ -90,6 +159,8 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
             unregisterJunctionObject,
             selectedExits,
             setSelectedExits,
+            junctionStructureRef,
+            snapToValidPosition
         }}>
             {children}
         </JModellerContext.Provider>

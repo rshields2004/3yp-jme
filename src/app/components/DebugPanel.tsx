@@ -10,7 +10,9 @@ export default function DebugPanel() {
         setJunction, 
         setSelectedJunctionObjectRefs, 
         selectedExits,
-        setSelectedExits
+        setSelectedExits,
+        junctionObjectRefs,
+        snapToValidPosition
     } = useJModellerContext();
 
 
@@ -110,18 +112,19 @@ export default function DebugPanel() {
 
     const addNewIntersection = () => {
 
+        const newID = crypto.randomUUID();
         setJunction((prevJunction) => ({
             ...prevJunction,
             junctionObjects: [
                 ...prevJunction.junctionObjects,
                 { 
-                    id: crypto.randomUUID(), 
+                    id: newID, 
                     type: "intersection",
                     config: defaultIntersectionConfig,
                 }
             ],
         }));
-    }
+    };
 
     const handleRemoveObj = (objID: string) => {
         setJunction((prevJunction) => ({

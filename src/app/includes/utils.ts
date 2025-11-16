@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { defaultLaneProperties } from "./defaults";
-import { ExitStructure, LaneStructure } from "./types";
+import { ExitStructure, IntersectionStructure, JunctionConfig, JunctionObjectRef, JunctionStructure, LaneStructure } from "./types";
 
 
 const getDirection = (

@@ -85,6 +85,8 @@ export type JModellerState = {
     unregisterJunctionObject: (group: THREE.Group<THREE.Object3DEventMap>) => void;
     selectedExits: ExitRef[];
     setSelectedExits: React.Dispatch<React.SetStateAction<ExitRef[]>>;
+    junctionStructureRef: React.RefObject<JunctionStructure>;
+    snapToValidPosition: (draggedGroup: THREE.Group<THREE.Object3DEventMap>) => void;
 };
 
 
