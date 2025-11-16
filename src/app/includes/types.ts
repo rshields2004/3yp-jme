@@ -41,6 +41,7 @@ export type JunctionStructure = {
 
 
 export type ExitConfig = {
+    numLanesIn: number;
     laneCount: number;
     laneWidth: number;
     exitLength: number;

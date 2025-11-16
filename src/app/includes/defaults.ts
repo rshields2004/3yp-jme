@@ -9,6 +9,7 @@ export const defaultLaneProperties: LaneLineProperties = {
 };
 
 export const defaultExitConfig = {
+    numLanesIn: 2,
     laneCount: 2,
     laneWidth: 1.5,
     exitLength: 20,
