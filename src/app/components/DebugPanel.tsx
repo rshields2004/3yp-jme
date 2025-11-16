@@ -8,62 +8,65 @@ export default function DebugPanel() {
     const { 
         junction, 
         setJunction, 
-        setSelectedJunctionObjectRefs, 
         selectedExits,
         setSelectedExits,
-        junctionObjectRefs,
-        snapToValidPosition
+        snapToValidPosition,
+        removeObject,
+        junctionObjectRefs
     } = useJModellerContext();
 
 
     const handleExitNumChange = (objID: string, newExitNum: number) => {
-    if (newExitNum <= 1) return;
+        if (newExitNum <= 1) return;
 
-    setJunction(prevJunction => {
-        const updatedJunctionObjects = prevJunction.junctionObjects.map(obj => {
-            if (obj.id === objID && obj.type === "intersection") {
-                const oldExits = obj.config.exitConfig;
+        setJunction(prevJunction => {
+            const updatedJunctionObjects = prevJunction.junctionObjects.map(obj => {
+                if (obj.id === objID && obj.type === "intersection") {
+                    const oldExits = obj.config.exitConfig;
 
-                let newExitConfig: ExitConfig[];
-                
-                if (newExitNum > oldExits.length) {
-                    const additionalExits = Array.from({ length: newExitNum - oldExits.length }, () => (defaultExitConfig));
-                    newExitConfig = [...oldExits, ...additionalExits];
-                } 
-                
-                else {
-                    newExitConfig = oldExits.slice(0, newExitNum);
+                    let newExitConfig: ExitConfig[];
+                    
+                    if (newExitNum > oldExits.length) {
+                        const additionalExits = Array.from({ length: newExitNum - oldExits.length }, () => (defaultExitConfig));
+                        newExitConfig = [...oldExits, ...additionalExits];
+                    } 
+                    
+                    else {
+                        newExitConfig = oldExits.slice(0, newExitNum);
+                    }
+
+                    return {
+                        ...obj,
+                        config: {
+                            ...obj.config,
+                            numExits: newExitNum,
+                            exitConfig: newExitConfig,
+                        },
+                    };
                 }
+                return obj;
+            });
 
-                return {
-                    ...obj,
-                    config: {
-                        ...obj.config,
-                        numExits: newExitNum,
-                        exitConfig: newExitConfig,
-                    },
-                };
-            }
-            return obj;
+            // Remove links that reference removed exits
+            const updatedJunctionLinks = prevJunction.junctionLinks.filter(link =>
+                link.objectPair.every(exitRef => {
+                    const obj = updatedJunctionObjects.find(o => o.id === exitRef.structureID);
+                    if (!obj) return false;
+
+                    return exitRef.exitIndex < obj.config.exitConfig.length;
+                })
+            );
+
+            return {
+                ...prevJunction,
+                junctionObjects: updatedJunctionObjects,
+                junctionLinks: updatedJunctionLinks,
+            };
         });
-
-        // Remove links that reference removed exits
-        const updatedJunctionLinks = prevJunction.junctionLinks.filter(link =>
-            link.objectPair.every(exitRef => {
-                const obj = updatedJunctionObjects.find(o => o.id === exitRef.structureID);
-                if (!obj) return false;
-
-                return exitRef.exitIndex < obj.config.exitConfig.length;
-            })
-        );
-
-        return {
-            ...prevJunction,
-            junctionObjects: updatedJunctionObjects,
-            junctionLinks: updatedJunctionLinks,
-        };
-    });
-};
+        const ref = junctionObjectRefs.current.find(obj => obj.refID === objID);
+        if (ref) snapToValidPosition(ref.group);
+        
+    };
 
     const handleLaneNumChange = (objID: string, exitIndex: number, newLaneNum: number) => {
         
@@ -86,6 +89,8 @@ export default function DebugPanel() {
                 return jObj;
             }),
         }));
+        const ref = junctionObjectRefs.current.find(obj => obj.refID === objID);
+        if (ref) snapToValidPosition(ref.group);
     };
 
     const handleExitLengthChange = (objID: string, exitIndex: number, newExitLength: number) => {
@@ -108,6 +113,8 @@ export default function DebugPanel() {
                 return jObj;
             }),
         }));
+        const ref = junctionObjectRefs.current.find(obj => obj.refID === objID);
+        if (ref) snapToValidPosition(ref.group);
     };
 
     const addNewIntersection = () => {
@@ -124,14 +131,11 @@ export default function DebugPanel() {
                 }
             ],
         }));
+        
     };
 
     const handleRemoveObj = (objID: string) => {
-        setJunction((prevJunction) => ({
-            ...prevJunction,
-            junctionObjects: prevJunction.junctionObjects.filter((obj, _) => obj.id !== objID)
-        }));
-        setSelectedJunctionObjectRefs([]);
+        removeObject(objID);
     };
 
     const addNewLink = () => {

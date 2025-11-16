@@ -25,7 +25,8 @@ export const IntersectionComponent = ({ id, intersectionStructure, index }: Inte
         unregisterJunctionObject,
         selectedExits,
         setSelectedExits,
-        snapToValidPosition
+        snapToValidPosition,
+        junctionStructureRef
     } = useJModellerContext();
 
     const handleIntersectionClick = (event: { button: number; stopPropagation: () => void }) => {
@@ -85,10 +86,6 @@ export const IntersectionComponent = ({ id, intersectionStructure, index }: Inte
         registerJunctionObject(groupRef.current, id, "intersection");
         
         snapToValidPosition(groupRef.current);
-        
-        return () => {
-            unregisterJunctionObject(groupRef.current!);
-        };
     }, []);
 
 

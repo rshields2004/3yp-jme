@@ -15,7 +15,7 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
     const [selectedJunctionObjectRefs, setSelectedJunctionObjectRefs] = useState<JunctionObjectRef[]>([]);
     const [selectedExits, setSelectedExits] = useState<ExitRef[]>([]);
     const junctionObjectRefs = useRef<JunctionObjectRef[]>([]);
-    
+
     const registerJunctionObject = (group: THREE.Group, id: string, type: JunctionObjectTypes) => {
         const exists = junctionObjectRefs.current.some(obj => obj.refID === id);
         if (!exists) {
@@ -25,6 +25,8 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
     const unregisterJunctionObject = (group: THREE.Group) => {
         junctionObjectRefs.current = junctionObjectRefs.current.filter(obj => obj.group !== group);
     };
+
+
     const snapToValidPosition = (draggedGroup: THREE.Group) => {
         if (!draggedGroup) return;
 
@@ -56,7 +58,7 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
                     let pushDir = newPos.clone().sub(otherPos).normalize();
 
                     if (pushDir.lengthSq() === 0) {
-                        pushDir.set(1, 0, 0);
+                        pushDir.set(0.01, 0, 0);
                     }
                     else {
                         pushDir.normalize();
@@ -69,7 +71,6 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
 
         // Snap to the valid position
         draggedGroup.position.copy(newPos);
-        draggedGroup.position.y = FLOOR_Y;
 
         // Update state
         setJunction(prev => {
@@ -92,11 +93,44 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
         });
     };
 
+    const removeObject = (objID: string) => {
+        setJunction((prevJunction) => ({
+            ...prevJunction,
+            junctionObjects: prevJunction.junctionObjects.filter(obj => obj.id !== objID)
+        }));
+
+
+        setSelectedJunctionObjectRefs(prev => prev.filter(obj => obj.refID !== objID));
+        setSelectedExits(prev => prev.filter(exit => exit.structureID !== objID));
+
+
+        const objRefIndex = junctionObjectRefs.current.findIndex(obj => obj.refID === objID);
+        if (objRefIndex !== -1) {
+            const group = junctionObjectRefs.current[objRefIndex].group;
+
+            // Dispose all meshes in the group
+            group.traverse((obj: any) => {
+                if (obj instanceof THREE.Mesh) {
+                    obj.geometry.dispose();
+                    if (Array.isArray(obj.material)) {
+                        obj.material.forEach(m => m.dispose());
+                    } else if (obj.material) {
+                        obj.material.dispose();
+                    }
+                }
+            });
+
+            // Remove from ref array
+            junctionObjectRefs.current.splice(objRefIndex, 1);
+        }
+
+        junctionStructureRef.current.intersectionStructures = junctionStructureRef.current.intersectionStructures.filter(s => s.id !== objID);
+    };
 
 
     const junctionStructure: JunctionStructure = useMemo(() => {
-        
-        
+
+
         // First we calculate intersections
         const intersectionStructures: IntersectionStructure[] = junction.junctionObjects.filter((obj) => obj.type === "intersection").map((obj) => {
             const id = obj.id;
@@ -106,15 +140,15 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
 
 
             const exitInfo = config.exitConfig.map((exitConfig, exitIndex) => {
-                
+
                 const angleStep = (2 * Math.PI) / config.numExits;
                 const angle = angleStep * exitIndex;
-                
+
                 const stopLines = generateStopLines(exitConfig.laneCount, exitConfig.laneWidth, adjustedOffset, angle);
-                
+
                 const laneLines = generateLaneLines(stopLines, exitConfig.exitLength, exitConfig.laneCount);
 
-                
+
                 return { stopLines, laneLines };
             });
 
@@ -147,6 +181,7 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
         junctionStructureRef.current = junctionStructure;
     }, [junctionStructure]);
     
+
     return (
         <JModellerContext.Provider value={{
             junction,
@@ -160,7 +195,8 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
             selectedExits,
             setSelectedExits,
             junctionStructureRef,
-            snapToValidPosition
+            snapToValidPosition,
+            removeObject
         }}>
             {children}
         </JModellerContext.Provider>
