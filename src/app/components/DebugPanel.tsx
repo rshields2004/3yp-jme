@@ -1,8 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useJModellerContext } from "../context/JModellerContext";
 import { defaultExitConfig, defaultIntersectionConfig } from "../includes/defaults";
-import { ExitConfig, ExitRef, IntersectionConfig, JunctionLink } from "../includes/types";
+import { ExitConfig, ExitRef, IntersectionConfig, JunctionLink, JunctionObject } from "../includes/types";
 
 export default function DebugPanel() {
     const { 
@@ -15,6 +16,44 @@ export default function DebugPanel() {
         junctionObjectRefs
     } = useJModellerContext();
 
+    const [intersectionQueue, setIntersectionQueue] = useState<IntersectionConfig[]>([]);
+    const [isProcessingQueue, setIsProcessingQueue] = useState(false);
+
+
+
+
+
+
+
+    useEffect(() => {
+        if (isProcessingQueue) return; // already processing
+        if (intersectionQueue.length === 0) return;
+
+        setIsProcessingQueue(true);
+
+        const nextConfig = intersectionQueue[0];
+        const newID = crypto.randomUUID();
+
+        // Add the new intersection
+        setJunction(prevJunction => ({
+            ...prevJunction,
+            junctionObjects: [
+                ...prevJunction.junctionObjects,
+                {
+                    id: newID,
+                    type: "intersection",
+                    config: nextConfig,
+                }
+            ]
+        }));
+
+        // Wait a tick to let the intersection initialize (geometry ready)
+        requestAnimationFrame(() => {
+            setIntersectionQueue(prevQueue => prevQueue.slice(1));
+            setIsProcessingQueue(false);
+        });
+
+    }, [intersectionQueue, isProcessingQueue]);
 
     const handleExitNumChange = (objID: string, newExitNum: number) => {
         if (newExitNum <= 1) return;
@@ -117,22 +156,12 @@ export default function DebugPanel() {
         if (ref) snapToValidPosition(ref.group);
     };
 
-    const addNewIntersection = () => {
 
-        const newID = crypto.randomUUID();
-        setJunction((prevJunction) => ({
-            ...prevJunction,
-            junctionObjects: [
-                ...prevJunction.junctionObjects,
-                { 
-                    id: newID, 
-                    type: "intersection",
-                    config: defaultIntersectionConfig,
-                }
-            ],
-        }));
-        
+    const addNewIntersection = () => {
+        setIntersectionQueue(prev => [...prev, defaultIntersectionConfig]);
     };
+        
+
 
     const handleRemoveObj = (objID: string) => {
         removeObject(objID);

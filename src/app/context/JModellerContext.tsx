@@ -1,9 +1,8 @@
 "use client";
 
-import React, { createContext, useContext, useState, ReactNode, useMemo, useRef, useEffect } from "react";
-import { ExitRef, IntersectionStructure, JModellerState, JunctionConfig, JunctionObjectRef, JunctionObjectTypes, JunctionStructure } from "../includes/types";
-import { generateEdgeTubes, generateFloorMesh, generateLaneLines, generateStopLines } from "../includes/utils";
-import { defaultJunctionConfig, FLOOR_Y } from "../includes/defaults";
+import React, { createContext, useContext, useState, ReactNode, useRef,  } from "react";
+import { ExitRef, JModellerState, JunctionConfig, JunctionObjectRef, JunctionObjectTypes } from "../includes/types";
+import { defaultJunctionConfig } from "../includes/defaults";
 import * as THREE from "three";
 
 
@@ -31,35 +30,39 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
         if (!draggedGroup) return;
 
         const draggedID = draggedGroup.userData.id;
-        const draggedStructure = junctionStructureRef.current.intersectionStructures.find(s => s.id === draggedID);
-        if (!draggedStructure) return;
+        if (!draggedID) return;
 
-        const draggedRadius = draggedStructure.maxDistanceToStopLine;
+        // Use the precomputed radius from userData
+        const draggedRadius = draggedGroup.userData.maxDistanceToStopLine || 0;
 
-        // Get live positions of all other junctions
+        // Get all other junctions
         const otherRefs = junctionObjectRefs.current.filter(obj => obj.refID !== draggedID);
 
-        let newPos = draggedGroup.position.clone();
+        // Precompute positions and radii for performance
+        const others = otherRefs.map(ref => ({
+            pos: ref.group.position,
+            radius: ref.group.userData.maxDistanceToStopLine || 0,
+        }));
 
+        let newPos = draggedGroup.position.clone();
         let safe = false;
         let maxIterations = 50;
+
         while (!safe && maxIterations-- > 0) {
             safe = true;
 
-            for (const ref of otherRefs) {
-                const otherPos = ref.group.position;
-                const otherRadius = junctionStructureRef.current.intersectionStructures.find(s => s.id === ref.refID)?.maxDistanceToStopLine || 0;
-
+            for (const { pos: otherPos, radius: otherRadius } of others) {
                 const dist = newPos.distanceTo(otherPos);
                 const minDist = draggedRadius + otherRadius;
-
+                console.log("dist " + dist + " " + minDist);
                 if (dist < minDist) {
                     safe = false;
-                    let pushDir = newPos.clone().sub(otherPos).normalize();
 
+                    let pushDir = newPos.clone().sub(otherPos);
                     if (pushDir.lengthSq() === 0) {
-                        pushDir.set(0.01, 0, 0);
-                    }
+                        const angle = Math.random() * 2 * Math.PI;
+                        pushDir.set(Math.cos(angle), 0, Math.sin(angle));
+                    } 
                     else {
                         pushDir.normalize();
                     }
@@ -72,26 +75,20 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
         // Snap to the valid position
         draggedGroup.position.copy(newPos);
 
-        // Update state
-        setJunction(prev => {
-            const newJunctionObjects = prev.junctionObjects.map(jObj => {
-                if (jObj.id === draggedID) {
-                    return {
+        // Update junction state
+        setJunction(prev => ({
+            ...prev,
+            junctionObjects: prev.junctionObjects.map(jObj =>
+                jObj.id === draggedID
+                    ? {
                         ...jObj,
-                        object: {
-                            ...jObj,
-                            config: {
-                                ...jObj.config,
-                                origin: newPos.clone(),
-                            },
-                        },
-                    };
-                }
-                return jObj;
-            });
-            return { ...prev, junctionObjects: newJunctionObjects };
-        });
+                        config: { ...jObj.config, origin: newPos.clone() },
+                    }
+                    : jObj
+            ),
+        }));
     };
+
 
     const removeObject = (objID: string) => {
         setJunction((prevJunction) => ({
@@ -123,70 +120,14 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
             // Remove from ref array
             junctionObjectRefs.current.splice(objRefIndex, 1);
         }
-
-        junctionStructureRef.current.intersectionStructures = junctionStructureRef.current.intersectionStructures.filter(s => s.id !== objID);
     };
 
 
-    const junctionStructure: JunctionStructure = useMemo(() => {
-
-
-        // First we calculate intersections
-        const intersectionStructures: IntersectionStructure[] = junction.junctionObjects.filter((obj) => obj.type === "intersection").map((obj) => {
-            const id = obj.id;
-            const config = obj.config;
-            const maxExitSpan = Math.max(...config.exitConfig.map(e => e.laneCount * e.laneWidth));
-            const adjustedOffset = maxExitSpan / (2 * Math.sin(Math.PI / config.numExits));
-
-
-            const exitInfo = config.exitConfig.map((exitConfig, exitIndex) => {
-
-                const angleStep = (2 * Math.PI) / config.numExits;
-                const angle = angleStep * exitIndex;
-
-                const stopLines = generateStopLines(exitConfig.laneCount, exitConfig.laneWidth, adjustedOffset, angle);
-
-                const laneLines = generateLaneLines(stopLines, exitConfig.exitLength, exitConfig.laneCount);
-
-
-                return { stopLines, laneLines };
-            });
-
-            const edgeTubes = generateEdgeTubes(exitInfo);
-            const intersectionFloor = generateFloorMesh(exitInfo);
-
-            const maxExitLength = Math.max(...config.exitConfig.map(c => c.exitLength));
-            const midPointStop = new THREE.Vector3();
-            exitInfo[0].stopLines[0].line.getCenter(midPointStop);
-            const maxDistanceToStopLine = maxExitLength + midPointStop.distanceTo(new THREE.Vector3(0, 0, 0)) + 1;
-
-            const origin = config.origin.clone();
-            return { id, exitInfo, edgeTubes, maxDistanceToStopLine, intersectionFloor, origin };
-
-        });
-        return { intersectionStructures };
-
-
-
-        // const roundaboutStructures
-
-
-
-
-    }, [junction]);
-
-    const junctionStructureRef = useRef<JunctionStructure>(junctionStructure);
-
-    useEffect(() => {
-        junctionStructureRef.current = junctionStructure;
-    }, [junctionStructure]);
-    
 
     return (
         <JModellerContext.Provider value={{
             junction,
             setJunction,
-            junctionStructure,
             selectedJunctionObjectRefs,
             setSelectedJunctionObjectRefs,
             junctionObjectRefs,
@@ -194,7 +135,6 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
             unregisterJunctionObject,
             selectedExits,
             setSelectedExits,
-            junctionStructureRef,
             snapToValidPosition,
             removeObject
         }}>

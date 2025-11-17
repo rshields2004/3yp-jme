@@ -1,20 +1,20 @@
-import {useEffect, useRef } from "react";
+import {useEffect, useMemo, useRef } from "react";
 import { ThickLine } from "./ThickLine";
 import * as THREE from "three";
-import { IntersectionStructure } from "../includes/types";
+import { IntersectionConfig, IntersectionStructure } from "../includes/types";
 import { useJModellerContext } from "../context/JModellerContext";
-import { generateExitMesh } from "../includes/utils";
+import { generateEdgeTubes, generateExitMesh, generateFloorMesh, generateLaneLines, generateStopLines } from "../includes/utils";
 import { Text } from "@react-three/drei";
 import React from "react";
 
 
 type IntersectionProps = {
     id: string;
-    intersectionStructure: IntersectionStructure;
+    intersectionConfig: IntersectionConfig;
     index: number;
 };
 
-export const IntersectionComponent = ({ id, intersectionStructure, index }: IntersectionProps) => {
+export const IntersectionComponent = ({ id, intersectionConfig, index }: IntersectionProps) => {
 
     const groupRef = useRef<THREE.Group>(null);
     const { 
@@ -22,11 +22,9 @@ export const IntersectionComponent = ({ id, intersectionStructure, index }: Inte
         selectedJunctionObjectRefs, 
         setSelectedJunctionObjectRefs, 
         registerJunctionObject, 
-        unregisterJunctionObject,
         selectedExits,
         setSelectedExits,
         snapToValidPosition,
-        junctionStructureRef
     } = useJModellerContext();
 
     const handleIntersectionClick = (event: { button: number; stopPropagation: () => void }) => {
@@ -75,16 +73,43 @@ export const IntersectionComponent = ({ id, intersectionStructure, index }: Inte
         });
     };
 
+
+    const intersectionMemo = useMemo(() => {
+
+        const exitInfo = intersectionConfig.exitConfig.map((exitConfig, exitIndex) => {
+            const maxExitSpan = Math.max(...intersectionConfig.exitConfig.map(e => e.laneCount * e.laneWidth));
+            const adjustedOffset = maxExitSpan / (2 * Math.sin(Math.PI / intersectionConfig.numExits));
+            const angleStep = (2 * Math.PI) / intersectionConfig.numExits;
+            const angle = angleStep * exitIndex;
+
+            const stopLines = generateStopLines(exitConfig.laneCount, exitConfig.laneWidth, adjustedOffset, angle);
+            const laneLines = generateLaneLines(stopLines, exitConfig.exitLength, exitConfig.laneCount);
+
+            return { stopLines, laneLines };
+        });
+
+        const edgeTubes = generateEdgeTubes(exitInfo);
+        const intersectionFloor = generateFloorMesh(exitInfo);
+
+        const maxExitLength = Math.max(...intersectionConfig.exitConfig.map(c => c.exitLength));
+        const midPointStop = new THREE.Vector3();
+        exitInfo[0].stopLines[0].line.getCenter(midPointStop);
+        const maxDistanceToStopLine = maxExitLength + midPointStop.distanceTo(new THREE.Vector3(0, 0, 0)) + 1;
+
+        return { exitInfo, edgeTubes, intersectionFloor, maxDistanceToStopLine };
+    }, [intersectionConfig]);
+
+
+
     // Upon intersection being initialised, register the object
     useEffect(() => {
         if (!groupRef.current) {
             return;
         }
-        
         //Actually added the id to the group userdata so THREE group can be linked to array ref object
         groupRef.current.userData.id = id;
+        groupRef.current.userData.maxDistanceToStopLine = intersectionMemo.maxDistanceToStopLine;
         registerJunctionObject(groupRef.current, id, "intersection");
-        
         snapToValidPosition(groupRef.current);
     }, []);
 
@@ -92,8 +117,8 @@ export const IntersectionComponent = ({ id, intersectionStructure, index }: Inte
     const isSelected = selectedJunctionObjectRefs.some(obj => obj.group === groupRef.current);
 
     const exitRefs = useRef<Array<THREE.Mesh | null>>([]);
-    if (exitRefs.current.length !== intersectionStructure.exitInfo.length) {
-        exitRefs.current = intersectionStructure.exitInfo.map(() => null);
+    if (exitRefs.current.length !== intersectionMemo.exitInfo.length) {
+        exitRefs.current = intersectionMemo.exitInfo.map(() => null);
     }
 
     const junctionObject = junction.junctionObjects.find((jObj) => jObj.id === id);
@@ -120,14 +145,14 @@ export const IntersectionComponent = ({ id, intersectionStructure, index }: Inte
             {/* Selection ring */}
             {isSelected && (
                 <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
-                    <ringGeometry args={[intersectionStructure.maxDistanceToStopLine, intersectionStructure.maxDistanceToStopLine + 0.5, 100]} />
+                    <ringGeometry args={[intersectionMemo.maxDistanceToStopLine, intersectionMemo.maxDistanceToStopLine + 0.5, 100]} />
                     <meshBasicMaterial color="black" side={THREE.DoubleSide} />
                 </mesh>
             )}
 
             {/* Floor */}
             <mesh
-                geometry={intersectionStructure.intersectionFloor}
+                geometry={intersectionMemo.intersectionFloor}
                 rotation={[-Math.PI / 2, Math.PI, Math.PI]}
                 position={[0, 0, 0]}
                 onPointerDown={(event) => handleIntersectionClick(event)}
@@ -136,7 +161,7 @@ export const IntersectionComponent = ({ id, intersectionStructure, index }: Inte
             </mesh>
 
             {/* Stop lines */}
-            {intersectionStructure.exitInfo.map((exit, exitIndex) =>
+            {intersectionMemo.exitInfo.map((exit, exitIndex) =>
                 exit.stopLines.map((lane, laneIdx) => (
                     <ThickLine
                         key={`${exitIndex}-${laneIdx}`}
@@ -148,7 +173,7 @@ export const IntersectionComponent = ({ id, intersectionStructure, index }: Inte
             )}
 
             {/* Lane lines */}
-            {intersectionStructure.exitInfo.map((exit, exitIndex) =>
+            {intersectionMemo.exitInfo.map((exit, exitIndex) =>
                 exit.laneLines.map((lane, laneIdx) => (
                     <ThickLine
                         key={`${exitIndex}-${laneIdx}`}
@@ -160,14 +185,14 @@ export const IntersectionComponent = ({ id, intersectionStructure, index }: Inte
             )}
 
             {/* Edge tubes */}
-            {intersectionStructure.edgeTubes.map((tubeGeom, tubeIndex) => (
+            {intersectionMemo.edgeTubes.map((tubeGeom, tubeIndex) => (
                 <mesh key={`${tubeIndex}`} geometry={tubeGeom} position={[0, 0, 0]}>
                     <meshStandardMaterial color="grey" emissive="black" emissiveIntensity={0.3} />
                 </mesh>
             ))}
 
             {/* Invisible exit mesh for exit selection */}
-            {intersectionStructure.exitInfo.map((exit, exitIndex) => {
+            {intersectionMemo.exitInfo.map((exit, exitIndex) => {
                 
                 const isSelectedExit = selectedExits.some(e => e.junctionGroup === groupRef.current && e.exitIndex === exitIndex);
                 const inALink = junction.junctionLinks.some(link =>

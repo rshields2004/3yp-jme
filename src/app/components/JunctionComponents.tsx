@@ -9,7 +9,7 @@ import { IntersectionComponent } from "./IntersectionComponent";
 
 export const JunctionComponents = () => {
 
-    const { selectedJunctionObjectRefs, junctionStructure, snapToValidPosition } = useJModellerContext();
+    const { selectedJunctionObjectRefs, junction, snapToValidPosition, setSelectedJunctionObjectRefs } = useJModellerContext();
 
     // We define our drag controls for all components
     const { camera, gl } = useThree();
@@ -38,13 +38,20 @@ export const JunctionComponents = () => {
             snapToValidPosition(event.object as THREE.Group);
         };
 
+        const onKeyPress = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                setSelectedJunctionObjectRefs([]);
+            }
+        }
+
         controls.addEventListener("drag", onDrag);
         controls.addEventListener("dragend", onDragEnd);
-
+        window.addEventListener("keydown", onKeyPress);
         return () => {
             controls.removeEventListener("drag", onDrag);
             controls.removeEventListener("dragend", onDragEnd);
             controls.dispose();
+            window.removeEventListener("keydown", onKeyPress);
         };
     }, [camera, gl]);
     
@@ -62,11 +69,11 @@ export const JunctionComponents = () => {
 
     return (
         <>
-            {junctionStructure.intersectionStructures.map((intersectionStructure, i) => (
+            {junction.junctionObjects.filter(obj => obj.type === "intersection").map((junctionObject, i) => (
                 <IntersectionComponent
-                    key={intersectionStructure.id}
-                    id={intersectionStructure.id}
-                    intersectionStructure={intersectionStructure}
+                    key={junctionObject.id}
+                    id={junctionObject.id}
+                    intersectionConfig={junctionObject.config}
                     index={i}
                 />
             ))}

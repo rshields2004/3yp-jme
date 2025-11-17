@@ -77,7 +77,6 @@ export type JunctionConfig = {
 export type JModellerState = {
     junction: JunctionConfig;
     setJunction: (junction: JunctionConfig | ((prev: JunctionConfig) => JunctionConfig)) => void;
-    junctionStructure: JunctionStructure;
     selectedJunctionObjectRefs: JunctionObjectRef[];
     setSelectedJunctionObjectRefs: React.Dispatch<React.SetStateAction<JunctionObjectRef[]>>;
     junctionObjectRefs: React.RefObject<JunctionObjectRef[]>;
@@ -85,7 +84,6 @@ export type JModellerState = {
     unregisterJunctionObject: (group: THREE.Group<THREE.Object3DEventMap>) => void;
     selectedExits: ExitRef[];
     setSelectedExits: React.Dispatch<React.SetStateAction<ExitRef[]>>;
-    junctionStructureRef: React.RefObject<JunctionStructure>;
     snapToValidPosition: (draggedGroup: THREE.Group<THREE.Object3DEventMap>) => void;
     removeObject: (objID: string) => void;
 };
