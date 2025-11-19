@@ -49,7 +49,6 @@ export type ExitConfig = {
 
 export type IntersectionConfig = {
     numExits: number;
-    origin: THREE.Vector3;
     exitConfig: ExitConfig[];
 };
 
@@ -77,29 +76,27 @@ export type JunctionConfig = {
 export type JModellerState = {
     junction: JunctionConfig;
     setJunction: (junction: JunctionConfig | ((prev: JunctionConfig) => JunctionConfig)) => void;
-    selectedJunctionObjectRefs: JunctionObjectRef[];
-    setSelectedJunctionObjectRefs: React.Dispatch<React.SetStateAction<JunctionObjectRef[]>>;
-    junctionObjectRefs: React.RefObject<JunctionObjectRef[]>;
-    registerJunctionObject: (group: THREE.Group, id: string, type: JunctionObjectTypes) => void;
+
+
+    selectedObjects: string[];
+    setSelectedObjects: React.Dispatch<React.SetStateAction<string[]>>;
+
+
+    junctionObjectRefs: React.RefObject<THREE.Group<THREE.Object3DEventMap>[]>;
+    registerJunctionObject: (group: THREE.Group) => void;
     unregisterJunctionObject: (group: THREE.Group<THREE.Object3DEventMap>) => void;
+
+
     selectedExits: ExitRef[];
     setSelectedExits: React.Dispatch<React.SetStateAction<ExitRef[]>>;
+
     snapToValidPosition: (draggedGroup: THREE.Group<THREE.Object3DEventMap>) => void;
     removeObject: (objID: string) => void;
 };
 
 
-// This exists for the drag controls to be able to attach themselves to any object
-export type JunctionObjectRef = {
-    group: THREE.Group;
-    refID: string;
-    type: JunctionObjectTypes;
-};
 
 export type ExitRef = {
     junctionGroup: THREE.Group;
     exitIndex: number;
-    structureType: string;
-    structureIndex: number;
-    structureID: string;
 };

@@ -5,10 +5,11 @@ import Car from "./Car";
 import { useState, useEffect } from "react";
 import { Bloom, EffectComposer } from "@react-three/postprocessing";
 import { useJModellerContext } from "../context/JModellerContext";
-import { carColours, carTypes } from "../includes/defaults";
+import { carColours, carTypes, FLOOR_Y } from "../includes/defaults";
 import * as THREE from "three";
 import { MTLLoader, OBJLoader } from "three/examples/jsm/Addons.js";
 import { JunctionComponents } from "./JunctionComponents";
+import { useFrame } from "@react-three/fiber";
 
 
 
@@ -48,7 +49,7 @@ export async function preloadCars() {
 
 export default function Scene() {
 
-    const { selectedJunctionObjectRefs } = useJModellerContext();
+    const { selectedObjects, junctionObjectRefs } = useJModellerContext();
     const [selectedCarId, setSelectedCarId] = useState(-1);
     const [carsLoaded, setCarsLoaded] = useState<boolean>(false);
 
@@ -77,6 +78,13 @@ export default function Scene() {
         })
     );
 
+    useFrame(() => {
+        junctionObjectRefs.current.forEach((g) => {
+            if (!isFinite(g.position.x) || !isFinite(g.position.y) || !isFinite(g.position.z)) {
+                console.error("GLOBAL NaN detected in object:", g.userData.id, g.position);
+            }
+        });
+    });
 
     return (
         <>
@@ -88,7 +96,11 @@ export default function Scene() {
             <directionalLight position={[20, 50, 20]} intensity={0.6} />
             <pointLight position={[0, 5, 0]} intensity={2} color="#ffaa00" />
 
-            <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+            <mesh 
+                rotation={[-Math.PI / 2, 0, 0]} 
+                position={[0, FLOOR_Y-1, 0]}
+                receiveShadow
+            >
                 <planeGeometry args={[500, 500]} />
                 <meshStandardMaterial color="#1c1c1c" />
             </mesh>
@@ -98,7 +110,7 @@ export default function Scene() {
             </EffectComposer>
 
             <OrbitControls
-                enabled={selectedJunctionObjectRefs.length === 0}
+                enabled={selectedObjects.length === 0}
                 minPolarAngle={Math.PI / 6}
                 maxPolarAngle={Math.PI / 2.1}
                 minDistance={5}

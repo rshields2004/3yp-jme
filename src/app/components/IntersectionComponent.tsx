@@ -1,4 +1,4 @@
-import {useEffect, useMemo, useRef } from "react";
+import {useEffect, useMemo, useRef, useState } from "react";
 import { ThickLine } from "./ThickLine";
 import * as THREE from "three";
 import { IntersectionConfig, IntersectionStructure } from "../includes/types";
@@ -15,64 +15,16 @@ type IntersectionProps = {
 };
 
 export const IntersectionComponent = ({ id, intersectionConfig, index }: IntersectionProps) => {
-
     const groupRef = useRef<THREE.Group>(null);
     const { 
         junction, 
-        selectedJunctionObjectRefs, 
-        setSelectedJunctionObjectRefs, 
+        selectedObjects, 
+        setSelectedObjects, 
         registerJunctionObject, 
         selectedExits,
         setSelectedExits,
         snapToValidPosition,
     } = useJModellerContext();
-
-    const handleIntersectionClick = (event: { button: number; stopPropagation: () => void }) => {
-        if (event.button !== 2) return;
-        event.stopPropagation();
-
-        // Since only 2 can be selected at a time, we remove the earliest selected and select the new one
-        setSelectedJunctionObjectRefs(prev => {
-            const exists = prev.some(obj => obj.group === groupRef.current);
-            if (exists) {
-                return prev.filter(obj => obj.group !== groupRef.current);
-            } 
-            else {
-                return [...prev, { group: groupRef.current!, refID: id, type: "intersection" }];
-            }
-        });
-    };
-
-    const handleExitClick = (junctionGroup: THREE.Group, exitIndex: number) => {
-        setSelectedExits(prev => {
-            const selectedAlready = prev.some(exit => exit.junctionGroup === junctionGroup && exit.exitIndex === exitIndex);
-            const inALink = junction.junctionLinks.some(link =>
-                link.objectPair.some(linkExit =>
-                    linkExit.junctionGroup === junctionGroup && linkExit.exitIndex === exitIndex
-                )
-            );
-
-            if (selectedAlready) {
-                return prev.filter(exit => !(exit.junctionGroup === junctionGroup && exit.exitIndex === exitIndex));
-            }
-
-            if (inALink) {
-                return prev;
-            }
-
-            let newLinks = prev.filter(exit => exit.junctionGroup !== junctionGroup);
-
-            if (newLinks.length >= 2) {
-                newLinks = newLinks.slice(1);
-            }
-
-            return [
-                ...newLinks,
-                { junctionGroup, exitIndex, structureType: "intersection", structureIndex: index, structureID: id }
-            ];
-        });
-    };
-
 
     const intersectionMemo = useMemo(() => {
 
@@ -96,38 +48,80 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
         exitInfo[0].stopLines[0].line.getCenter(midPointStop);
         const maxDistanceToStopLine = maxExitLength + midPointStop.distanceTo(new THREE.Vector3(0, 0, 0)) + 1;
 
-        return { exitInfo, edgeTubes, intersectionFloor, maxDistanceToStopLine };
+        console.log(maxDistanceToStopLine);
+        return { exitInfo, edgeTubes, intersectionFloor, maxDistanceToStopLine, isValid: true, };
     }, [intersectionConfig]);
 
 
 
     // Upon intersection being initialised, register the object
     useEffect(() => {
-        if (!groupRef.current) {
+        const group = groupRef.current;
+        if (!group) { 
             return;
         }
-        //Actually added the id to the group userdata so THREE group can be linked to array ref object
-        groupRef.current.userData.id = id;
-        groupRef.current.userData.maxDistanceToStopLine = intersectionMemo.maxDistanceToStopLine;
-        registerJunctionObject(groupRef.current, id, "intersection");
-        snapToValidPosition(groupRef.current);
-    }, []);
+        group.userData.id = id;
+        group.userData.type = "intersection";
+        group.userData.maxDistanceToStopLine = intersectionMemo.maxDistanceToStopLine;
+        
+        registerJunctionObject(group);
+        snapToValidPosition(group);
+    }, [id, intersectionMemo.maxDistanceToStopLine, registerJunctionObject, snapToValidPosition]);
+    
+    const isSelected = groupRef.current ? selectedObjects.includes(groupRef.current.userData.id) : false;
 
 
-    const isSelected = selectedJunctionObjectRefs.some(obj => obj.group === groupRef.current);
+    const handleIntersectionClick = (event: any) => {
+        if (event.button !== 2){
+            return;
+        }
+        event.stopPropagation();
+        const group = groupRef.current;
+        if (!group) {
+            return;
+        }
+        setSelectedObjects(prev => prev.includes(group.userData.id) ? prev.filter(g => g !== group.userData.id) : [...prev, group.userData.id]);
+    };
 
-    const exitRefs = useRef<Array<THREE.Mesh | null>>([]);
-    if (exitRefs.current.length !== intersectionMemo.exitInfo.length) {
-        exitRefs.current = intersectionMemo.exitInfo.map(() => null);
-    }
+    const handleExitClick = (event: any, exitIndex: number) => {
+        if (event.button !== 0) {
+            return;
+        }
 
-    const junctionObject = junction.junctionObjects.find((jObj) => jObj.id === id);
-    const origin = junctionObject ? junctionObject.config.origin : new THREE.Vector3(0, 0, 0);
+        const group = groupRef.current;
+        if (!group) {
+            return;
+        }
+
+        setSelectedExits(prev => {
+            const existingIndex = prev.findIndex(e => e.junctionGroup === group && e.exitIndex === exitIndex);
+
+            // Deselect if already selected
+            if (existingIndex !== -1) {
+                return prev.filter((_, i) => i !== existingIndex);
+            }
+
+            // New selection
+            const newSelection = { junctionGroup: group, exitIndex };
+
+            const filteredPrev = prev.filter(e => e.junctionGroup !== group);
+
+            if (prev.length < 2) {
+                return [...filteredPrev, newSelection];
+            }
+
+            if (filteredPrev.length < 2) {
+                return [...filteredPrev, { junctionGroup: group, exitIndex }];
+            } 
+            else {
+                return [filteredPrev[1], { junctionGroup: group, exitIndex }];
+            }
+        });
+    };
 
     return (
         <group
             ref={groupRef}
-            position={origin}
         >
 
             <Text
@@ -141,11 +135,17 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
             >
                 Intersection {index}
             </Text>
+            
 
             {/* Selection ring */}
-            {isSelected && (
+           {isSelected && (
                 <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
-                    <ringGeometry args={[intersectionMemo.maxDistanceToStopLine, intersectionMemo.maxDistanceToStopLine + 0.5, 100]} />
+                    <torusGeometry args={[
+                        intersectionMemo.maxDistanceToStopLine + 0.25, // radius
+                        0.25, // tube radius
+                        16, // radial segments
+                        64 // tubular segments
+                    ]} />
                     <meshBasicMaterial color="black" side={THREE.DoubleSide} />
                 </mesh>
             )}
@@ -243,7 +243,7 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
                             position={[0, 0.01, 0]}
                             onPointerDown={(event) => {
                                 event.stopPropagation();
-                                handleExitClick(groupRef.current!, exitIndex);
+                                handleExitClick(event, exitIndex);
                             }}
                         >
                             <meshBasicMaterial

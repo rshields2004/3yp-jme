@@ -1,5 +1,4 @@
 import { LaneLineProperties, IntersectionConfig } from "./types";
-import * as THREE from "three";
 
 export const defaultLaneProperties: LaneLineProperties = {
     pattern: "solid",
@@ -17,7 +16,6 @@ export const defaultExitConfig = {
 
 export const defaultIntersectionConfig: IntersectionConfig = {
     numExits: 4,
-    origin: new THREE.Vector3(0, 1, 0),
     exitConfig: Array.from({ length: 4 }, () => (defaultExitConfig)),
 };
 
@@ -35,5 +33,5 @@ export const defaultJunctionConfig = {
 export const carTypes = ["coupe", "hatchback", "micro", "microcargo", "microtransport", "minibus", "mpv", "normal", "pickup", "pickup-small", "station", "van"];
 export const carColours = ["blue", "citrus", "green", "orange", "red", "silver", "violet"];
 
-export const FLOOR_Y = 1;
+export const FLOOR_Y = 0;
 

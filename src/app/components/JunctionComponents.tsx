@@ -9,7 +9,7 @@ import { IntersectionComponent } from "./IntersectionComponent";
 
 export const JunctionComponents = () => {
 
-    const { selectedJunctionObjectRefs, junction, snapToValidPosition, setSelectedJunctionObjectRefs } = useJModellerContext();
+    const { selectedObjects, junction, snapToValidPosition, setSelectedObjects, junctionObjectRefs } = useJModellerContext();
 
     // We define our drag controls for all components
     const { camera, gl } = useThree();
@@ -35,12 +35,12 @@ export const JunctionComponents = () => {
         };
 
         const onDragEnd = (event: any) => {
-            snapToValidPosition(event.object as THREE.Group);
+            requestAnimationFrame(() => snapToValidPosition(event.object as THREE.Group));
         };
 
         const onKeyPress = (event: KeyboardEvent) => {
             if (event.key === "Escape") {
-                setSelectedJunctionObjectRefs([]);
+                setSelectedObjects([]);
             }
         }
 
@@ -55,6 +55,7 @@ export const JunctionComponents = () => {
         };
     }, [camera, gl]);
     
+    
 
     // In the event of a object selection changing, register the correct one with the drag controls
     useEffect(() => {
@@ -62,9 +63,10 @@ export const JunctionComponents = () => {
         if (!controls)  {
             return;
         }
-        controls.objects = selectedJunctionObjectRefs.map(obj => obj.group);
+        const controlObjects = selectedObjects.map(id => junctionObjectRefs.current.find(g => g.userData.id === id)).filter((g): g is THREE.Group => !!g)
+        controls.objects = controlObjects;
 
-    }, [selectedJunctionObjectRefs]);
+    }, [selectedObjects]);
 
 
     return (
