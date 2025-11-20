@@ -44,14 +44,21 @@ export const JunctionComponents = () => {
             }
         }
 
+        const handleWheel = (event: WheelEvent) => {
+
+
+        };
+
         controls.addEventListener("drag", onDrag);
         controls.addEventListener("dragend", onDragEnd);
         window.addEventListener("keydown", onKeyPress);
+        window.addEventListener("wheel", handleWheel);
         return () => {
             controls.removeEventListener("drag", onDrag);
             controls.removeEventListener("dragend", onDragEnd);
             controls.dispose();
             window.removeEventListener("keydown", onKeyPress);
+            window.removeEventListener("wheel", handleWheel);
         };
     }, [camera, gl]);
     
@@ -79,6 +86,8 @@ export const JunctionComponents = () => {
                     index={i}
                 />
             ))}
+
+            
 
             {/* Below goes future objects such as roundabouts etc. */}
         </>

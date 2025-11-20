@@ -3,12 +3,12 @@ import { LaneLineProperties, IntersectionConfig } from "./types";
 export const defaultLaneProperties: LaneLineProperties = {
     pattern: "solid",
     colour: "white",
-    thickness: 0.5,
+    thickness: 2.5,
     glow: 1.3,
 };
 
 export const defaultExitConfig = {
-    numLanesIn: 2,
+    numLanesIn: 1,
     laneCount: 2,
     laneWidth: 1.5,
     exitLength: 20,

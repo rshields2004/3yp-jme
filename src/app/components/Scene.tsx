@@ -2,14 +2,14 @@
 
 import { OrbitControls } from "@react-three/drei";
 import Car from "./Car";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Bloom, EffectComposer } from "@react-three/postprocessing";
 import { useJModellerContext } from "../context/JModellerContext";
 import { carColours, carTypes, FLOOR_Y } from "../includes/defaults";
 import * as THREE from "three";
 import { MTLLoader, OBJLoader } from "three/examples/jsm/Addons.js";
 import { JunctionComponents } from "./JunctionComponents";
-import { useFrame } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 
 
 
@@ -53,7 +53,9 @@ export default function Scene() {
     const [selectedCarId, setSelectedCarId] = useState(-1);
     const [carsLoaded, setCarsLoaded] = useState<boolean>(false);
 
-    
+    const { camera, gl } = useThree();
+    const controlsRef = useRef<any>(null);
+
     // Jonnys Dealership
     useEffect(() => {
         const loadAllCars = async () => {
@@ -62,6 +64,7 @@ export default function Scene() {
         };
         loadAllCars();
     }, []);
+
     const spacing = 1.2;
     const offsetX = (carColours.length - 1) * spacing / 2;
     const offsetZ = (carTypes.length - 1) * spacing / 2;
@@ -85,6 +88,7 @@ export default function Scene() {
             }
         });
     });
+
 
     return (
         <>
@@ -111,6 +115,7 @@ export default function Scene() {
 
             <OrbitControls
                 enabled={selectedObjects.length === 0}
+                ref={controlsRef}
                 minPolarAngle={Math.PI / 6}
                 maxPolarAngle={Math.PI / 2.1}
                 minDistance={5}

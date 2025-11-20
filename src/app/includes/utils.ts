@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { defaultLaneProperties } from "./defaults";
-import { ExitStructure, IntersectionStructure, JunctionConfig, JunctionObjectRef, JunctionStructure, LaneStructure } from "./types";
+import { ExitStructure, LaneStructure } from "./types";
 
 
 const getDirection = (
@@ -40,6 +40,7 @@ export function generateLaneLines(
     stopLines: LaneStructure[], 
     length: number, 
     numLanes: number, 
+    numLanesIn: number
 ): LaneStructure[] {
 
     const laneLines: LaneStructure[] = [];
@@ -58,14 +59,18 @@ export function generateLaneLines(
 
         // left edge of stop line
         const leftEdge = startVec.clone();
-
         for (let i = 0; i <= numLanes; i++) {
+
             const fractionAlong = (i / numLanes); // 0 -> left edge, 1 -> right edge
             const laneStart = leftEdge.clone().add(stopVec.clone().multiplyScalar(fractionAlong));
             const laneEnd = laneStart.clone().add(laneDir.clone().multiplyScalar(-length));
+            console.log(i + " " + numLanesIn);
             laneLines.push({
                 line: new THREE.Line3(laneStart.clone(), laneEnd.clone()),
-                properties: { ...defaultLaneProperties, pattern: (i == 0 || i == numLanes) ? "solid" : "dashed" },
+                properties: { 
+                    ...defaultLaneProperties, 
+                    pattern: (i == 0 || i == numLanes || (numLanes - i) == numLanesIn) ? "solid" : "dashed" 
+                },
             });
         }
     });

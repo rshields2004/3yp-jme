@@ -16,6 +16,8 @@ type IntersectionProps = {
 
 export const IntersectionComponent = ({ id, intersectionConfig, index }: IntersectionProps) => {
     const groupRef = useRef<THREE.Group>(null);
+    const [hovered, setHovered] = useState<boolean>(false);
+
     const { 
         junction, 
         selectedObjects, 
@@ -35,7 +37,7 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
             const angle = angleStep * exitIndex;
 
             const stopLines = generateStopLines(exitConfig.laneCount, exitConfig.laneWidth, adjustedOffset, angle);
-            const laneLines = generateLaneLines(stopLines, exitConfig.exitLength, exitConfig.laneCount);
+            const laneLines = generateLaneLines(stopLines, exitConfig.exitLength, exitConfig.laneCount, exitConfig.numLanesIn);
 
             return { stopLines, laneLines };
         });
@@ -68,9 +70,26 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
         snapToValidPosition(group);
     }, [id, intersectionMemo.maxDistanceToStopLine, registerJunctionObject, snapToValidPosition]);
     
+    
+    
+    useEffect(() => {
+        const handleWheel = (event: WheelEvent) => {
+            if (!hovered || !selectedObjects.includes(id)) return;
+
+            const delta = event.deltaY * 0.0025; // rotation speed
+            if (groupRef.current) {
+                groupRef.current.rotateY(delta);
+            }
+        };
+
+        window.addEventListener("wheel", handleWheel);
+        return () => window.removeEventListener("wheel", handleWheel);
+
+    }, [hovered, selectedObjects]);
+    
+    
     const isSelected = groupRef.current ? selectedObjects.includes(groupRef.current.userData.id) : false;
-
-
+    
     const handleIntersectionClick = (event: any) => {
         if (event.button !== 2){
             return;
@@ -122,6 +141,8 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
     return (
         <group
             ref={groupRef}
+            onPointerOver={() => setHovered(true)}
+            onPointerOut={() => setHovered(false)}
         >
 
             <Text
@@ -161,25 +182,30 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
             </mesh>
 
             {/* Stop lines */}
-            {intersectionMemo.exitInfo.map((exit, exitIndex) =>
-                exit.stopLines.map((lane, laneIdx) => (
+            {intersectionMemo.exitInfo.map((exit, _) =>
+                exit.stopLines.map((lane, _) => (
                     <ThickLine
-                        key={`${exitIndex}-${laneIdx}`}
-                        line={lane.line}
-                        colour={lane.properties.colour}
-                        dashed={lane.properties.pattern}
+                        key={crypto.randomUUID()}
+                        points={[lane.line.start.toArray(), lane.line.end.toArray()]}
+                        colour={lane.properties.colour} // use actual value, not string
+                        linewidth={lane.properties.thickness}
+                        dashed={lane.properties.pattern === "dashed"}
+                        worldUnits={false}
+                        isStop={true}
                     />
                 ))
             )}
 
             {/* Lane lines */}
-            {intersectionMemo.exitInfo.map((exit, exitIndex) =>
-                exit.laneLines.map((lane, laneIdx) => (
+            {intersectionMemo.exitInfo.map((exit, _) =>
+                exit.laneLines.slice(1, -1).map((lane, _) => (
                     <ThickLine
-                        key={`${exitIndex}-${laneIdx}`}
-                        line={lane.line}
-                        colour={lane.properties.colour}
-                        dashed={lane.properties.pattern}
+                        key={crypto.randomUUID()}
+                        points={[lane.line.start.toArray(), lane.line.end.toArray()]}
+                        colour={lane.properties.colour} // use actual value, not string
+                        linewidth={lane.properties.thickness}
+                        dashed={lane.properties.pattern === "dashed"}
+                        worldUnits={false}
                     />
                 ))
             )}

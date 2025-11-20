@@ -1,52 +1,73 @@
+"use client";
+
 import * as THREE from "three";
-import { useMemo } from "react";
+import { useEffect, useRef } from "react";
+import { useThree } from "@react-three/fiber";
+import { Line2 } from "three/addons/lines/Line2.js";
+import { LineGeometry } from "three/addons/lines/LineGeometry.js";
+import { LineMaterial } from "three/addons/lines/LineMaterial.js";
 
 type ThickLineProps = {
-    line: THREE.Line3
-    colour?: string;
-    dashed?: string;
-    dashSize?: number;
-    gapSize?: number;
+    points: [number, number, number][];  
+    colour: string | number;             
+    linewidth: number;                  
+    dashed: boolean;                    
+    worldUnits: boolean;      
+    isStop?: boolean;         
 };
 
 export const ThickLine: React.FC<ThickLineProps> = ({
-    line,
-    colour = "white",
+    points,
+    colour = 0xffffff,
+    linewidth = 5,
     dashed = false,
-    dashSize = 0.2,
-    gapSize = 0.1,
+    worldUnits = false,
+    isStop = false
 }) => {
-    const startVec = useMemo(() => line.start.clone(), [line]);
-    const endVec = useMemo(() => line.end.clone(), [line]);
+    const groupRef = useRef<THREE.Group>(null);
+    const { size } = useThree();
+    const lineRef = useRef<Line2>(null);
+    const geometryRef = useRef<LineGeometry>(null);
+    const materialRef = useRef<LineMaterial>(null);
+
+    useEffect(() => {
+        if (!groupRef.current) return;
+
+        const start = new THREE.Vector3(...points[0]);
+
+        const geometry = new LineGeometry();
+        geometry.setPositions(points.flat());
+
+        const material = new LineMaterial({
+            color: colour,
+            linewidth,
+            dashed,
+            dashSize: 0.5,
+            gapSize: 0.5,
+            worldUnits,
+        });
+        material.resolution.set(size.width, size.height);
+
+        const line = new Line2(geometry, material);
+        line.computeLineDistances();
+        groupRef.current.add(line);
+
+        // Save refs
+        lineRef.current = line;
+        geometryRef.current = geometry;
+        materialRef.current = material;
+
+        return () => {
+            // Remove and dispose
+            groupRef.current?.remove(line);
+            geometry.dispose();
+            material.dispose();
+            lineRef.current = null;
+            geometryRef.current = null;
+            materialRef.current = null;
+        };
+    }, []); // only on mount
 
 
-    const geometry = useMemo(() => {
-        const g = new THREE.BufferGeometry().setFromPoints([startVec, endVec]);
-        if (dashed) {
-            // Manually compute line distances for dashed material
-            const positions = g.attributes.position.array as Float32Array;
-            const lineDistances = new Float32Array(positions.length / 3);
-            let dist = 0;
-            for (let i = 3; i < positions.length; i += 3) {
-                const dx = positions[i] - positions[i - 3];
-                const dy = positions[i + 1] - positions[i - 2];
-                const dz = positions[i + 2] - positions[i - 1];
-                dist += Math.sqrt(dx * dx + dy * dy + dz * dz);
-                lineDistances[i / 3] = dist;
-                lineDistances[i / 3 - 1] = dist - Math.sqrt(dx * dx + dy * dy + dz * dz);
-            }
-            g.setAttribute("lineDistance", new THREE.BufferAttribute(lineDistances, 1));
-        }
-        return g;
-    }, [startVec, endVec, dashed]);
-
-    return (dashed === "dashed") ? (
-        <line geometry={geometry}>
-            <lineDashedMaterial color={colour} dashSize={dashSize} gapSize={gapSize} />
-        </line>
-    ) : (
-        <line geometry={geometry}>
-            <lineBasicMaterial color={colour} />
-        </line>
-    );
+    return <group ref={groupRef} />;
 };
