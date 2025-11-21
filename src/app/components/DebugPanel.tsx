@@ -1,8 +1,9 @@
 "use client";
 
+import { exit } from "process";
 import { useJModellerContext } from "../context/JModellerContext";
 import { defaultExitConfig, defaultIntersectionConfig } from "../includes/defaults";
-import { IntersectionConfig, JunctionLink } from "../includes/types";
+import { ExitStructure, IntersectionConfig, JunctionLink } from "../includes/types";
 import * as THREE from "three";
 
 export default function DebugPanel() {
@@ -11,7 +12,8 @@ export default function DebugPanel() {
         setJunction,
         selectedExits,
         setSelectedExits,
-        removeObject
+        removeObject,
+        setBestRotation
     } = useJModellerContext();
 
 
@@ -127,30 +129,25 @@ export default function DebugPanel() {
         const [a, b] = selectedExits;
         const exists = junction.junctionLinks.some(link =>
             (
-                link.objectPair[0].junctionGroup === a.junctionGroup && link.objectPair[0].exitIndex === a.exitIndex &&
-                link.objectPair[1].junctionGroup === b.junctionGroup && link.objectPair[1].exitIndex === b.exitIndex
+                link.objectPair[0].structureID === a.structureID && link.objectPair[0].exitIndex === a.exitIndex &&
+                link.objectPair[1].structureID === b.structureID && link.objectPair[1].exitIndex === b.exitIndex
             ) ||
             (
-                link.objectPair[0].junctionGroup === b.junctionGroup && link.objectPair[0].exitIndex === b.exitIndex &&
-                link.objectPair[1].junctionGroup === a.junctionGroup && link.objectPair[1].exitIndex === a.exitIndex
+                link.objectPair[0].structureID === b.structureID && link.objectPair[0].exitIndex === b.exitIndex &&
+                link.objectPair[1].structureID === a.structureID && link.objectPair[1].exitIndex === a.exitIndex
             )
         );
         if (exists) {
             return;
         }
-        else {
-            console.log("here");
-
-        }
-
         const newLink: JunctionLink = { id: crypto.randomUUID(), objectPair: [a, b] };
 
         const exitA = newLink.objectPair[0];
         const exitB = newLink.objectPair[1];
 
         // Get the config of each junction
-        const junctionoA = junction.junctionObjects.find(jo => jo.id === exitA.junctionGroup.userData.id);
-        const junctionoB = junction.junctionObjects.find(jo => jo.id === exitB.junctionGroup.userData.id);
+        const junctionoA = junction.junctionObjects.find(jo => jo.id === exitA.structureID);
+        const junctionoB = junction.junctionObjects.find(jo => jo.id === exitB.structureID);
 
         // Get the exit configs
         const exitAConfig = junctionoA?.config;
@@ -161,33 +158,8 @@ export default function DebugPanel() {
             const laneCountB = exitBConfig.exitConfig[exitB.exitIndex].laneCount;
 
             if (laneCountA === laneCountB) {
-                console.log(laneCountA + " tes " + laneCountB); // now this will run
                 setJunction(prev => ({ ...prev, junctionLinks: [...prev.junctionLinks, newLink] }));
                 setSelectedExits([]);
-
-                const exitAPos = new THREE.Vector3();
-                exitA.junctionGroup.getWorldPosition(exitAPos);
-
-                const exitBPos = new THREE.Vector3();
-                exitB.junctionGroup.getWorldPosition(exitBPos);
-
-                // Direction from A -> B
-                const dir = new THREE.Vector3().subVectors(exitBPos, exitAPos).normalize();
-
-                // Make a temporary object at A to compute rotation
-                const tempObj = new THREE.Object3D();
-                tempObj.position.copy(exitAPos);
-                tempObj.lookAt(exitBPos); // points +Z toward B
-
-                // Apply rotation to junctionGroup (convert from world to local if needed)
-                exitA.junctionGroup.quaternion.copy(tempObj.quaternion);
-
-                // Optionally do the reverse for B -> A
-                const tempObjB = new THREE.Object3D();
-                tempObjB.position.copy(exitBPos);
-                tempObjB.lookAt(exitAPos);
-                exitB.junctionGroup.quaternion.copy(tempObjB.quaternion);
-
             } 
             else {
                 alert("Cannot link exits with different number of lanes...yet!");

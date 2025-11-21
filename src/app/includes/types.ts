@@ -92,11 +92,13 @@ export type JModellerState = {
 
     snapToValidPosition: (draggedGroup: THREE.Group<THREE.Object3DEventMap>) => void;
     removeObject: (objID: string) => void;
+
+    setBestRotation: () => void;
 };
 
 
 
 export type ExitRef = {
-    junctionGroup: THREE.Group;
+    structureID: string;
     exitIndex: number;
 };

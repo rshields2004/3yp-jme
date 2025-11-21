@@ -64,7 +64,6 @@ export function generateLaneLines(
             const fractionAlong = (i / numLanes); // 0 -> left edge, 1 -> right edge
             const laneStart = leftEdge.clone().add(stopVec.clone().multiplyScalar(fractionAlong));
             const laneEnd = laneStart.clone().add(laneDir.clone().multiplyScalar(-length));
-            console.log(i + " " + numLanesIn);
             laneLines.push({
                 line: new THREE.Line3(laneStart.clone(), laneEnd.clone()),
                 properties: { 
@@ -177,4 +176,25 @@ export function generateExitMesh(
     shape.closePath();
 
     return new THREE.ShapeGeometry(shape);
+};
+
+
+export function getWorldPoint(
+    group: THREE.Group, 
+    localPoint: THREE.Vector3, 
+    candidateRotation: number
+): THREE.Vector3 {
+
+    const candidateQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), candidateRotation);
+    const combinedQuat = group.quaternion.clone().multiply(candidateQuat);
+    const rotated = localPoint.clone().applyQuaternion(combinedQuat);
+    return group.position.clone().add(rotated);
+};
+
+export function getExitMidpoint(
+    exitStructure: ExitStructure
+): THREE.Vector3 {
+    const start = exitStructure.laneLines[0].line.end.clone();
+    const end = exitStructure.laneLines[exitStructure.laneLines.length - 1].line.end.clone();
+    return start.add(end).multiplyScalar(0.5);
 };

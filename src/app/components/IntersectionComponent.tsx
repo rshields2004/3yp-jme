@@ -25,10 +25,10 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
         registerJunctionObject, 
         selectedExits,
         setSelectedExits,
-        snapToValidPosition,
+        snapToValidPosition
     } = useJModellerContext();
 
-    const intersectionMemo = useMemo(() => {
+    const intersectionMemo: IntersectionStructure = useMemo(() => {
 
         const exitInfo = intersectionConfig.exitConfig.map((exitConfig, exitIndex) => {
             const maxExitSpan = Math.max(...intersectionConfig.exitConfig.map(e => e.laneCount * e.laneWidth));
@@ -50,13 +50,11 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
         exitInfo[0].stopLines[0].line.getCenter(midPointStop);
         const maxDistanceToStopLine = maxExitLength + midPointStop.distanceTo(new THREE.Vector3(0, 0, 0)) + 1;
 
-        console.log(maxDistanceToStopLine);
-        return { exitInfo, edgeTubes, intersectionFloor, maxDistanceToStopLine, isValid: true, };
+        // Add a random ID each time so the below useEffect knows when it needs to re render
+        return { id: crypto.randomUUID(), exitInfo, edgeTubes, intersectionFloor, maxDistanceToStopLine, isValid: true, };
     }, [intersectionConfig]);
 
 
-
-    // Upon intersection being initialised, register the object
     useEffect(() => {
         const group = groupRef.current;
         if (!group) { 
@@ -65,10 +63,12 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
         group.userData.id = id;
         group.userData.type = "intersection";
         group.userData.maxDistanceToStopLine = intersectionMemo.maxDistanceToStopLine;
+        group.userData.exitInfo = intersectionMemo.exitInfo;
         
+        // Registration only works if intersection doesnt exist before, contains a check for ID
         registerJunctionObject(group);
         snapToValidPosition(group);
-    }, [id, intersectionMemo.maxDistanceToStopLine, registerJunctionObject, snapToValidPosition]);
+    }, [intersectionMemo.id]);
     
     
     
@@ -113,7 +113,7 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
         }
 
         setSelectedExits(prev => {
-            const existingIndex = prev.findIndex(e => e.junctionGroup === group && e.exitIndex === exitIndex);
+            const existingIndex = prev.findIndex(e => e.structureID === group.userData.id && e.exitIndex === exitIndex);
 
             // Deselect if already selected
             if (existingIndex !== -1) {
@@ -121,19 +121,19 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
             }
 
             // New selection
-            const newSelection = { junctionGroup: group, exitIndex };
+            const newSelection = { structureID: group.userData.id, exitIndex };
 
-            const filteredPrev = prev.filter(e => e.junctionGroup !== group);
+            const filteredPrev = prev.filter(e => e.structureID !== group.userData.id);
 
             if (prev.length < 2) {
                 return [...filteredPrev, newSelection];
             }
 
             if (filteredPrev.length < 2) {
-                return [...filteredPrev, { junctionGroup: group, exitIndex }];
+                return [...filteredPrev, { structureID: group.userData.id, exitIndex }];
             } 
             else {
-                return [filteredPrev[1], { junctionGroup: group, exitIndex }];
+                return [filteredPrev[1], { structureID: group.userData.id, exitIndex }];
             }
         });
     };
@@ -220,10 +220,10 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
             {/* Invisible exit mesh for exit selection */}
             {intersectionMemo.exitInfo.map((exit, exitIndex) => {
                 
-                const isSelectedExit = selectedExits.some(e => e.junctionGroup === groupRef.current && e.exitIndex === exitIndex);
+                const isSelectedExit = selectedExits.some(e => e.structureID === groupRef.current?.userData.id && e.exitIndex === exitIndex);
                 const inALink = junction.junctionLinks.some(link =>
                     link.objectPair.some(linkExit =>
-                        linkExit.junctionGroup === groupRef.current && linkExit.exitIndex === exitIndex
+                        linkExit.structureID === groupRef.current?.userData.id && linkExit.exitIndex === exitIndex
                     )
                 );
                 
