@@ -1,6 +1,9 @@
 import * as THREE from "three";
 import { defaultLaneProperties } from "./defaults";
-import { ExitStructure, LaneStructure } from "./types";
+import { ExitStructure } from "./types/intersection";
+import { ExitRef, JunctionConfig, LaneStructure } from "./types/types";
+import { RingLaneStructure, RoundaboutExitStructure, RoundaboutStructure } from "./types/roundabout";
+import { exit } from "process";
 
 
 const getDirection = (
@@ -153,8 +156,9 @@ export function generateFloorMesh(
 };
 
 export function generateExitMesh(
-    exit: ExitStructure
+    exit: ExitStructure | RoundaboutExitStructure
 ): THREE.ShapeGeometry {
+    
     const distanceFromEdge = 0.90;
     const shape = new THREE.Shape();
     
@@ -179,22 +183,204 @@ export function generateExitMesh(
 };
 
 
-export function getWorldPoint(
-    group: THREE.Group, 
-    localPoint: THREE.Vector3, 
-    candidateRotation: number
-): THREE.Vector3 {
+export function generateLaneLinesRound(
+    outerRadius: number,
+    laneCount: number,
+    laneWidth: number,
+    angle: number,
+    exitLength: number,
+    numLanesIn: number
+): LaneStructure[] {
+    const start = new THREE.Vector3(Math.cos(angle) * outerRadius, 0, Math.sin(angle) * outerRadius);
+    const endBase = start.clone().add(new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle)).multiplyScalar(exitLength));
+    const right = new THREE.Vector3().subVectors(endBase, start).cross(new THREE.Vector3(0, 1, 0)).normalize();
 
-    const candidateQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), candidateRotation);
-    const combinedQuat = group.quaternion.clone().multiply(candidateQuat);
-    const rotated = localPoint.clone().applyQuaternion(combinedQuat);
-    return group.position.clone().add(rotated);
+    const laneLines: LaneStructure[] = [];
+
+    for (let i = 0; i <= laneCount; i++) {
+        const offset = (i - (laneCount) / 2) * laneWidth;
+        const laneStart = start.clone().add(right.clone().multiplyScalar(offset));
+        const laneEnd = endBase.clone().add(right.clone().multiplyScalar(offset));
+
+
+        const dir = new THREE.Vector3().subVectors(laneEnd, laneStart).normalize();
+
+        const a = 1;
+        const b = 2 * laneStart.dot(dir);
+        const c = laneStart.dot(laneStart) - (outerRadius * outerRadius);
+
+        const discriminant = b * b - 4 * a * c;
+
+        if (discriminant < 0) {
+            console.warn("big trouble");
+        }
+        else {
+            const sqrtD = Math.sqrt(discriminant);
+            const t1 = (-b + sqrtD) / (2*a);
+            const t2 = (-b - sqrtD) / (2*a);
+            // choose the smaller positive t as the intersection along dir
+            const t = Math.min(t1, t2) > 0 ? Math.min(t1, t2) : Math.max(t1, t2);
+            const newStart = laneStart.clone().add(dir.clone().multiplyScalar(t));
+            
+            const lengthDiff = laneStart.distanceTo(newStart);
+            // compute new laneEnd to preserve original length
+            const originalLength = laneEnd.distanceTo(laneStart);
+            const newEnd = newStart.clone().add(dir.clone().multiplyScalar(originalLength + lengthDiff));
+            laneLines.push({
+                line: new THREE.Line3(newStart, newEnd),
+                properties: {
+                    ...defaultLaneProperties,
+                    pattern: (i === 0 || i === laneCount || i === laneCount - numLanesIn) ? "solid" : "dashed",                
+                }
+            });
+        }
+
+        
+    }
+    return laneLines;
 };
 
-export function getExitMidpoint(
-    exitStructure: ExitStructure
+
+export function generateStopLineRound(
+    numLanesIn: number,
+    laneLinesRound: LaneStructure[],
+    outerRadius: number
+): RingLaneStructure {
+    const left = laneLinesRound[laneLinesRound.length - 1];
+    const right = laneLinesRound[laneLinesRound.length - 1 - numLanesIn];
+
+    const angleLeft = Math.atan2(left.line.start.z, left.line.start.x);
+    const angleRight = Math.atan2(right.line.start.z, right.line.start.x);
+
+    const points: [number, number, number][] = [];
+    const segments = 16; // number of points along the curve
+    for (let i = 0; i <= segments; i++) {
+        const t = i / segments;
+        const angle = angleLeft + t * (angleRight - angleLeft);
+        const x = Math.cos(angle) * outerRadius;
+        const z = Math.sin(angle) * outerRadius;
+        points.push([x, 0, z]);
+    }
+
+    return {
+        points,
+        radius: outerRadius,
+        properties: {
+            ...defaultLaneProperties,
+            pattern: "dashed"
+        }
+    };
+}
+
+export function generateRoundaboutFloorMesh(
+    exitStructures: RoundaboutExitStructure[]
+): THREE.ShapeGeometry {
+    
+    const shape = new THREE.Shape();
+
+    shape.moveTo(exitStructures[0].laneLines[0].line.start.x, exitStructures[0].laneLines[0].line.start.z);
+    
+    exitStructures.forEach(eX => {
+        shape.lineTo(eX.laneLines[0].line.start.x, eX.laneLines[0].line.start.z);
+        shape.lineTo(eX.laneLines[0].line.end.x, eX.laneLines[0].line.end.z);
+        shape.lineTo(eX.laneLines[eX.laneLines.length - 1].line.end.x, eX.laneLines[eX.laneLines.length - 1].line.end.z);
+        shape.lineTo(eX.laneLines[eX.laneLines.length - 1].line.start.x, eX.laneLines[eX.laneLines.length - 1].line.start.z);
+    });
+
+    shape.closePath();
+
+    return new THREE.ShapeGeometry(shape);
+};
+
+export function generateEdgeTubesRound(
+    outerRadius: number,
+    exitStructures: RoundaboutExitStructure[]
+): THREE.TubeGeometry[] {
+    const tubeGeometries: THREE.TubeGeometry[] = [];
+
+
+    for (let i = 0; i < exitStructures.length; i++) {
+        const exit1 = exitStructures[i];
+        const exit2 = exitStructures[(i + 1) % exitStructures.length]; // wrap around
+
+        const left = exit1.laneLines[exit2.laneLines.length - 1];
+        const right = exit2.laneLines[0];
+
+        let angleLeft = Math.atan2(left.line.start.z, left.line.start.x);
+        let angleRight = Math.atan2(right.line.start.z, right.line.start.x);
+        if (angleRight < angleLeft) angleRight += Math.PI * 2;
+
+        const points: THREE.Vector3[] = [];
+        const segments = 16;
+        for (let j = 0; j <= segments; j++) {
+            const t = j / segments;
+            const angle = angleLeft + t * (angleRight - angleLeft);
+            points.push(new THREE.Vector3(Math.cos(angle) * outerRadius, 0, Math.sin(angle) * outerRadius));
+        }
+
+        const curve = new THREE.CatmullRomCurve3(points);
+        const curve2 = new THREE.CatmullRomCurve3([exit1.laneLines[0].line.start, exit1.laneLines[0].line.end]);
+        const curve3 = new THREE.CatmullRomCurve3([exit1.laneLines[exit1.laneLines.length - 1].line.start, exit1.laneLines[exit1.laneLines.length - 1].line.end]);
+
+        const tube = new THREE.TubeGeometry(curve, 64, 0.1, 8, false); // small radius
+        const tube2 = new THREE.TubeGeometry(curve2, 64, 0.1, 8, false)
+        const tube3 = new THREE.TubeGeometry(curve3, 64, 0.1, 8, false)
+        tubeGeometries.push(tube);
+        tubeGeometries.push(tube2);
+        tubeGeometries.push(tube3);
+
+    }
+
+    return tubeGeometries;
+};
+
+export function generateRingLines(
+    maxLaneCount: number,
+    islandRadius: number,
+    maxLaneWidth: number
+): RingLaneStructure[] {
+
+    const ringLines: RingLaneStructure[] = [];
+    for (let i = 0; i < maxLaneCount - 1; i++) {
+        const radius = islandRadius + (i + 1) * maxLaneWidth;
+        const points: [number, number, number][] = [];
+        for (let j = 0; j <= 256; j++) {
+            const theta = (j / 256) * Math.PI * 2;
+            points.push([Math.cos(theta) * radius, 0, Math.sin(theta) * radius]);
+        }
+        ringLines.push({ radius, points, properties: {
+                ...defaultLaneProperties ,
+                pattern: "dashed"
+            }
+        });
+    }
+
+    return ringLines;
+}
+
+export function generateTextPosition(
+    exit: ExitStructure | RoundaboutExitStructure
 ): THREE.Vector3 {
-    const start = exitStructure.laneLines[0].line.end.clone();
-    const end = exitStructure.laneLines[exitStructure.laneLines.length - 1].line.end.clone();
-    return start.add(end).multiplyScalar(0.5);
+    const end = exit.laneLines[0].line.end;
+    const start = exit.laneLines[exit.laneLines.length - 1].line.end;
+
+    const end2 = exit.laneLines[0].line.start;
+    const start2 = exit.laneLines[exit.laneLines.length - 1].line.start;
+
+
+    const midpoint = new THREE.Vector3().addVectors(end, start).multiplyScalar(0.5);
+    const midpoint2 = new THREE.Vector3().addVectors(end2, start2).multiplyScalar(0.5);
+
+    const position = new THREE.Vector3().lerpVectors(midpoint, midpoint2, 1 / midpoint.distanceTo(midpoint2)).add(new THREE.Vector3(0, 0.1, 0));
+    return position.clone();
+};
+
+export function generateTextAngle(
+    exit: ExitStructure | RoundaboutExitStructure
+): number {
+    const position = generateTextPosition(exit);
+    const dir = new THREE.Vector3().subVectors(new THREE.Vector3(0, 0, 0), position).normalize();
+    const angleY = Math.atan2(dir.x, dir.z);
+
+    return angleY;
 };

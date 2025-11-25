@@ -1,4 +1,6 @@
-import { LaneLineProperties, IntersectionConfig } from "./types";
+import { IntersectionConfig } from "./types/intersection";
+import { RoundaboutConfig } from "./types/roundabout";
+import { JunctionConfig, JunctionObject, LaneLineProperties } from "./types/types";
 
 export const defaultLaneProperties: LaneLineProperties = {
     pattern: "solid",
@@ -9,7 +11,7 @@ export const defaultLaneProperties: LaneLineProperties = {
 
 export const defaultExitConfig = {
     numLanesIn: 1,
-    laneCount: 2,
+    laneCount: 3,
     laneWidth: 1.5,
     exitLength: 20,
 };
@@ -19,14 +21,20 @@ export const defaultIntersectionConfig: IntersectionConfig = {
     exitConfig: Array.from({ length: 4 }, () => (defaultExitConfig)),
 };
 
-export const defaultJunctionObject = {
+export const defaultRoundaboutConfig: RoundaboutConfig = {
+    numExits: 6,
+    exitConfig: Array.from({ length: 6 }, () => (defaultExitConfig)),
+};
+
+
+export const defaultJunctionObject: JunctionObject = {
     id: crypto.randomUUID(),
-    type: "intersection",
-    config: defaultIntersectionConfig,
+    type: "roundabout",
+    config: defaultRoundaboutConfig,
 }
 
-export const defaultJunctionConfig = {
-    junctionObjects: [],
+export const defaultJunctionConfig: JunctionConfig = {
+    junctionObjects: [defaultJunctionObject],
     junctionLinks: [],
 };
 

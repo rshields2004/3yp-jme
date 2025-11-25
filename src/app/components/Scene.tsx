@@ -81,13 +81,7 @@ export default function Scene() {
         })
     );
 
-    useFrame(() => {
-        junctionObjectRefs.current.forEach((g) => {
-            if (!isFinite(g.position.x) || !isFinite(g.position.y) || !isFinite(g.position.z)) {
-                console.error("GLOBAL NaN detected in object:", g.userData.id, g.position);
-            }
-        });
-    });
+   
 
 
     return (

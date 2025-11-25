@@ -2,9 +2,11 @@
 
 import { exit } from "process";
 import { useJModellerContext } from "../context/JModellerContext";
-import { defaultExitConfig, defaultIntersectionConfig } from "../includes/defaults";
-import { ExitStructure, IntersectionConfig, JunctionLink } from "../includes/types";
+import { defaultExitConfig, defaultIntersectionConfig, defaultJunctionObject, defaultRoundaboutConfig } from "../includes/defaults";
+import { ExitStructure, IntersectionConfig } from "../includes/types/intersection";
 import * as THREE from "three";
+import { JunctionLink } from "../includes/types/types";
+import { RoundaboutConfig } from "../includes/types/roundabout";
 
 export default function DebugPanel() {
     const {
@@ -13,7 +15,6 @@ export default function DebugPanel() {
         selectedExits,
         setSelectedExits,
         removeObject,
-        setBestRotation
     } = useJModellerContext();
 
 
@@ -149,9 +150,9 @@ export default function DebugPanel() {
         const junctionoA = junction.junctionObjects.find(jo => jo.id === exitA.structureID);
         const junctionoB = junction.junctionObjects.find(jo => jo.id === exitB.structureID);
 
-        // Get the exit configs
-        const exitAConfig = junctionoA?.config;
-        const exitBConfig = junctionoB?.config;
+        // Get the exit configs !! NEED TO UPDATE FOR ROUNDABOUTS
+        const exitAConfig = junctionoA?.config as IntersectionConfig;
+        const exitBConfig = junctionoB?.config as IntersectionConfig;
 
         if (exitAConfig && exitBConfig) {
             const laneCountA = exitAConfig.exitConfig[exitA.exitIndex].laneCount;
@@ -171,12 +172,118 @@ export default function DebugPanel() {
         setJunction(prev => ({ ...prev, junctionLinks: prev.junctionLinks.filter(l => l.id !== linkID) }));
     };
 
+    const addNewRoundabout = () => {
+        setJunction(prev => ({
+            ...prev,
+            junctionObjects: [
+                ...prev.junctionObjects,
+                { id: crypto.randomUUID(), type: "roundabout", config: defaultRoundaboutConfig }
+            ]
+        }));
+    };
+
+
+
+    const handleNumExitsChangeRound = (objID: string, value: number) => {
+        setJunction(prev => ({
+            ...prev,
+            junctionObjects: prev.junctionObjects.map(obj =>
+                obj.id === objID && obj.type === "roundabout"
+                    ? {
+                        ...obj,
+                        config: {
+                            ...obj.config as RoundaboutConfig,
+                            numExits: value,
+                            exitConfig: Array.from(
+                                { length: value },
+                                (_, j) => (obj.config as RoundaboutConfig).exitConfig[j] ?? defaultExitConfig
+                            )
+                        }
+                    }
+                    : obj
+            )
+        }));
+    };
+    
+
+    const handleLaneCountChangeRound = (objID: string, exitIndex: number, value: number) => {
+        setJunction(prev => ({
+            ...prev,
+            junctionObjects: prev.junctionObjects.map(obj =>
+                obj.id === objID && obj.type === "roundabout"
+                    ? {
+                        ...obj,
+                        config: {
+                            ...obj.config as RoundaboutConfig,
+                            exitConfig: (obj.config as RoundaboutConfig).exitConfig.map((ex, _) => {
+                                const newLaneCount = value;
+                                let newNumLanesIn = ex.numLanesIn;
+
+                                // Ensure numLanesIn is within 1 .. newLaneCount - 1
+                                if (newNumLanesIn < 1 || newNumLanesIn >= newLaneCount) {
+                                    newNumLanesIn = Math.floor(newLaneCount / 2);
+                                }
+
+                                return {
+                                    ...ex,
+                                    laneCount: newLaneCount,
+                                    numLanesIn: newNumLanesIn
+                                };
+                            })
+                        }
+                    }
+                    : obj
+            )
+        }));
+    };
+
+    const handleExitLengthChangeRound = (objID: string, exitIndex: number, value: number) => {
+        setJunction(prev => ({
+            ...prev,
+            junctionObjects: prev.junctionObjects.map(obj =>
+                obj.id === objID && obj.type === "roundabout"
+                    ? {
+                        ...obj,
+                        config: {
+                            ...obj.config as RoundaboutConfig,
+                            exitConfig: (obj.config as RoundaboutConfig).exitConfig.map((ex, idx) =>
+                                idx === exitIndex ? { ...ex, exitLength: value } : ex
+                            )
+                        }
+                    }
+                    : obj
+            )
+        }));
+    };
+
+
+    const handleNumLanesInChangeRound = (objID: string, exitIndex: number, value: number) => {
+        setJunction(prev => ({
+            ...prev,
+            junctionObjects: prev.junctionObjects.map(obj =>
+                obj.id === objID && obj.type === "roundabout"
+                    ? {
+                        ...obj,
+                        config: {
+                            ...obj.config as RoundaboutConfig,
+                            exitConfig: (obj.config as RoundaboutConfig).exitConfig.map((ex, idx) =>
+                                idx === exitIndex ? { ...ex, numLanesIn: value } : ex
+                            )
+                        }
+                    }
+                    : obj
+            )
+        }));
+    };
+
     return (
         <>
-            {/* Add Intersection */}
+            {/* Add new object */}
             <div style={{ position: "absolute", top: 10, right: 10, padding: 10, background: "rgba(0,0,0,0.7)", color: "white", borderRadius: 8, minWidth: 300 }}>
                 <h2>Add Intersection</h2>
                 <button onClick={addNewIntersection}>Add New</button>
+                <h2>Add Roundabout</h2>
+                <button onClick={addNewRoundabout}>Add New</button>
             </div>
 
             {/* Links Panel */}
@@ -240,6 +347,62 @@ export default function DebugPanel() {
                                             max={exit.laneCount - 1}
                                             value={exit.numLanesIn} 
                                             onChange={e => handleNumLanesInChange(obj.id, j, Number(e.target.value))}
+                                        />
+                                </div>
+                            ))}
+                        </div>
+                    );
+                })}
+            </div>
+            {/* Roundabout Config Panel */}
+            <div style={{ position: "absolute", bottom: 10, left: 10, padding: 10, background: "rgba(0,0,0,0.7)", color: "white", borderRadius: 8, minWidth: 300, maxHeight: "40vh", overflowY: "auto" }}>
+                <h2>Roundabout</h2>
+                {junction.junctionObjects.filter(obj => obj.type === "roundabout").map((obj, i) => {
+                    const config = obj.config as IntersectionConfig;
+                    return (
+                        <div key={obj.id} style={{ marginBottom: "1rem" }}>
+                            <h3>Roundabout #{i}</h3>
+                            <label># Exits:
+                                <input 
+                                    type="number" 
+                                    min={2} 
+                                    max={6}
+                                    value={config.numExits} 
+                                    onChange={e => handleNumExitsChangeRound(obj.id, Number(e.target.value))}
+                                />
+                            </label>
+                            <button onClick={() => removeObject(obj.id)}>Delete</button>
+
+                            {config.exitConfig.map((exit, j) => (
+                                <div key={j}>
+                                    <h4>Exit {j}</h4>
+                                    <label># Lanes:
+                                        <input 
+                                            type="range" 
+                                            min={2} 
+                                            max={obj.config.numExits * 2}
+                                            value={exit.laneCount} 
+                                            onChange={e => handleLaneCountChangeRound(obj.id, j, Number(e.target.value))}
+                                        />
+                                    </label><span>{exit.laneCount}</span>
+                                    <br />
+                                    <label>Length:
+                                        <input 
+                                            type="range" 
+                                            min={20} 
+                                            max={70}
+                                            value={exit.exitLength} 
+                                            onChange={e => handleExitLengthChangeRound(obj.id, j, Number(e.target.value))}
+                                        />
+                                    </label><span>{exit.exitLength}</span>
+                                    <br />
+                                    <label># Lanes in: {exit.numLanesIn}</label>
+                                        <input
+                                            type="range" 
+                                            min={1} 
+                                            max={exit.laneCount - 1}
+                                            value={exit.numLanesIn} 
+                                            onChange={e => handleNumLanesInChangeRound(obj.id, j, Number(e.target.value))}
                                         />
                                 </div>
                             ))}

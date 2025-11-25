@@ -2,18 +2,20 @@
 
 import * as THREE from "three";
 import { useEffect, useRef } from "react";
-import { useThree } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import { Line2 } from "three/addons/lines/Line2.js";
 import { LineGeometry } from "three/addons/lines/LineGeometry.js";
 import { LineMaterial } from "three/addons/lines/LineMaterial.js";
+import { gapSize } from "three/tsl";
 
 type ThickLineProps = {
     points: [number, number, number][];  
     colour: string | number;             
     linewidth: number;                  
     dashed: boolean;                    
-    worldUnits: boolean;      
-    isStop?: boolean;         
+    worldUnits: boolean;   
+    dashSize?: number;   
+    gapSize?: number;
 };
 
 export const ThickLine: React.FC<ThickLineProps> = ({
@@ -22,7 +24,8 @@ export const ThickLine: React.FC<ThickLineProps> = ({
     linewidth = 5,
     dashed = false,
     worldUnits = false,
-    isStop = false
+    dashSize = 0.5,
+    gapSize = 0.5,
 }) => {
     const groupRef = useRef<THREE.Group>(null);
     const { size } = useThree();
@@ -33,8 +36,6 @@ export const ThickLine: React.FC<ThickLineProps> = ({
     useEffect(() => {
         if (!groupRef.current) return;
 
-        const start = new THREE.Vector3(...points[0]);
-
         const geometry = new LineGeometry();
         geometry.setPositions(points.flat());
 
@@ -42,8 +43,8 @@ export const ThickLine: React.FC<ThickLineProps> = ({
             color: colour,
             linewidth,
             dashed,
-            dashSize: 0.5,
-            gapSize: 0.5,
+            dashSize: dashSize,
+            gapSize: gapSize,
             worldUnits,
         });
         material.resolution.set(size.width, size.height);
@@ -67,7 +68,6 @@ export const ThickLine: React.FC<ThickLineProps> = ({
             materialRef.current = null;
         };
     }, []); // only on mount
-
 
     return <group ref={groupRef} />;
 };

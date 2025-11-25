@@ -1,58 +1,69 @@
-import {useEffect, useMemo, useRef, useState } from "react";
-import { ThickLine } from "./ThickLine";
+import { useEffect, useMemo, useRef } from "react";
+import { RingLaneStructure, RoundaboutConfig, RoundaboutExitStructure, RoundaboutStructure } from "../includes/types/roundabout";
 import * as THREE from "three";
-import { IntersectionConfig, IntersectionStructure } from "../includes/types/intersection";
 import { useJModellerContext } from "../context/JModellerContext";
-import { generateEdgeTubes, generateExitMesh, generateFloorMesh, generateLaneLines, generateStopLines, generateTextPosition } from "../includes/utils";
-import { Text } from "@react-three/drei";
+import { ThickLine } from "./ThickLine";
+import { generateEdgeTubesRound, generateExitMesh, generateFloorMesh, generateLaneLinesRound, generateRingLines, generateRoundaboutFloorMesh, generateStopLineRound, generateStopLines, generateTextPosition } from "../includes/utils";
+import { defaultLaneProperties } from "../includes/defaults";
 import React from "react";
+import { Text } from "@react-three/drei";
 
 
-type IntersectionProps = {
+
+type RoundaboutProps = {
     id: string;
-    intersectionConfig: IntersectionConfig;
+    roundaboutConfig: RoundaboutConfig;
     index: number;
 };
 
-export const IntersectionComponent = ({ id, intersectionConfig, index }: IntersectionProps) => {
+
+export const RoundaboutComponent = ({ id, roundaboutConfig, index }: RoundaboutProps) => {
+
     const groupRef = useRef<THREE.Group>(null);
 
-    const { 
-        junction, 
-        selectedObjects, 
-        setSelectedObjects, 
-        registerJunctionObject, 
-        selectedExits,
+    const {
+        registerJunctionObject,
+        snapToValidPosition,
+        selectedObjects,
+        setSelectedObjects,
         setSelectedExits,
-        snapToValidPosition
+        selectedExits,
+        junction
     } = useJModellerContext();
 
-    const intersectionMemo: IntersectionStructure = useMemo(() => {
+    const roundaboutMemo: RoundaboutStructure = useMemo(() => {
+        const { numExits, exitConfig } = roundaboutConfig;
 
-        const exitInfo = intersectionConfig.exitConfig.map((exitConfig, exitIndex) => {
-            const maxExitSpan = Math.max(...intersectionConfig.exitConfig.map(e => e.laneCount * e.laneWidth));
-            const adjustedOffset = maxExitSpan / (2 * Math.sin(Math.PI / intersectionConfig.numExits));
-            const angleStep = (2 * Math.PI) / intersectionConfig.numExits;
-            const angle = angleStep * exitIndex;
+        const maxLaneCount = Math.max(...exitConfig.map(c => c.laneCount));
+        const maxLaneWidth = Math.max(...exitConfig.map(c => c.laneWidth));
+        const maxExitLength = Math.max(...exitConfig.map(c => c.exitLength));
+        const islandRadius = maxLaneWidth * 1;
+        const ringLines = generateRingLines(maxLaneCount, islandRadius, maxLaneWidth);
+        const islandGeometry = new THREE.CircleGeometry(islandRadius, 64);
+        const floorCircle = new THREE.RingGeometry(islandRadius, islandRadius + maxLaneWidth * maxLaneCount, 64);
 
-            const stopLines = generateStopLines(exitConfig.laneCount, exitConfig.laneWidth, adjustedOffset, angle);
-            const laneLines = generateLaneLines(stopLines, exitConfig.exitLength, exitConfig.laneCount, exitConfig.numLanesIn);
+        const exitStructures: RoundaboutExitStructure[] = [];
+        let maxOuterRadius = 0;
 
-            return { stopLines, laneLines };
-        });
+        for (let i = 0; i < numExits; i++) {
+            const angle = (i / numExits) * 2 * Math.PI;
 
-        const edgeTubes = generateEdgeTubes(exitInfo);
-        const intersectionFloor = generateFloorMesh(exitInfo);
+            const config = exitConfig[i];
 
-        const maxExitLength = Math.max(...intersectionConfig.exitConfig.map(c => c.exitLength));
-        const midPointStop = new THREE.Vector3();
-        exitInfo[0].stopLines[0].line.getCenter(midPointStop);
-        const maxDistanceToStopLine = maxExitLength + midPointStop.distanceTo(new THREE.Vector3(0, 0, 0)) + 1;
+            const outerRadius = islandRadius + config.laneCount * config.laneWidth;
+            const laneLines = generateLaneLinesRound(outerRadius, config.laneCount, config.laneWidth, angle, config.exitLength - outerRadius, config.numLanesIn);
 
-        // Add a random ID each time so the below useEffect knows when it needs to re render
-        return { id: crypto.randomUUID(), exitInfo, edgeTubes, intersectionFloor, maxDistanceToStopLine, isValid: true, };
-    }, [intersectionConfig]);
+            const stopLine = generateStopLineRound(config.numLanesIn, laneLines, outerRadius);
+            maxOuterRadius = outerRadius;
+            exitStructures.push({ angle, laneLines, stopLine });
+        }
 
+        const roundaboutFloor = generateRoundaboutFloorMesh(exitStructures);
+        const edgeTubes = generateEdgeTubesRound(maxOuterRadius, exitStructures);
+
+        const maxDistanceToStopLine = maxOuterRadius = maxExitLength;
+        return { id: crypto.randomUUID(), islandGeometry, floorCircle, ringLines, exitStructures, roundaboutFloor, edgeTubes, maxDistanceToStopLine }
+    }, [roundaboutConfig]);
 
     useEffect(() => {
         const group = groupRef.current;
@@ -61,19 +72,19 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
         }
         group.userData.id = id;
         group.userData.type = "intersection";
-        group.userData.maxDistanceToStopLine = intersectionMemo.maxDistanceToStopLine;
-        group.userData.exitInfo = intersectionMemo.exitInfo;
+        group.userData.maxDistanceToStopLine = roundaboutMemo.maxDistanceToStopLine;
+        group.userData.exitInfo = roundaboutMemo.exitStructures;
         
         // Registration only works if intersection doesnt exist before, contains a check for ID
         registerJunctionObject(group);
         snapToValidPosition(group);
-    }, [intersectionMemo.id]);
-    
-    
+    }, [roundaboutMemo.id]);
+
+
     const isSelected = groupRef.current ? selectedObjects.includes(groupRef.current.userData.id) : false;
-    
-    const handleIntersectionClick = (event: any) => {
-        if (event.button !== 2){
+
+    const handleRoundaboutClick = (event: any) => {
+        if (event.button !== 2) {
             return;
         }
         event.stopPropagation();
@@ -113,7 +124,7 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
 
             if (filteredPrev.length < 2) {
                 return [...filteredPrev, { structureID: group.userData.id, exitIndex }];
-            } 
+            }
             else {
                 return [filteredPrev[1], { structureID: group.userData.id, exitIndex }];
             }
@@ -122,53 +133,61 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
 
     return (
         <group
-            key={`i-${id}`}
+            key={`r-${id}`}
             ref={groupRef}
         >
+
             <Text
-                key={`i-label-${id}`}
+                key={`r-${id}-label`}
                 font="/fonts/Electrolize-Regular.ttf"
                 position={[0, 0.1, 0]}
                 rotation={[-Math.PI / 2, 0, 0]}
                 fontSize={0.35}
-                color="white"
+                color="black"
                 anchorX="center"
                 anchorY="middle"
             >
-                Intersection {index}
+                Roundabout {index}
             </Text>
-            
+
             {/* Selection ring */}
             {isSelected && (
                 <mesh 
-                    key={`i-select-${id}`}
-                    rotation={[-Math.PI / 2, 0, 0]}
+                    key={`r-${id}-select`}
+                    rotation={[-Math.PI / 2, 0, 0]} 
                     position={[0, 0, 0]}
                 >
                     <torusGeometry 
-                        args={[intersectionMemo.maxDistanceToStopLine + 0.25, 0.25, 16, 64 ]} 
+                        args={[roundaboutMemo.maxDistanceToStopLine + 0.25, 0.25, 16, 64 ]} 
                     />
                     <meshBasicMaterial color="black" side={THREE.DoubleSide} />
                 </mesh>
             )}
 
-            {/* Floor */}
+            {/* Roundabout circular floor */}
             <mesh
-                key={`i-floor-${id}`}
-                geometry={intersectionMemo.intersectionFloor}
+                key={`r-${id}-cfloor`}
+                geometry={roundaboutMemo.floorCircle}
+                rotation={[-Math.PI / 2, 0, 0]}
+                onPointerDown={(event) => handleRoundaboutClick(event)}
+            >
+                <meshStandardMaterial color={"darkgrey"} side={THREE.DoubleSide} />
+            </mesh>
+
+            {/* Roundabout floor */}
+            <mesh
+                key={`r-${id}-floor`}
+                geometry={roundaboutMemo.roundaboutFloor}
                 rotation={[-Math.PI / 2, Math.PI, Math.PI]}
-                position={[0, 0, 0]}
-                onPointerDown={(event) => handleIntersectionClick(event)}
+                onPointerDown={(event) => handleRoundaboutClick(event)}
             >
                 <meshStandardMaterial color="darkgrey" side={THREE.DoubleSide} />
             </mesh>
 
-            
-
             {/* Edge tubes */}
-            {intersectionMemo.edgeTubes.map((tubeGeom, tubeIndex) => (
+            {roundaboutMemo.edgeTubes.map((tubeGeom, tubeIndex) => (
                 <mesh 
-                    key={`i-tube-${tubeIndex}`} 
+                    key={`r-${id}-tube-${tubeIndex}`} 
                     geometry={tubeGeom} 
                     position={[0, 0, 0]}
                 >
@@ -176,8 +195,30 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
                 </mesh>
             ))}
 
+            {/* Roundabout island */}
+            <mesh
+                key={`r-${id}-island`}
+                geometry={roundaboutMemo.islandGeometry}
+                rotation={[-Math.PI / 2, 0, 0]}
+                position={[0, 0.01, 0]}
+            >
+                <meshStandardMaterial color={"white"} side={THREE.DoubleSide} />
+            </mesh>
+
+            {/* Roundabout lane lines */}
+            {roundaboutMemo.ringLines.map((ring, ringIndex) => (
+                <ThickLine
+                    key={crypto.randomUUID()}
+                    points={ring.points}
+                    colour={ring.properties.colour}
+                    linewidth={ring.properties.thickness}
+                    dashed={ring.properties.pattern === "dashed"}
+                    worldUnits={false}
+                />
+            ))}
+
             {/* Invisible exit mesh for exit selection */}
-            {intersectionMemo.exitInfo.map((exit, exitIndex) => {
+            {roundaboutMemo.exitStructures.map((exit, exitIndex) => {
                 const isSelectedExit = selectedExits.some(e => e.structureID === groupRef.current?.userData.id && e.exitIndex === exitIndex);
                 const inALink = junction.junctionLinks.some(link =>
                     link.objectPair.some(linkExit =>
@@ -190,19 +231,18 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
 
                 return (
                     <group
-                        key={`i-${id}-exit-${exitIndex}`}
+                        key={`r-${id}-exit-${exitIndex}`}
                     >
-                        {/* Exit stop lines */}
-                        {exit.stopLines.map((lane, laneIndex) => (
-                            <ThickLine
-                                key={crypto.randomUUID()}
-                                points={[lane.line.start.toArray(), lane.line.end.toArray()]}
-                                colour={lane.properties.colour} // use actual value, not string
-                                linewidth={lane.properties.thickness}
-                                dashed={lane.properties.pattern === "dashed"}
-                                worldUnits={false}
-                            />
-                        ))}
+                        {/* Exit stop line */}
+                        <ThickLine
+                            key={crypto.randomUUID()}
+                            points={exit.stopLine.points}
+                            colour={exit.stopLine.properties.colour} // use actual value, not string
+                            linewidth={exit.stopLine.properties.thickness}
+                            dashed={exit.stopLine.properties.pattern === "dashed"}
+                            worldUnits={false}
+                        />
+
 
                         {/* Exit lane lines */}
                         {exit.laneLines.slice(1, -1).map((lane, laneIndex) => (
@@ -234,7 +274,7 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
 
                         {/* Exit Invisible Mesh for selection */}
                         <mesh
-                            key={`i-${id}-exitmesh-${exitIndex}`}
+                            key={`r-${id}-exitmesh-${exitIndex}`}
                             geometry={generateExitMesh(exit)}
                             rotation={[-Math.PI / 2, Math.PI, Math.PI]}
                             position={[0, 0.01, 0]}

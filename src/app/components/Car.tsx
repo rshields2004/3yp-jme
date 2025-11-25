@@ -3,7 +3,7 @@
 import { useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import { CarProperties } from "../includes/types";
+import { CarProperties } from "../includes/types/types";
 import { carCache } from "./Scene";
 
 

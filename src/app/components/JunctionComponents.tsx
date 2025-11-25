@@ -5,6 +5,7 @@ import { useJModellerContext } from "../context/JModellerContext";
 import { FLOOR_Y } from "../includes/defaults";
 import { useThree } from "@react-three/fiber";
 import { IntersectionComponent } from "./IntersectionComponent";
+import { RoundaboutComponent } from "./RoundaboutComponent";
 
 
 export const JunctionComponents = () => {
@@ -75,9 +76,18 @@ export const JunctionComponents = () => {
         <>
             {junction.junctionObjects.filter(obj => obj.type === "intersection").map((junctionObject, i) => (
                 <IntersectionComponent
-                    key={junctionObject.id}
+                    key={`i-${i}`}
                     id={junctionObject.id}
                     intersectionConfig={junctionObject.config}
+                    index={i}
+                />
+            ))}
+
+            {junction.junctionObjects.filter(obj => obj.type === "roundabout").map((junctionObject, i) => (
+                <RoundaboutComponent
+                    key={`r-${i}`}
+                    id={junctionObject.id}
+                    roundaboutConfig={junctionObject.config}
                     index={i}
                 />
             ))}
