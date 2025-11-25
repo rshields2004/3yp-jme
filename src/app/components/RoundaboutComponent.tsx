@@ -3,7 +3,7 @@ import { RingLaneStructure, RoundaboutConfig, RoundaboutExitStructure, Roundabou
 import * as THREE from "three";
 import { useJModellerContext } from "../context/JModellerContext";
 import { ThickLine } from "./ThickLine";
-import { generateEdgeTubesRound, generateExitMesh, generateFloorMesh, generateLaneLinesRound, generateRingLines, generateRoundaboutFloorMesh, generateStopLineRound, generateStopLines, generateTextPosition } from "../includes/utils";
+import { generateEdgeTubesRound, generateExitMesh, generateLaneLinesRound, generateRingLines, generateRoundaboutFloorMesh, generateStopLineRound, generateTextPosition } from "../includes/utils";
 import { defaultLaneProperties } from "../includes/defaults";
 import React from "react";
 import { Text } from "@react-three/drei";
@@ -35,33 +35,34 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, index }: RoundaboutP
         const { numExits, exitConfig } = roundaboutConfig;
 
         const maxLaneCount = Math.max(...exitConfig.map(c => c.laneCount));
+        const maxNumLaneIn = Math.max(...exitConfig.map(c => c.numLanesIn));
         const maxLaneWidth = Math.max(...exitConfig.map(c => c.laneWidth));
-        const maxExitLength = Math.max(...exitConfig.map(c => c.exitLength));
-        const islandRadius = maxLaneWidth * 1;
-        const ringLines = generateRingLines(maxLaneCount, islandRadius, maxLaneWidth);
+        const maxDistanceToStopLine = Math.max(...exitConfig.map(c => c.exitLength));
+        
+        const islandRadius = maxLaneWidth * (maxLaneCount - maxNumLaneIn);
+        const outerRadius = islandRadius + maxLaneWidth * maxNumLaneIn;
+        
+        
+        const ringLines = generateRingLines(maxNumLaneIn, islandRadius, maxLaneWidth);
         const islandGeometry = new THREE.CircleGeometry(islandRadius, 64);
-        const floorCircle = new THREE.RingGeometry(islandRadius, islandRadius + maxLaneWidth * maxLaneCount, 64);
+        const floorCircle = new THREE.RingGeometry(islandRadius, outerRadius, 64);
 
         const exitStructures: RoundaboutExitStructure[] = [];
-        let maxOuterRadius = 0;
 
         for (let i = 0; i < numExits; i++) {
             const angle = (i / numExits) * 2 * Math.PI;
 
             const config = exitConfig[i];
 
-            const outerRadius = islandRadius + config.laneCount * config.laneWidth;
             const laneLines = generateLaneLinesRound(outerRadius, config.laneCount, config.laneWidth, angle, config.exitLength - outerRadius, config.numLanesIn);
 
             const stopLine = generateStopLineRound(config.numLanesIn, laneLines, outerRadius);
-            maxOuterRadius = outerRadius;
             exitStructures.push({ angle, laneLines, stopLine });
         }
 
         const roundaboutFloor = generateRoundaboutFloorMesh(exitStructures);
-        const edgeTubes = generateEdgeTubesRound(maxOuterRadius, exitStructures);
+        const edgeTubes = generateEdgeTubesRound(outerRadius, exitStructures);
 
-        const maxDistanceToStopLine = maxOuterRadius = maxExitLength;
         return { id: crypto.randomUUID(), islandGeometry, floorCircle, ringLines, exitStructures, roundaboutFloor, edgeTubes, maxDistanceToStopLine }
     }, [roundaboutConfig]);
 
@@ -206,7 +207,7 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, index }: RoundaboutP
             </mesh>
 
             {/* Roundabout lane lines */}
-            {roundaboutMemo.ringLines.map((ring, ringIndex) => (
+            {roundaboutMemo.ringLines.map((ring, _) => (
                 <ThickLine
                     key={crypto.randomUUID()}
                     points={ring.points}
@@ -233,7 +234,7 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, index }: RoundaboutP
                     <group
                         key={`r-${id}-exit-${exitIndex}`}
                     >
-                        {/* Exit stop line */}
+                        Exit stop line
                         <ThickLine
                             key={crypto.randomUUID()}
                             points={exit.stopLine.points}

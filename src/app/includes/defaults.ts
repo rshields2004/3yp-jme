@@ -11,7 +11,7 @@ export const defaultLaneProperties: LaneLineProperties = {
 
 export const defaultExitConfig = {
     numLanesIn: 1,
-    laneCount: 3,
+    laneCount: 2,
     laneWidth: 1.5,
     exitLength: 20,
 };
@@ -22,15 +22,15 @@ export const defaultIntersectionConfig: IntersectionConfig = {
 };
 
 export const defaultRoundaboutConfig: RoundaboutConfig = {
-    numExits: 6,
+    numExits: 4,
     exitConfig: Array.from({ length: 6 }, () => (defaultExitConfig)),
 };
 
 
 export const defaultJunctionObject: JunctionObject = {
     id: crypto.randomUUID(),
-    type: "roundabout",
-    config: defaultRoundaboutConfig,
+    type: "intersection",
+    config: defaultIntersectionConfig,
 }
 
 export const defaultJunctionConfig: JunctionConfig = {

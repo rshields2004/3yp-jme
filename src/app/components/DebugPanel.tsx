@@ -196,7 +196,9 @@ export default function DebugPanel() {
                             numExits: value,
                             exitConfig: Array.from(
                                 { length: value },
-                                (_, j) => (obj.config as RoundaboutConfig).exitConfig[j] ?? defaultExitConfig
+                                (_, j) => (obj.config as RoundaboutConfig).exitConfig[j] ?? { 
+                                    ...obj.config.exitConfig[obj.config.exitConfig.length - 1] 
+                                }
                             )
                         }
                     }

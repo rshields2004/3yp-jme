@@ -142,14 +142,13 @@ export function generateFloorMesh(
 ): THREE.ShapeGeometry {
     const shape = new THREE.Shape();
     exits.forEach(exit => {
-        const stopLine = exit.stopLines[0].line;
         const firstLane = exit.laneLines[0].line;
         const lastLane = exit.laneLines[exit.laneLines.length - 1].line;
 
-        shape.moveTo(stopLine.start.x, stopLine.start.z);
+        shape.moveTo(firstLane.start.x, firstLane.start.z);
         shape.lineTo(firstLane.end.x, firstLane.end.z);
         shape.lineTo(lastLane.end.x, lastLane.end.z);
-        shape.lineTo(stopLine.end.x, stopLine.end.z);
+        shape.lineTo(lastLane.start.x, lastLane.start.z);
     });
     shape.closePath();
     return new THREE.ShapeGeometry(shape);
@@ -240,6 +239,19 @@ export function generateLaneLinesRound(
     return laneLines;
 };
 
+export function shortestAngleDiff(
+    a: number, 
+    b: number
+): number {
+    let diff = b - a;
+    while (diff > Math.PI) {
+        diff -= 2 * Math.PI;
+    }
+    while (diff < -Math.PI) {
+        diff += 2 * Math.PI;
+    }
+    return diff;
+}
 
 export function generateStopLineRound(
     numLanesIn: number,
@@ -254,9 +266,12 @@ export function generateStopLineRound(
 
     const points: [number, number, number][] = [];
     const segments = 16; // number of points along the curve
+
+    const angleDiff = shortestAngleDiff(angleLeft, angleRight);
+
     for (let i = 0; i <= segments; i++) {
         const t = i / segments;
-        const angle = angleLeft + t * (angleRight - angleLeft);
+        const angle = angleLeft + t * angleDiff;
         const x = Math.cos(angle) * outerRadius;
         const z = Math.sin(angle) * outerRadius;
         points.push([x, 0, z]);
@@ -354,7 +369,7 @@ export function generateRingLines(
             }
         });
     }
-
+    console.log(ringLines.length); 
     return ringLines;
 }
 
