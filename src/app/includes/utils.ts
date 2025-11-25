@@ -332,11 +332,13 @@ export function generateEdgeTubesRound(
     const tubeGeometries: THREE.TubeGeometry[] = [];
 
 
-    for (let i = 0; i < exitStructures.length; i++) {
+     for (let i = 0; i < exitStructures.length; i++) {
         const exit1 = exitStructures[i];
         const exit2 = exitStructures[(i + 1) % exitStructures.length]; // wrap around
 
-        const left = exit1.laneLines[exit2.laneLines.length - 1];
+        // Leftmost lane of exit1 (outer edge)
+        const left = exit1.laneLines[exit1.laneLines.length - 1];
+        // Rightmost lane of exit2 (inner edge)
         const right = exit2.laneLines[0];
 
         let angleLeft = Math.atan2(left.line.start.z, left.line.start.x);
@@ -352,16 +354,21 @@ export function generateEdgeTubesRound(
         }
 
         const curve = new THREE.CatmullRomCurve3(points);
-        const curve2 = new THREE.CatmullRomCurve3([exit1.laneLines[0].line.start, exit1.laneLines[0].line.end]);
-        const curve3 = new THREE.CatmullRomCurve3([exit1.laneLines[exit1.laneLines.length - 1].line.start, exit1.laneLines[exit1.laneLines.length - 1].line.end]);
 
-        const tube = new THREE.TubeGeometry(curve, 64, 0.1, 8, false); // small radius
-        const tube2 = new THREE.TubeGeometry(curve2, 64, 0.1, 8, false)
-        const tube3 = new THREE.TubeGeometry(curve3, 64, 0.1, 8, false)
-        tubeGeometries.push(tube);
-        tubeGeometries.push(tube2);
-        tubeGeometries.push(tube3);
+        // Edge tubes along first and last lane of exit1 (cover its lanes)
+        const curveStart = new THREE.CatmullRomCurve3([
+            exit1.laneLines[0].line.start.clone(),
+            exit1.laneLines[0].line.end.clone()
+        ]);
+        
+        const curveEnd = new THREE.CatmullRomCurve3([
+            exit1.laneLines[exit1.laneLines.length - 1].line.start.clone(),
+            exit1.laneLines[exit1.laneLines.length - 1].line.end.clone()
+        ]);
 
+        tubeGeometries.push(new THREE.TubeGeometry(curve, 64, 0.1, 8, false));
+        tubeGeometries.push(new THREE.TubeGeometry(curveStart, 64, 0.1, 8, false));
+        tubeGeometries.push(new THREE.TubeGeometry(curveEnd, 64, 0.1, 8, false));
     }
 
     return tubeGeometries;

@@ -29,8 +29,8 @@ export const defaultRoundaboutConfig: RoundaboutConfig = {
 
 export const defaultJunctionObject: JunctionObject = {
     id: crypto.randomUUID(),
-    type: "intersection",
-    config: defaultIntersectionConfig,
+    type: "roundabout",
+    config: defaultRoundaboutConfig,
 }
 
 export const defaultJunctionConfig: JunctionConfig = {

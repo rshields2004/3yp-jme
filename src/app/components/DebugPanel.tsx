@@ -209,35 +209,38 @@ export default function DebugPanel() {
     
 
     const handleLaneCountChangeRound = (objID: string, exitIndex: number, value: number) => {
-        setJunction(prev => ({
-            ...prev,
-            junctionObjects: prev.junctionObjects.map(obj =>
-                obj.id === objID && obj.type === "roundabout"
-                    ? {
-                        ...obj,
-                        config: {
-                            ...obj.config as RoundaboutConfig,
-                            exitConfig: (obj.config as RoundaboutConfig).exitConfig.map((ex, _) => {
-                                const newLaneCount = value;
-                                let newNumLanesIn = ex.numLanesIn;
+    setJunction(prev => ({
+        ...prev,
+        junctionObjects: prev.junctionObjects.map(obj =>
+            obj.id === objID && obj.type === "roundabout"
+                ? {
+                    ...obj,
+                    config: {
+                        ...obj.config as RoundaboutConfig,
+                        exitConfig: (obj.config as RoundaboutConfig).exitConfig.map((ex, i) => {
+                            // Only update the exit that matches exitIndex
+                            if (i !== exitIndex) return ex;
 
-                                // Ensure numLanesIn is within 1 .. newLaneCount - 1
-                                if (newNumLanesIn < 1 || newNumLanesIn >= newLaneCount) {
-                                    newNumLanesIn = Math.floor(newLaneCount / 2);
-                                }
+                            const newLaneCount = value;
+                            let newNumLanesIn = ex.numLanesIn;
 
-                                return {
-                                    ...ex,
-                                    laneCount: newLaneCount,
-                                    numLanesIn: newNumLanesIn
-                                };
-                            })
-                        }
+                            // Ensure numLanesIn is within 1 .. newLaneCount - 1
+                            if (newNumLanesIn < 1 || newNumLanesIn >= newLaneCount) {
+                                newNumLanesIn = Math.floor(newLaneCount / 2);
+                            }
+
+                            return {
+                                ...ex,
+                                laneCount: newLaneCount,
+                                numLanesIn: newNumLanesIn
+                            };
+                        })
                     }
-                    : obj
-            )
-        }));
-    };
+                }
+                : obj
+        )
+    }));
+};
 
     const handleExitLengthChangeRound = (objID: string, exitIndex: number, value: number) => {
         setJunction(prev => ({
