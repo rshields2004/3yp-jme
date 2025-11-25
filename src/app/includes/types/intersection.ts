@@ -3,7 +3,7 @@ import * as THREE from "three";
 
 export type ExitStructure = {
     laneLines: LaneStructure[];
-    stopLines: LaneStructure[];
+    stopLine: LaneStructure;
 };
 
 export type IntersectionStructure = {

@@ -13,11 +13,40 @@ const getDirection = (
 };
 
 
-export function generateStopLines(
+export function generateStopLine(
     laneCount: number, 
     laneWidth: number, 
     stopLineOffset: number, 
     angle: number, 
+    numLanesIn: number
+): LaneStructure {
+    const origin = new THREE.Vector3(0, 0, 0);
+    const direction = getDirection(angle);
+    const perp = new THREE.Vector3(direction.z, 0, -direction.x);
+
+    const stopCenter = origin.clone().add(direction.clone().multiplyScalar(stopLineOffset));
+
+    const totalExitWidth = laneCount * laneWidth;
+
+    const leftPoint = stopCenter.clone().add(perp.clone().multiplyScalar(-totalExitWidth / 2));
+
+    const rightPoint = leftPoint.clone().add(perp.clone().multiplyScalar(numLanesIn * laneWidth));
+
+    return {
+        line: new THREE.Line3(leftPoint, rightPoint),
+        properties: defaultLaneProperties
+    };
+}
+
+
+export function generateLaneLines(
+    laneCount: number,
+    laneWidth: number,
+    stopLineOffset: number,
+    angle: number,
+    length: number, 
+    numLanes: number, 
+    numLanesIn: number
 ): LaneStructure[] {
     const origin = new THREE.Vector3(0, 0, 0);
     const direction = getDirection(angle);
@@ -30,52 +59,41 @@ export function generateStopLines(
     const leftPoint = stopCenter.clone().add(perp.clone().multiplyScalar(startOffset));
     const rightPoint = stopCenter.clone().add(perp.clone().multiplyScalar(startOffset + totalWidth));
 
-    return [
-        {
-            line: new THREE.Line3(leftPoint.clone(), rightPoint.clone()),
-            properties: defaultLaneProperties
-        },
-    ];
-}
+    const stopLine: LaneStructure = {
+        line: new THREE.Line3(leftPoint.clone(), rightPoint.clone()),
+        properties: defaultLaneProperties
+    };
 
-
-export function generateLaneLines(
-    stopLines: LaneStructure[], 
-    length: number, 
-    numLanes: number, 
-    numLanesIn: number
-): LaneStructure[] {
 
     const laneLines: LaneStructure[] = [];
-    stopLines.forEach((stopLine) => {
-        const startVec = stopLine.line.start.clone();
-        const endVec = stopLine.line.end.clone();
 
-        // Vector along the stop line
-        const stopDir = endVec.clone().sub(startVec).normalize();
+    const startVec = stopLine.line.start.clone();
+    const endVec = stopLine.line.end.clone();
 
-        // Vector perpendicular to stop line (direction lanes extend)
-        const laneDir = new THREE.Vector3(-stopDir.z, 0, stopDir.x).normalize();
+    // Vector along the stop line
+    const stopDir = endVec.clone().sub(startVec).normalize();
 
-        // stop line vector
-        const stopVec = endVec.clone().sub(startVec);
+    // Vector perpendicular to stop line (direction lanes extend)
+    const laneDir = new THREE.Vector3(-stopDir.z, 0, stopDir.x).normalize();
 
-        // left edge of stop line
-        const leftEdge = startVec.clone();
-        for (let i = 0; i <= numLanes; i++) {
+    // stop line vector
+    const stopVec = endVec.clone().sub(startVec);
 
-            const fractionAlong = (i / numLanes); // 0 -> left edge, 1 -> right edge
-            const laneStart = leftEdge.clone().add(stopVec.clone().multiplyScalar(fractionAlong));
-            const laneEnd = laneStart.clone().add(laneDir.clone().multiplyScalar(-length));
-            laneLines.push({
-                line: new THREE.Line3(laneStart.clone(), laneEnd.clone()),
-                properties: { 
-                    ...defaultLaneProperties, 
-                    pattern: (i == 0 || i == numLanes || (numLanes - i) == numLanesIn) ? "solid" : "dashed" 
-                },
-            });
-        }
-    });
+    // left edge of stop line
+    const leftEdge = startVec.clone();
+    for (let i = 0; i <= numLanes; i++) {
+
+        const fractionAlong = (i / numLanes); // 0 -> left edge, 1 -> right edge
+        const laneStart = leftEdge.clone().add(stopVec.clone().multiplyScalar(fractionAlong));
+        const laneEnd = laneStart.clone().add(laneDir.clone().multiplyScalar(-length));
+        laneLines.push({
+            line: new THREE.Line3(laneStart.clone(), laneEnd.clone()),
+            properties: { 
+                ...defaultLaneProperties, 
+                pattern: (i == 0 || i == numLanes || (numLanes - i) == numLanesIn) ? "solid" : "dashed" 
+            },
+        });
+    }
 
     return laneLines;
 }

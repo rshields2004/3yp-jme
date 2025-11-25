@@ -3,7 +3,7 @@ import { ThickLine } from "./ThickLine";
 import * as THREE from "three";
 import { IntersectionConfig, IntersectionStructure } from "../includes/types/intersection";
 import { useJModellerContext } from "../context/JModellerContext";
-import { generateEdgeTubes, generateExitMesh, generateFloorMesh, generateLaneLines, generateStopLines, generateTextPosition } from "../includes/utils";
+import { generateEdgeTubes, generateExitMesh, generateFloorMesh, generateLaneLines, generateStopLine, generateTextPosition } from "../includes/utils";
 import { Text } from "@react-three/drei";
 import React from "react";
 
@@ -35,22 +35,22 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
             const angleStep = (2 * Math.PI) / intersectionConfig.numExits;
             const angle = angleStep * exitIndex;
 
-            const stopLines = generateStopLines(exitConfig.laneCount, exitConfig.laneWidth, adjustedOffset, angle);
-            const laneLines = generateLaneLines(stopLines, exitConfig.exitLength, exitConfig.laneCount, exitConfig.numLanesIn);
+            const stopLine = generateStopLine(exitConfig.laneCount, exitConfig.laneWidth, adjustedOffset, angle, exitConfig.numLanesIn);
+            const laneLines = generateLaneLines(exitConfig.laneCount, exitConfig.laneWidth, adjustedOffset, angle, exitConfig.exitLength, exitConfig.laneCount, exitConfig.numLanesIn);
 
-            return { stopLines, laneLines };
+            return { stopLine, laneLines };
         });
 
         const edgeTubes = generateEdgeTubes(exitInfo);
         const intersectionFloor = generateFloorMesh(exitInfo);
 
         const maxExitLength = Math.max(...intersectionConfig.exitConfig.map(c => c.exitLength));
-        const midPointStop = new THREE.Vector3();
-        exitInfo[0].stopLines[0].line.getCenter(midPointStop);
+        const midPointStop = exitInfo[0].laneLines[0].line.start.clone().lerp(exitInfo[0].laneLines[exitInfo[0].laneLines.length - 1].line.start.clone(), 0.5);
+        
         const maxDistanceToStopLine = maxExitLength + midPointStop.distanceTo(new THREE.Vector3(0, 0, 0)) + 1;
 
         // Add a random ID each time so the below useEffect knows when it needs to re render
-        return { id: crypto.randomUUID(), exitInfo, edgeTubes, intersectionFloor, maxDistanceToStopLine, isValid: true, };
+        return { id: crypto.randomUUID(), exitInfo, edgeTubes, intersectionFloor, maxDistanceToStopLine };
     }, [intersectionConfig]);
 
 
@@ -193,16 +193,14 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
                         key={`i-${id}-exit-${exitIndex}`}
                     >
                         {/* Exit stop lines */}
-                        {exit.stopLines.map((lane, laneIndex) => (
-                            <ThickLine
-                                key={crypto.randomUUID()}
-                                points={[lane.line.start.toArray(), lane.line.end.toArray()]}
-                                colour={lane.properties.colour} // use actual value, not string
-                                linewidth={lane.properties.thickness}
-                                dashed={lane.properties.pattern === "dashed"}
-                                worldUnits={false}
-                            />
-                        ))}
+                        <ThickLine
+                            key={crypto.randomUUID()}
+                            points={[exit.stopLine.line.start.toArray(), exit.stopLine.line.end.toArray()]}
+                            colour={exit.stopLine.properties.colour} // use actual value, not string
+                            linewidth={exit.stopLine.properties.thickness}
+                            dashed={exit.stopLine.properties.pattern === "dashed"}
+                            worldUnits={false}
+                        />
 
                         {/* Exit lane lines */}
                         {exit.laneLines.slice(1, -1).map((lane, laneIndex) => (
