@@ -3,7 +3,7 @@
 import { exit } from "process";
 import { useJModellerContext } from "../context/JModellerContext";
 import { defaultExitConfig, defaultIntersectionConfig, defaultJunctionObject, defaultRoundaboutConfig } from "../includes/defaults";
-import { ExitStructure, IntersectionConfig } from "../includes/types/intersection";
+import { IntersectionConfig } from "../includes/types/intersection";
 import * as THREE from "three";
 import { JunctionLink } from "../includes/types/types";
 import { RoundaboutConfig } from "../includes/types/roundabout";
