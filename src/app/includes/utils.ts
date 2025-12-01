@@ -424,3 +424,21 @@ export function generateTextAngle(
 
     return angleY;
 };
+
+
+export function getExitWorldPosition(junctionGroup: THREE.Group, exit: ExitStructure, position: string): THREE.Vector3 {
+
+    const points = exit.laneLines.map(lane =>
+        position === "start" ? lane.line.start : lane.line.end
+    );
+
+
+    const left = points[0].clone();
+    const right = points[points.length - 1].clone();
+
+    const midpoint = new THREE.Vector3();
+    midpoint.addVectors(left, right).multiplyScalar(0.5);
+
+    return midpoint.applyMatrix4(junctionGroup.matrixWorld);
+
+};

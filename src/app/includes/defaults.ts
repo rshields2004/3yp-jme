@@ -23,7 +23,7 @@ export const defaultIntersectionConfig: IntersectionConfig = {
 
 export const defaultRoundaboutConfig: RoundaboutConfig = {
     numExits: 4,
-    exitConfig: Array.from({ length: 6 }, () => (defaultExitConfig)),
+    exitConfig: Array.from({ length: 4 }, () => (defaultExitConfig)),
 };
 
 

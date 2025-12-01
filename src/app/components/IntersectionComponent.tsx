@@ -47,7 +47,7 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
         const maxExitLength = Math.max(...intersectionConfig.exitConfig.map(c => c.exitLength));
         const midPointStop = exitInfo[0].laneLines[0].line.start.clone().lerp(exitInfo[0].laneLines[exitInfo[0].laneLines.length - 1].line.start.clone(), 0.5);
         
-        const maxDistanceToStopLine = maxExitLength + midPointStop.distanceTo(new THREE.Vector3(0, 0, 0)) + 1;
+        const maxDistanceToStopLine = maxExitLength + midPointStop.distanceTo(new THREE.Vector3(0, 0, 0)) + 15;
 
         // Add a random ID each time so the below useEffect knows when it needs to re render
         return { id: crypto.randomUUID(), exitInfo, edgeTubes, intersectionFloor, maxDistanceToStopLine };

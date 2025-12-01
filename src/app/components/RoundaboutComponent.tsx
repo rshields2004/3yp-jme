@@ -37,7 +37,7 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, index }: RoundaboutP
         const maxLaneCount = Math.max(...exitConfig.map(c => c.laneCount));
         const maxNumLaneIn = Math.max(...exitConfig.map(c => c.numLanesIn));
         const maxLaneWidth = Math.max(...exitConfig.map(c => c.laneWidth));
-        const maxDistanceToStopLine = Math.max(...exitConfig.map(c => c.exitLength));
+        const maxDistanceToStopLine = Math.max(...exitConfig.map(c => c.exitLength)) + 15;
         
         const islandRadius = maxLaneWidth * (maxLaneCount - maxNumLaneIn);
         const outerRadius = islandRadius + maxLaneWidth * maxNumLaneIn;
@@ -72,7 +72,7 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, index }: RoundaboutP
             return;
         }
         group.userData.id = id;
-        group.userData.type = "intersection";
+        group.userData.type = "roundabout";
         group.userData.maxDistanceToStopLine = roundaboutMemo.maxDistanceToStopLine;
         group.userData.exitInfo = roundaboutMemo.exitStructures;
         

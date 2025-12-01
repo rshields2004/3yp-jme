@@ -5,7 +5,7 @@ import { useJModellerContext } from "../context/JModellerContext";
 import { defaultExitConfig, defaultIntersectionConfig, defaultJunctionObject, defaultRoundaboutConfig } from "../includes/defaults";
 import { IntersectionConfig } from "../includes/types/intersection";
 import * as THREE from "three";
-import { JunctionLink } from "../includes/types/types";
+import { ExitConfig, ExitRef, JunctionLink } from "../includes/types/types";
 import { RoundaboutConfig } from "../includes/types/roundabout";
 
 export default function DebugPanel() {
@@ -23,15 +23,15 @@ export default function DebugPanel() {
         setJunction(prev => ({
             ...prev,
             junctionObjects: prev.junctionObjects.map(obj =>
-                obj.id === objID && obj.type === "intersection"
+                obj.id === objID
                     ? {
                         ...obj,
                         config: {
-                            ...obj.config as IntersectionConfig,
+                            ...obj.config,
                             numExits: value,
                             exitConfig: Array.from(
                                 { length: value },
-                                (_, j) => (obj.config as IntersectionConfig).exitConfig[j] ?? defaultExitConfig
+                                (_, j) => (obj.config).exitConfig[j] ?? defaultExitConfig
                             )
                         }
                     }
@@ -40,50 +40,17 @@ export default function DebugPanel() {
         }));
     };
 
-    const handleLaneCountChange = (objID: string, exitIndex: number, value: number) => {
-        setJunction(prev => ({
-            ...prev,
-            junctionObjects: prev.junctionObjects.map(obj =>
-                obj.id === objID && obj.type === "intersection"
-                    ? {
-                        ...obj,
-                        config: {
-                            ...obj.config as IntersectionConfig,
-                            exitConfig: (obj.config as IntersectionConfig).exitConfig.map((ex, idx) => {
-                                if (idx === exitIndex) {
-                                    const newLaneCount = value;
-                                    let newNumLanesIn = ex.numLanesIn;
-
-                                    // Ensure numLanesIn is within 1 .. newLaneCount - 1
-                                    if (newNumLanesIn < 1 || newNumLanesIn >= newLaneCount) {
-                                        newNumLanesIn = Math.floor(newLaneCount / 2);
-                                    }
-
-                                    return {
-                                        ...ex,
-                                        laneCount: newLaneCount,
-                                        numLanesIn: newNumLanesIn
-                                    };
-                                }
-                                return ex;
-                            })
-                        }
-                    }
-                    : obj
-            )
-        }));
-    };
 
     const handleExitLengthChange = (objID: string, exitIndex: number, value: number) => {
         setJunction(prev => ({
             ...prev,
             junctionObjects: prev.junctionObjects.map(obj =>
-                obj.id === objID && obj.type === "intersection"
+                obj.id === objID
                     ? {
                         ...obj,
                         config: {
-                            ...obj.config as IntersectionConfig,
-                            exitConfig: (obj.config as IntersectionConfig).exitConfig.map((ex, idx) =>
+                            ...obj.config,
+                            exitConfig: (obj.config).exitConfig.map((ex, idx) =>
                                 idx === exitIndex ? { ...ex, exitLength: value } : ex
                             )
                         }
@@ -93,24 +60,6 @@ export default function DebugPanel() {
         }));
     };
 
-    const handleNumLanesInChange = (objID: string, exitIndex: number, value: number) => {
-        setJunction(prev => ({
-            ...prev,
-            junctionObjects: prev.junctionObjects.map(obj =>
-                obj.id === objID && obj.type === "intersection"
-                    ? {
-                        ...obj,
-                        config: {
-                            ...obj.config as IntersectionConfig,
-                            exitConfig: (obj.config as IntersectionConfig).exitConfig.map((ex, idx) =>
-                                idx === exitIndex ? { ...ex, numLanesIn: value } : ex
-                            )
-                        }
-                    }
-                    : obj
-            )
-        }));
-    };
 
     const addNewIntersection = () => {
         if (junction.junctionObjects.filter(o => o.type === "intersection").length >= 10) return;
@@ -182,47 +131,29 @@ export default function DebugPanel() {
         }));
     };
 
+    const handleLaneCountChange = (objID: string, exitIndex: number, value: number) => {
+        setJunction(prev => {
+            // Find any link that contains the current object and exit
+            const link = junction.junctionLinks.find(link =>
+                link.objectPair.some(ref => ref.structureID === objID && ref.exitIndex === exitIndex)
+            );
 
+            // If there is a linked exit, store its object ID and exitIndex
+            let linkedRef: ExitRef | null = null;
+            if (link) {
+                linkedRef = link.objectPair.find(ref => !(ref.structureID === objID && ref.exitIndex === exitIndex)) || null;
+            }
 
-    const handleNumExitsChangeRound = (objID: string, value: number) => {
-        setJunction(prev => ({
-            ...prev,
-            junctionObjects: prev.junctionObjects.map(obj =>
-                obj.id === objID && obj.type === "roundabout"
-                    ? {
-                        ...obj,
-                        config: {
-                            ...obj.config as RoundaboutConfig,
-                            numExits: value,
-                            exitConfig: Array.from(
-                                { length: value },
-                                (_, j) => (obj.config as RoundaboutConfig).exitConfig[j] ?? { 
-                                    ...obj.config.exitConfig[obj.config.exitConfig.length - 1] 
-                                }
-                            )
-                        }
-                    }
-                    : obj
-            )
-        }));
-    };
-    
-
-    const handleLaneCountChangeRound = (objID: string, exitIndex: number, value: number) => {
-    setJunction(prev => ({
-        ...prev,
-        junctionObjects: prev.junctionObjects.map(obj =>
-            obj.id === objID && obj.type === "roundabout"
-                ? {
-                    ...obj,
-                    config: {
-                        ...obj.config as RoundaboutConfig,
-                        exitConfig: (obj.config as RoundaboutConfig).exitConfig.map((ex, i) => {
-                            // Only update the exit that matches exitIndex
+            return {
+                ...prev,
+                junctionObjects: prev.junctionObjects.map(obj => {
+                    const updateExitConfig = (exitConfig: ExitConfig[]) =>
+                        exitConfig.map((ex, i) => {
+                            // Only update the matching exit
                             if (i !== exitIndex) return ex;
 
-                            const newLaneCount = value;
                             let newNumLanesIn = ex.numLanesIn;
+                            const newLaneCount = value;
 
                             // Ensure numLanesIn is within 1 .. newLaneCount - 1
                             if (newNumLanesIn < 1 || newNumLanesIn >= newLaneCount) {
@@ -232,53 +163,99 @@ export default function DebugPanel() {
                             return {
                                 ...ex,
                                 laneCount: newLaneCount,
-                                numLanesIn: newNumLanesIn
+                                numLanesIn: 1
                             };
-                        })
-                    }
-                }
-                : obj
-        )
-    }));
-};
+                        });
 
-    const handleExitLengthChangeRound = (objID: string, exitIndex: number, value: number) => {
-        setJunction(prev => ({
-            ...prev,
-            junctionObjects: prev.junctionObjects.map(obj =>
-                obj.id === objID && obj.type === "roundabout"
-                    ? {
-                        ...obj,
-                        config: {
-                            ...obj.config as RoundaboutConfig,
-                            exitConfig: (obj.config as RoundaboutConfig).exitConfig.map((ex, idx) =>
-                                idx === exitIndex ? { ...ex, exitLength: value } : ex
-                            )
-                        }
+                    // Update current object
+                    if (obj.id === objID) {
+                        return {
+                            ...obj,
+                            config: {
+                                ...obj.config,
+                                exitConfig: updateExitConfig((obj.config).exitConfig)
+                            }
+                        };
                     }
-                    : obj
-            )
-        }));
+
+                    // Update linked object if exists
+                    if (linkedRef && obj.id === linkedRef.structureID) {
+                        return {
+                            ...obj,
+                            config: {
+                                ...obj.config,
+                                exitConfig: (obj.config).exitConfig.map((ex, i) => {
+                                    if (i !== linkedRef!.exitIndex) return ex;
+
+                                    let newNumLanesIn = ex.numLanesIn;
+                                    const newLaneCount = value;
+
+                                    if (newNumLanesIn < 1 || newNumLanesIn >= newLaneCount) {
+                                        newNumLanesIn = Math.floor(newLaneCount / 2);
+                                    }
+
+                                    return {
+                                        ...ex,
+                                        laneCount: newLaneCount,
+                                        numLanesIn: newLaneCount - 1
+                                    };
+                                })
+                            }
+                        };
+                    }
+
+                    return obj;
+                })
+            };
+        });
     };
 
+    const handleNumLanesInChange = (objID: string, exitIndex: number, value: number) => {
+        setJunction(prev => {
+            // Find any link that contains the current object and exit
+            const link = junction.junctionLinks.find(link =>
+                link.objectPair.some(ref => ref.structureID === objID && ref.exitIndex === exitIndex)
+            );
 
-    const handleNumLanesInChangeRound = (objID: string, exitIndex: number, value: number) => {
-        setJunction(prev => ({
-            ...prev,
-            junctionObjects: prev.junctionObjects.map(obj =>
-                obj.id === objID && obj.type === "roundabout"
-                    ? {
-                        ...obj,
-                        config: {
-                            ...obj.config as RoundaboutConfig,
-                            exitConfig: (obj.config as RoundaboutConfig).exitConfig.map((ex, idx) =>
-                                idx === exitIndex ? { ...ex, numLanesIn: value } : ex
-                            )
-                        }
+            // If there is a linked exit, store its object ID and exitIndex
+            let linkedRef: ExitRef | null = null;
+            if (link) {
+                linkedRef = link.objectPair.find(ref => !(ref.structureID === objID && ref.exitIndex === exitIndex)) || null;
+            }
+
+            return {
+                ...prev,
+                junctionObjects: prev.junctionObjects.map(obj => {
+                    // Update current object
+                    if (obj.id === objID) {
+                        return {
+                            ...obj,
+                            config: {
+                                ...obj.config,
+                                exitConfig: (obj.config).exitConfig.map((ex, idx) =>
+                                    idx === exitIndex ? { ...ex, numLanesIn: value } : ex
+                                )
+                            }
+                        };
                     }
-                    : obj
-            )
-        }));
+
+                    // Update linked object if exists
+                    if (linkedRef && obj.id === linkedRef.structureID) {
+                        return {
+                            ...obj,
+                            config: {
+                                ...obj.config,
+                                exitConfig: (obj.config).exitConfig.map((ex, idx) =>
+                                    idx === linkedRef!.exitIndex ? { ...ex, numLanesIn: ex.laneCount - value } : ex
+                                )
+                            }
+                        };
+                    }
+
+                    return obj;
+                })
+            };
+        });
     };
 
     return (
@@ -373,7 +350,7 @@ export default function DebugPanel() {
                                     min={2} 
                                     max={6}
                                     value={config.numExits} 
-                                    onChange={e => handleNumExitsChangeRound(obj.id, Number(e.target.value))}
+                                    onChange={e => handleNumExitsChange(obj.id, Number(e.target.value))}
                                 />
                             </label>
                             <button onClick={() => removeObject(obj.id)}>Delete</button>
@@ -387,7 +364,7 @@ export default function DebugPanel() {
                                             min={2} 
                                             max={obj.config.numExits * 2}
                                             value={exit.laneCount} 
-                                            onChange={e => handleLaneCountChangeRound(obj.id, j, Number(e.target.value))}
+                                            onChange={e => handleLaneCountChange(obj.id, j, Number(e.target.value))}
                                         />
                                     </label><span>{exit.laneCount}</span>
                                     <br />
@@ -397,7 +374,7 @@ export default function DebugPanel() {
                                             min={20} 
                                             max={70}
                                             value={exit.exitLength} 
-                                            onChange={e => handleExitLengthChangeRound(obj.id, j, Number(e.target.value))}
+                                            onChange={e => handleExitLengthChange(obj.id, j, Number(e.target.value))}
                                         />
                                     </label><span>{exit.exitLength}</span>
                                     <br />
@@ -407,7 +384,7 @@ export default function DebugPanel() {
                                             min={1} 
                                             max={exit.laneCount - 1}
                                             value={exit.numLanesIn} 
-                                            onChange={e => handleNumLanesInChangeRound(obj.id, j, Number(e.target.value))}
+                                            onChange={e => handleNumLanesInChange(obj.id, j, Number(e.target.value))}
                                         />
                                 </div>
                             ))}

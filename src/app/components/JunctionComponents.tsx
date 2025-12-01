@@ -6,6 +6,8 @@ import { FLOOR_Y } from "../includes/defaults";
 import { useThree } from "@react-three/fiber";
 import { IntersectionComponent } from "./IntersectionComponent";
 import { RoundaboutComponent } from "./RoundaboutComponent";
+import { LinkComponent } from "./LinkComponent";
+import { JunctionObject } from "../includes/types/types";
 
 
 export const JunctionComponents = () => {
@@ -91,6 +93,20 @@ export const JunctionComponents = () => {
                     index={i}
                 />
             ))}
+
+            {junction.junctionLinks.map((link, linkIndex) => {
+                const config1 = junction.junctionObjects.find(o => o.id === link.objectPair[0].structureID)?.config.exitConfig[link.objectPair[0].exitIndex];
+                const config2 = junction.junctionObjects.find(o => o.id === link.objectPair[1].structureID)?.config.exitConfig[link.objectPair[1].exitIndex];
+                if (!config1 || !config2) return null;
+                return (
+                    <LinkComponent
+                        key={`l-${linkIndex}`}
+                        link={link}
+                        config1={config1}
+                        config2={config2}
+                    />
+                );
+            })}
 
             {/* Below goes future objects such as roundabouts etc. */}
         </>
