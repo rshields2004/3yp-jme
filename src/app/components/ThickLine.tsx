@@ -44,6 +44,8 @@ export const ThickLine = forwardRef<ThickLineHandle, ThickLineProps>(
         useEffect(() => {
             if (!groupRef.current) return;
 
+            const current = groupRef.current;
+
             const geometry = new LineGeometry();
             geometry.setPositions(points.flat());
 
@@ -66,11 +68,11 @@ export const ThickLine = forwardRef<ThickLineHandle, ThickLineProps>(
             materialRef.current = material;
 
             return () => {
-                groupRef.current?.remove(line);
+                current.remove(line);
                 geometry.dispose();
                 material.dispose();
             };
-        }, []);
+        }, [colour, dashSize, dashed, gapSize, linewidth, points, size.height, size.width, worldUnits]);
 
         return <group ref={groupRef} />;
     }

@@ -7,7 +7,6 @@ import { useThree } from "@react-three/fiber";
 import { IntersectionComponent } from "./IntersectionComponent";
 import { RoundaboutComponent } from "./RoundaboutComponent";
 import { LinkComponent } from "./LinkComponent";
-import { JunctionObject } from "../includes/types/types";
 
 
 export const JunctionComponents = () => {
@@ -27,7 +26,7 @@ export const JunctionComponents = () => {
         controlRef.current = controls;
 
         // Drag listener
-        const onDrag = (event: any) => {
+        const onDrag = (event: { type: string; object: THREE.Object3D }) => {
             const draggedGroup = event.object as THREE.Group;
             if (!draggedGroup) {
                 return;
@@ -37,7 +36,7 @@ export const JunctionComponents = () => {
             }
         };
 
-        const onDragEnd = (event: any) => {
+        const onDragEnd = (event: { type: string; object: THREE.Object3D }) => {
             requestAnimationFrame(() => {
                 snapToValidPosition(event.object as THREE.Group);
             });
@@ -58,7 +57,7 @@ export const JunctionComponents = () => {
             controls.dispose();
             window.removeEventListener("keydown", onKeyPress);
         };
-    }, [camera, gl]);
+    }, [camera, gl, setSelectedObjects, snapToValidPosition]);
     
     
 
@@ -71,7 +70,7 @@ export const JunctionComponents = () => {
         const controlObjects = selectedObjects.map(id => junctionObjectRefs.current.find(g => g.userData.id === id)).filter((g): g is THREE.Group => !!g)
         controls.objects = controlObjects;
 
-    }, [selectedObjects]);
+    }, [selectedObjects, setSelectedObjects, snapToValidPosition, junctionObjectRefs]);
 
 
     return (

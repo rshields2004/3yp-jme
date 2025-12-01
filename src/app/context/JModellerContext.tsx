@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode, useRef  } from "react";
-import { ExitRef, JModellerState, JunctionConfig, JunctionLink } from "../includes/types/types";
+import { ExitRef, JModellerState, JunctionConfig } from "../includes/types/types";
 import { defaultJunctionConfig } from "../includes/defaults";
 import * as THREE from "three";
 
@@ -34,7 +34,7 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
         
         junctionObjectRefs.current = junctionObjectRefs.current.filter(g => g !== group);
 
-        group.traverse((obj: any) => {
+        group.traverse((obj: THREE.Object3D) => {
             if (obj instanceof THREE.Mesh) {
                 obj.geometry.dispose();
                 if (Array.isArray(obj.material)) {
@@ -62,7 +62,7 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
             radius: g.userData.maxDistanceToStopLine || 0,
         }));
 
-        let newPos = draggedGroup.position.clone();
+        const newPos = draggedGroup.position.clone();
         let safe = false;
         let maxIterations = 50;
 
@@ -76,7 +76,7 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
                 if (dist < minDist) {
                     safe = false;
 
-                    let pushDir = newPos.clone().sub(otherPos);
+                    const pushDir = newPos.clone().sub(otherPos);
 
                     // If exactly overlapping or close to running out of iterations, pick a random direction
                     if (pushDir.lengthSq() === 0 || maxIterations < 10) {

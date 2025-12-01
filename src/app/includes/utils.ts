@@ -1,10 +1,8 @@
 import * as THREE from "three";
 import { defaultLaneProperties } from "./defaults";
 import { ExitStructure } from "./types/intersection";
-import { ExitRef, JunctionConfig, LaneStructure } from "./types/types";
-import { RingLaneStructure, RoundaboutExitStructure, RoundaboutStructure } from "./types/roundabout";
-import { exit } from "process";
-
+import { LaneStructure } from "./types/types";
+import { RingLaneStructure, RoundaboutExitStructure } from "./types/roundabout";
 
 const getDirection = (
     angle: number
@@ -341,7 +339,7 @@ export function generateEdgeTubesRound(
         // Rightmost lane of exit2 (inner edge)
         const right = exit2.laneLines[0];
 
-        let angleLeft = Math.atan2(left.line.start.z, left.line.start.x);
+        const angleLeft = Math.atan2(left.line.start.z, left.line.start.x);
         let angleRight = Math.atan2(right.line.start.z, right.line.start.x);
         if (angleRight < angleLeft) angleRight += Math.PI * 2;
 

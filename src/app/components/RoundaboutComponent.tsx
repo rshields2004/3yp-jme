@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef } from "react";
-import { RingLaneStructure, RoundaboutConfig, RoundaboutExitStructure, RoundaboutStructure } from "../includes/types/roundabout";
+import { RoundaboutConfig, RoundaboutExitStructure, RoundaboutStructure } from "../includes/types/roundabout";
 import * as THREE from "three";
 import { useJModellerContext } from "../context/JModellerContext";
 import { ThickLine } from "./ThickLine";
 import { generateEdgeTubesRound, generateExitMesh, generateLaneLinesRound, generateRingLines, generateRoundaboutFloorMesh, generateStopLineRound, generateTextPosition } from "../includes/utils";
-import { defaultLaneProperties } from "../includes/defaults";
 import React from "react";
 import { Text } from "@react-three/drei";
+import { ThreeEvent } from "@react-three/fiber";
 
 
 
@@ -79,12 +79,12 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, index }: RoundaboutP
         // Registration only works if intersection doesnt exist before, contains a check for ID
         registerJunctionObject(group);
         snapToValidPosition(group);
-    }, [roundaboutMemo.id]);
+    }, [roundaboutMemo.id, id, registerJunctionObject, roundaboutMemo.exitStructures, roundaboutMemo.maxDistanceToStopLine, snapToValidPosition]);
 
 
     const isSelected = groupRef.current ? selectedObjects.includes(groupRef.current.userData.id) : false;
 
-    const handleRoundaboutClick = (event: any) => {
+    const handleRoundaboutClick = (event: ThreeEvent<PointerEvent>) => {
         if (event.button !== 2) {
             return;
         }
@@ -96,7 +96,7 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, index }: RoundaboutP
         setSelectedObjects(prev => prev.includes(group.userData.id) ? prev.filter(g => g !== group.userData.id) : [...prev, group.userData.id]);
     };
 
-    const handleExitClick = (event: any, exitIndex: number) => {
+    const handleExitClick = (event: ThreeEvent<PointerEvent>, exitIndex: number) => {
         if (event.button !== 0) {
             return;
         }
@@ -207,7 +207,7 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, index }: RoundaboutP
             </mesh>
 
             {/* Roundabout lane lines */}
-            {roundaboutMemo.ringLines.map((ring, _) => (
+            {roundaboutMemo.ringLines.map((ring) => (
                 <ThickLine
                     key={crypto.randomUUID()}
                     points={ring.points}
@@ -246,7 +246,7 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, index }: RoundaboutP
 
 
                         {/* Exit lane lines */}
-                        {exit.laneLines.slice(1, -1).map((lane, laneIndex) => (
+                        {exit.laneLines.slice(1, -1).map((lane) => (
                             <ThickLine
                                 key={crypto.randomUUID()}
                                 points={[lane.line.start.toArray(), lane.line.end.toArray()]}

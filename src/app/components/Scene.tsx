@@ -1,6 +1,7 @@
 "use client";
 
 import { OrbitControls } from "@react-three/drei";
+import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import Car from "./Car";
 import { useState, useEffect, useRef } from "react";
 import { Bloom, EffectComposer } from "@react-three/postprocessing";
@@ -9,7 +10,6 @@ import { carColours, carTypes, FLOOR_Y } from "../includes/defaults";
 import * as THREE from "three";
 import { MTLLoader, OBJLoader } from "three/examples/jsm/Addons.js";
 import { JunctionComponents } from "./JunctionComponents";
-import { useFrame, useThree } from "@react-three/fiber";
 
 
 
@@ -49,12 +49,11 @@ export async function preloadCars() {
 
 export default function Scene() {
 
-    const { selectedObjects, junctionObjectRefs } = useJModellerContext();
+    const { selectedObjects } = useJModellerContext();
     const [selectedCarId, setSelectedCarId] = useState(-1);
     const [carsLoaded, setCarsLoaded] = useState<boolean>(false);
 
-    const { camera, gl } = useThree();
-    const controlsRef = useRef<any>(null);
+    const controlsRef = useRef<OrbitControlsImpl>(null)
 
     // Jonnys Dealership
     useEffect(() => {

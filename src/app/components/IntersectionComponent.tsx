@@ -1,4 +1,4 @@
-import {useEffect, useMemo, useRef, useState } from "react";
+import {useEffect, useMemo, useRef } from "react";
 import { ThickLine } from "./ThickLine";
 import * as THREE from "three";
 import { IntersectionConfig, IntersectionStructure } from "../includes/types/intersection";
@@ -6,6 +6,7 @@ import { useJModellerContext } from "../context/JModellerContext";
 import { generateEdgeTubes, generateExitMesh, generateFloorMesh, generateLaneLines, generateStopLine, generateTextPosition } from "../includes/utils";
 import { Text } from "@react-three/drei";
 import React from "react";
+import { ThreeEvent } from "@react-three/fiber";
 
 
 type IntersectionProps = {
@@ -67,12 +68,12 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
         // Registration only works if intersection doesnt exist before, contains a check for ID
         registerJunctionObject(group);
         snapToValidPosition(group);
-    }, [intersectionMemo.id]);
+    }, [id, intersectionMemo.exitInfo, intersectionMemo.maxDistanceToStopLine, registerJunctionObject, snapToValidPosition]);
     
     
     const isSelected = groupRef.current ? selectedObjects.includes(groupRef.current.userData.id) : false;
     
-    const handleIntersectionClick = (event: any) => {
+    const handleIntersectionClick = (event: ThreeEvent<PointerEvent>) => {
         if (event.button !== 2){
             return;
         }
@@ -84,7 +85,7 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
         setSelectedObjects(prev => prev.includes(group.userData.id) ? prev.filter(g => g !== group.userData.id) : [...prev, group.userData.id]);
     };
 
-    const handleExitClick = (event: any, exitIndex: number) => {
+    const handleExitClick = (event: ThreeEvent<PointerEvent>, exitIndex: number) => {
         if (event.button !== 0) {
             return;
         }
@@ -203,7 +204,7 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
                         />
 
                         {/* Exit lane lines */}
-                        {exit.laneLines.slice(1, -1).map((lane, laneIndex) => (
+                        {exit.laneLines.slice(1, -1).map((lane) => (
                             <ThickLine
                                 key={crypto.randomUUID()}
                                 points={[lane.line.start.toArray(), lane.line.end.toArray()]}

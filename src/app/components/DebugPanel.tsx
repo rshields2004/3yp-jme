@@ -1,12 +1,9 @@
 "use client";
 
-import { exit } from "process";
 import { useJModellerContext } from "../context/JModellerContext";
-import { defaultExitConfig, defaultIntersectionConfig, defaultJunctionObject, defaultRoundaboutConfig } from "../includes/defaults";
+import { defaultExitConfig, defaultIntersectionConfig, defaultRoundaboutConfig } from "../includes/defaults";
 import { IntersectionConfig } from "../includes/types/intersection";
-import * as THREE from "three";
 import { ExitConfig, ExitRef, JunctionLink } from "../includes/types/types";
-import { RoundaboutConfig } from "../includes/types/roundabout";
 
 export default function DebugPanel() {
     const {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useJModellerContext } from "../context/JModellerContext";
-import { ExitConfig, JunctionLink, JunctionObject } from "../includes/types/types";
+import { ExitConfig, JunctionLink } from "../includes/types/types";
 import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
 import { getExitWorldPosition } from "../includes/utils";
