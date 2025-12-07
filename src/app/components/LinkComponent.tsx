@@ -6,7 +6,7 @@ import { getExitWorldPosition } from "../includes/utils";
 import { ThickLine, ThickLineHandle } from "./ThickLine";
 import type { ExitConfig, JunctionLink } from "../includes/types/types";
 import type { ExitStructure } from "../includes/types/intersection";
-import React from "react";
+import React from "react"
 
 type LinkComponentProps = {
     link: JunctionLink;
@@ -15,11 +15,22 @@ type LinkComponentProps = {
     yOffset?: number;
 };
 
+type LinkInfo = {
+    laneWidth: number,
+    laneCount: number,
+    numLanesIn: number,
+}
+
 export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkComponentProps) => {
-    const { junctionObjectRefs } = useJModellerContext();
+    const { junctionObjectRefs, selectedObjects } = useJModellerContext();
+
+    const prevPositionsRef = useRef<[THREE.Vector3, THREE.Vector3] | null>(null);
+    const prevLinkInfoRef = useRef<LinkInfo>(null);
+    const prevSelectedRef = useRef<string[]>(null);
+
 
     // Precompute lane info
-    const linkInfo = useMemo(() => {
+    const linkInfo: LinkInfo | null = useMemo(() => {
         if (!config1 || !config2) return null;
         const laneCount = Math.max(config1.laneCount, config2.laneCount);
         return { laneWidth: config1.laneWidth, laneCount, numLanesIn: config1.numLanesIn };
@@ -38,12 +49,16 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
         )
     );
 
-    const laneRefs = useMemo(() => {
-        if (!linkInfo) return [];
-        return Array.from({ length: linkInfo.laneCount - 1 }, () =>
-            React.createRef<ThickLineHandle>()
-        );
-    }, [linkInfo]);
+    const laneRefs = useRef<React.RefObject<ThickLineHandle | null>[]>([]);
+
+    if (linkInfo) {
+        // Add refs if lane count increased
+        while (laneRefs.current.length < linkInfo.laneCount - 1) {
+            laneRefs.current.push(React.createRef<ThickLineHandle>());
+        }
+        // Trim if lane count decreased
+        laneRefs.current.length = linkInfo.laneCount - 1;
+    }
 
     // Precompute lane offsets once
     const laneOffsets = useMemo(() => {
@@ -64,16 +79,47 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
     useFrame(() => {
         if (!linkInfo) return;
 
+        
+
         const [exitA, exitB] = link.objectPair;
         const groupA = junctionObjectRefs.current.find(g => g.userData.id === exitA.structureID);
         const groupB = junctionObjectRefs.current.find(g => g.userData.id === exitB.structureID);
+    
+       
         if (!groupA || !groupB) return;
 
+
+
+        
         const infoA: ExitStructure = groupA.userData.exitInfo[exitA.exitIndex];
         const infoB: ExitStructure = groupB.userData.exitInfo[exitB.exitIndex];
 
         const pA = getExitWorldPosition(groupA, infoA, "end").add(new THREE.Vector3(0, yOffset, 0));
         const pB = getExitWorldPosition(groupB, infoB, "end").add(new THREE.Vector3(0, yOffset, 0));
+
+        const prevPositions = prevPositionsRef.current;
+        const prevLinkInfo = prevLinkInfoRef.current;
+
+        const positionsChanged = !prevPositions || !pA.equals(prevPositions[0]) || !pB.equals(prevPositions[1]);
+        const configChanged = !prevLinkInfo ||
+            prevLinkInfo.laneCount !== linkInfo.laneCount ||
+            prevLinkInfo.laneWidth !== linkInfo.laneWidth ||
+            prevLinkInfo.numLanesIn !== linkInfo.numLanesIn;
+
+        const selectedChanged = !prevSelectedRef.current ||
+            prevSelectedRef.current.length !== selectedObjects.length ||
+            prevSelectedRef.current.some((id, i) => id !== selectedObjects[i]);
+
+
+        if (!positionsChanged && !configChanged && !selectedChanged) {
+            return; // Nothing changed, skip the frame update
+        }
+
+        prevPositionsRef.current = [pA.clone(), pB.clone()];
+        prevLinkInfoRef.current = { ...linkInfo };
+        prevSelectedRef.current = [...selectedObjects];
+
+        console.log("resaw");
 
         const dA = pA.clone().sub(getExitWorldPosition(groupA, infoA, "start")).setY(0).normalize();
         const dB = pB.clone().sub(getExitWorldPosition(groupB, infoB, "start")).setY(0).normalize();
@@ -112,7 +158,7 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
                 return p.clone().add(perp.multiplyScalar(offset)).toArray();
             });
 
-            const ref = laneRefs[idx];
+            const ref = laneRefs.current[idx];
             if (ref?.current) {
                 ref.current.updatePoints(pts);
                 ref.current.setDashed(idx !== linkInfo.laneCount - linkInfo.numLanesIn - 1);
@@ -140,26 +186,24 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
             });
         }
     });
-
     return (
         <group>
             <mesh ref={roadRef}>
                 <meshStandardMaterial color="darkgrey" side={THREE.DoubleSide} />
             </mesh>
 
-            {linkInfo &&
-                laneRefs.map((refObj, i) => (
-                    <ThickLine
-                        key={i}
-                        ref={refObj}
-                        points={[[0, yOffset, 0], [0, yOffset, 0]]}
-                        colour="white"
-                        linewidth={2.5}
-                        dashed={false} // updated in useFrame
-                        worldUnits={false}
-                    />
-                ))
-            }
+            {laneRefs.current.map((refObj, i) => (
+                <ThickLine
+                    key={`lane-${i}`}
+                    ref={refObj}
+                    points={[[0, yOffset, 0], [0, yOffset, 0]]}
+                    colour="white"
+                    linewidth={2.5}
+                    dashed={false} // updated in useFrame
+                    worldUnits={false}
+                />
+            ))}
+            
 
             <mesh ref={edgeTube1Ref}>
                 <meshStandardMaterial color="grey" emissive="black" emissiveIntensity={0.3} />

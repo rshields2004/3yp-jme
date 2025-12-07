@@ -207,9 +207,9 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, index }: RoundaboutP
             </mesh>
 
             {/* Roundabout lane lines */}
-            {roundaboutMemo.ringLines.map((ring) => (
+            {roundaboutMemo.ringLines.map((ring, ringIndex) => (
                 <ThickLine
-                    key={crypto.randomUUID()}
+                    key={`ring-${ringIndex}`}
                     points={ring.points}
                     colour={ring.properties.colour}
                     linewidth={ring.properties.thickness}
@@ -236,7 +236,7 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, index }: RoundaboutP
                     >
                         Exit stop line
                         <ThickLine
-                            key={crypto.randomUUID()}
+                            key={`stopline-${exitIndex}`}
                             points={exit.stopLine.points}
                             colour={exit.stopLine.properties.colour} // use actual value, not string
                             linewidth={exit.stopLine.properties.thickness}
@@ -246,9 +246,9 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, index }: RoundaboutP
 
 
                         {/* Exit lane lines */}
-                        {exit.laneLines.slice(1, -1).map((lane) => (
+                        {exit.laneLines.slice(1, -1).map((lane, laneIndex) => (
                             <ThickLine
-                                key={crypto.randomUUID()}
+                                key={`exit-${exitIndex}-lane-${laneIndex}`}
                                 points={[lane.line.start.toArray(), lane.line.end.toArray()]}
                                 colour={lane.properties.colour} // use actual value, not string
                                 linewidth={lane.properties.thickness}

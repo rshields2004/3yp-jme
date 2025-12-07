@@ -193,22 +193,22 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
                     <group
                         key={`i-${id}-exit-${exitIndex}`}
                     >
-                        {/* Exit stop lines */}
+                        {/* Exit stop lines - FIXED: Stable key instead of random UUID */}
                         <ThickLine
-                            key={crypto.randomUUID()}
+                            key={`stopline-${exitIndex}`}
                             points={[exit.stopLine.line.start.toArray(), exit.stopLine.line.end.toArray()]}
-                            colour={exit.stopLine.properties.colour} // use actual value, not string
+                            colour={exit.stopLine.properties.colour}
                             linewidth={exit.stopLine.properties.thickness}
                             dashed={exit.stopLine.properties.pattern === "dashed"}
                             worldUnits={false}
                         />
 
-                        {/* Exit lane lines */}
-                        {exit.laneLines.slice(1, -1).map((lane) => (
+                        {/* Exit lane lines - FIXED: Stable keys instead of random UUIDs */}
+                        {exit.laneLines.slice(1, -1).map((lane, laneIndex) => (
                             <ThickLine
-                                key={crypto.randomUUID()}
+                                key={`exit-${exitIndex}-lane-${laneIndex}`}
                                 points={[lane.line.start.toArray(), lane.line.end.toArray()]}
-                                colour={lane.properties.colour} // use actual value, not string
+                                colour={lane.properties.colour}
                                 linewidth={lane.properties.thickness}
                                 dashed={lane.properties.pattern === "dashed"}
                                 worldUnits={false}
