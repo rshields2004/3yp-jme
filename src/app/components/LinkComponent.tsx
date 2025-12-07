@@ -22,7 +22,7 @@ type LinkInfo = {
 }
 
 export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkComponentProps) => {
-    const { junctionObjectRefs, selectedObjects } = useJModellerContext();
+    const { junctionObjectRefs, selectedObjects, simIsRunning } = useJModellerContext();
 
     const prevPositionsRef = useRef<[THREE.Vector3, THREE.Vector3] | null>(null);
     const prevLinkInfoRef = useRef<LinkInfo>(null);
@@ -39,7 +39,7 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
     const roadRef = useRef<THREE.Mesh>(null);
     const edgeTube1Ref = useRef<THREE.Mesh>(null);
     const edgeTube2Ref = useRef<THREE.Mesh>(null);
-
+    const prevSimRunningRef = useRef<boolean | null>(null);
     const curveRef = useRef(
         new THREE.CubicBezierCurve3(
             new THREE.Vector3(),
@@ -49,16 +49,21 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
         )
     );
 
-    const laneRefs = useRef<React.RefObject<ThickLineHandle | null>[]>([]);
+    const laneRefsPool = useRef<React.RefObject<ThickLineHandle | null>[]>([]);
 
-    if (linkInfo) {
-        // Add refs if lane count increased
-        while (laneRefs.current.length < linkInfo.laneCount - 1) {
-            laneRefs.current.push(React.createRef<ThickLineHandle>());
+    const laneRefs = useMemo(() => {
+        if (!linkInfo) return [];
+
+        const count = linkInfo.laneCount - 1;
+
+        // Expand pool if needed
+        while (laneRefsPool.current.length < count) {
+            laneRefsPool.current.push(React.createRef<ThickLineHandle>());
         }
-        // Trim if lane count decreased
-        laneRefs.current.length = linkInfo.laneCount - 1;
-    }
+
+        // Return slice without modifying the pool
+        return laneRefsPool.current.slice(0, count);
+    }, [linkInfo?.laneCount]);
 
     // Precompute lane offsets once
     const laneOffsets = useMemo(() => {
@@ -79,18 +84,18 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
     useFrame(() => {
         if (!linkInfo) return;
 
-        
+
 
         const [exitA, exitB] = link.objectPair;
         const groupA = junctionObjectRefs.current.find(g => g.userData.id === exitA.structureID);
         const groupB = junctionObjectRefs.current.find(g => g.userData.id === exitB.structureID);
-    
-       
+
+
         if (!groupA || !groupB) return;
 
 
 
-        
+
         const infoA: ExitStructure = groupA.userData.exitInfo[exitA.exitIndex];
         const infoB: ExitStructure = groupB.userData.exitInfo[exitB.exitIndex];
 
@@ -110,14 +115,19 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
             prevSelectedRef.current.length !== selectedObjects.length ||
             prevSelectedRef.current.some((id, i) => id !== selectedObjects[i]);
 
-
-        if (!positionsChanged && !configChanged && !selectedChanged) {
-            return; // Nothing changed, skip the frame update
-        }
+        const simRunningChanged = prevSimRunningRef.current !== simIsRunning;
 
         prevPositionsRef.current = [pA.clone(), pB.clone()];
         prevLinkInfoRef.current = { ...linkInfo };
         prevSelectedRef.current = [...selectedObjects];
+        prevSimRunningRef.current = simIsRunning;
+
+
+        if (!positionsChanged && !configChanged && !selectedChanged && !simRunningChanged) {
+            return; // Nothing changed, skip the frame update
+        }
+
+
 
         console.log("resaw");
 
@@ -158,7 +168,7 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
                 return p.clone().add(perp.multiplyScalar(offset)).toArray();
             });
 
-            const ref = laneRefs.current[idx];
+            const ref = laneRefs[idx];
             if (ref?.current) {
                 ref.current.updatePoints(pts);
                 ref.current.setDashed(idx !== linkInfo.laneCount - linkInfo.numLanesIn - 1);
@@ -192,7 +202,7 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
                 <meshStandardMaterial color="darkgrey" side={THREE.DoubleSide} />
             </mesh>
 
-            {laneRefs.current.map((refObj, i) => (
+            {laneRefs.map((refObj, i) => (
                 <ThickLine
                     key={`lane-${i}`}
                     ref={refObj}
@@ -203,7 +213,7 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
                     worldUnits={false}
                 />
             ))}
-            
+
 
             <mesh ref={edgeTube1Ref}>
                 <meshStandardMaterial color="grey" emissive="black" emissiveIntensity={0.3} />

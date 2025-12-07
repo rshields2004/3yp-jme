@@ -28,7 +28,8 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, index }: RoundaboutP
         setSelectedObjects,
         setSelectedExits,
         selectedExits,
-        junction
+        junction,
+        simIsRunning
     } = useJModellerContext();
 
     const roundaboutMemo: RoundaboutStructure = useMemo(() => {
@@ -63,7 +64,7 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, index }: RoundaboutP
         const roundaboutFloor = generateRoundaboutFloorMesh(exitStructures);
         const edgeTubes = generateEdgeTubesRound(outerRadius, exitStructures);
 
-        return { id: crypto.randomUUID(), islandGeometry, floorCircle, ringLines, exitStructures, roundaboutFloor, edgeTubes, maxDistanceToStopLine }
+        return { id: id, islandGeometry, floorCircle, ringLines, exitStructures, roundaboutFloor, edgeTubes, maxDistanceToStopLine }
     }, [roundaboutConfig]);
 
     useEffect(() => {
@@ -86,6 +87,9 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, index }: RoundaboutP
 
     const handleRoundaboutClick = (event: ThreeEvent<PointerEvent>) => {
         if (event.button !== 2) {
+            return;
+        }
+        if (simIsRunning) {
             return;
         }
         event.stopPropagation();
@@ -209,7 +213,7 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, index }: RoundaboutP
             {/* Roundabout lane lines */}
             {roundaboutMemo.ringLines.map((ring, ringIndex) => (
                 <ThickLine
-                    key={`ring-${ringIndex}`}
+                    key={`r-${id}-ring-${ringIndex}`}
                     points={ring.points}
                     colour={ring.properties.colour}
                     linewidth={ring.properties.thickness}
@@ -236,7 +240,7 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, index }: RoundaboutP
                     >
                         Exit stop line
                         <ThickLine
-                            key={`stopline-${exitIndex}`}
+                            key={`r-${id}-stopline-${exitIndex}`}
                             points={exit.stopLine.points}
                             colour={exit.stopLine.properties.colour} // use actual value, not string
                             linewidth={exit.stopLine.properties.thickness}
@@ -248,7 +252,7 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, index }: RoundaboutP
                         {/* Exit lane lines */}
                         {exit.laneLines.slice(1, -1).map((lane, laneIndex) => (
                             <ThickLine
-                                key={`exit-${exitIndex}-lane-${laneIndex}`}
+                                key={`r-${id}-exit-${exitIndex}-lane-${laneIndex}`}
                                 points={[lane.line.start.toArray(), lane.line.end.toArray()]}
                                 colour={lane.properties.colour} // use actual value, not string
                                 linewidth={lane.properties.thickness}

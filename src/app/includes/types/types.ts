@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { IntersectionObject } from "./intersection";
 import { RoundaboutObject } from "./roundabout";
-
+import { ThickLineHandle } from "@/app/components/ThickLine";
 export type CarProperties = {
     key: number;
     position: [number, number, number];
@@ -62,6 +62,14 @@ export type JModellerState = {
 
     snapToValidPosition: (draggedGroup: THREE.Group<THREE.Object3DEventMap>) => void;
     removeObject: (objID: string) => void;
+
+    trafficControllers: React.RefObject<{ [id: string]: IntersectionTrafficController; }>
+    startIntersectionSequence: (intersectionId: string) => void;
+    stopIntersectionSequence: (intersectionId: string) => void;
+
+    simIsRunning: boolean;
+    startSim: () => void;
+    haltSim: () => void;
 };
 
 
@@ -69,4 +77,15 @@ export type JModellerState = {
 export type ExitRef = {
     structureID: string;
     exitIndex: number;
+};
+
+// Simulation stuff
+
+
+export type IntersectionTrafficController = {
+    stopLinesQueue: { ref: React.RefObject<ThickLineHandle | null>, exitIndex: number }[];
+    currentIndex: number;
+    currentStep: number;
+    intervalId: NodeJS.Timeout | null;
+    sequence: string[];
 };

@@ -49,7 +49,7 @@ export async function preloadCars() {
 
 export default function Scene() {
 
-    const { selectedObjects } = useJModellerContext();
+    const { selectedObjects, simIsRunning } = useJModellerContext();
     const [selectedCarId, setSelectedCarId] = useState(-1);
     const [carsLoaded, setCarsLoaded] = useState<boolean>(false);
 

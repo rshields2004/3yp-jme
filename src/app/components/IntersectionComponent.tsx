@@ -1,5 +1,5 @@
 import {useEffect, useMemo, useRef } from "react";
-import { ThickLine } from "./ThickLine";
+import { ThickLine, ThickLineHandle } from "./ThickLine";
 import * as THREE from "three";
 import { IntersectionConfig, IntersectionStructure } from "../includes/types/intersection";
 import { useJModellerContext } from "../context/JModellerContext";
@@ -25,8 +25,12 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
         registerJunctionObject, 
         selectedExits,
         setSelectedExits,
-        snapToValidPosition
+        snapToValidPosition,
+        trafficControllers,
+        stopIntersectionSequence,
+        simIsRunning
     } = useJModellerContext();
+
 
     const intersectionMemo: IntersectionStructure = useMemo(() => {
 
@@ -51,8 +55,14 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
         const maxDistanceToStopLine = maxExitLength + midPointStop.distanceTo(new THREE.Vector3(0, 0, 0)) + 15;
 
         // Add a random ID each time so the below useEffect knows when it needs to re render
-        return { id: crypto.randomUUID(), exitInfo, edgeTubes, intersectionFloor, maxDistanceToStopLine };
+        return { id: id, exitInfo, edgeTubes, intersectionFloor, maxDistanceToStopLine };
     }, [intersectionConfig]);
+
+
+
+
+    
+
 
 
     useEffect(() => {
@@ -70,11 +80,46 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
         snapToValidPosition(group);
     }, [id, intersectionMemo.exitInfo, intersectionMemo.maxDistanceToStopLine, registerJunctionObject, snapToValidPosition]);
     
+
+
+
+    const stopLineRefs: React.RefObject<ThickLineHandle | null>[] = useMemo(
+        () => intersectionMemo.exitInfo.map(() => React.createRef<ThickLineHandle>()),
+        [intersectionMemo.exitInfo]
+    );
+
+    useEffect(() => {
+        if (!stopLineRefs.length || !trafficControllers.current) return; // make sure refs are ready
+
+        trafficControllers.current[id] = {
+            stopLinesQueue: stopLineRefs.map((ref, index) => ({ ref, exitIndex: index })),
+            currentIndex: 0,
+            currentStep: 0,
+            intervalId: null,
+            sequence: ["red", "red-amber", "green", "amber", "red"],
+        };
+
+        // Cleanup on unmount
+        return () => {
+            stopIntersectionSequence(id); // stops interval if running
+            delete trafficControllers.current[id]; // remove controller
+        };
+
+    }, [id, stopLineRefs]);
+
+
+
+
+
+
     
     const isSelected = groupRef.current ? selectedObjects.includes(groupRef.current.userData.id) : false;
     
     const handleIntersectionClick = (event: ThreeEvent<PointerEvent>) => {
         if (event.button !== 2){
+            return;
+        }
+        if (simIsRunning) {
             return;
         }
         event.stopPropagation();
@@ -189,6 +234,7 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
                 const dir = new THREE.Vector3().subVectors(new THREE.Vector3(0, 0, 0), position).normalize();
                 const angleY = Math.atan2(dir.x, dir.z);
 
+
                 return (
                     <group
                         key={`i-${id}-exit-${exitIndex}`}
@@ -196,6 +242,7 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
                         {/* Exit stop lines - FIXED: Stable key instead of random UUID */}
                         <ThickLine
                             key={`stopline-${exitIndex}`}
+                            ref={stopLineRefs[exitIndex]}
                             points={[exit.stopLine.line.start.toArray(), exit.stopLine.line.end.toArray()]}
                             colour={exit.stopLine.properties.colour}
                             linewidth={exit.stopLine.properties.thickness}

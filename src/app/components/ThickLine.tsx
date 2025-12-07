@@ -8,6 +8,10 @@ import { LineMaterial } from "three/addons/lines/LineMaterial.js";
 export type ThickLineHandle = {
     updatePoints: (points: [number, number, number][]) => void;
     setDashed(isDashed: boolean): void;
+    setRed: () => void;
+    setRedAmber: () => void;
+    setGreen: () => void;
+    setAmber: () => void;
 };
 
 type ThickLineProps = {
@@ -30,38 +34,32 @@ export const ThickLine = forwardRef<ThickLineHandle, ThickLineProps>(
 
         useImperativeHandle(ref, () => ({
             updatePoints(newPoints: [number, number, number][]) {
-                if (!geometryRef.current) return;
+                if (!geometryRef.current || !lineRef.current) return;
                 geometryRef.current.setPositions(newPoints.flat());
-                if (lineRef.current) lineRef.current.computeLineDistances();
+                lineRef.current.computeLineDistances();
             },
             setDashed(isDashed: boolean) {
                 if (!materialRef.current) return;
                 materialRef.current.dashed = isDashed;
                 materialRef.current.needsUpdate = true;
-            }
+            },
+            setRed: () => { if (!materialRef.current) return; materialRef.current.color.set("red"); },
+            setRedAmber: () => { if (!materialRef.current) return; materialRef.current.color.set("orange"); },
+            setGreen: () => { if (!materialRef.current) return; materialRef.current.color.set("green"); },
+            setAmber: () => { if (!materialRef.current) return; materialRef.current.color.set("yellow"); },
         }));
 
+        // Create line once on mount, never recreate
         useEffect(() => {
             if (!groupRef.current) return;
 
             const current = groupRef.current;
 
             const geometry = new LineGeometry();
-            geometry.setPositions(points.flat());
-
-            const material = new LineMaterial({
-                color: colour,
-                linewidth,
-                dashed,
-                dashSize,
-                gapSize,
-                worldUnits
-            });
-            material.resolution.set(size.width, size.height);
-
+            const material = new LineMaterial();
             const line = new Line2(geometry, material);
-            line.computeLineDistances();
-            groupRef.current.add(line);
+            
+            current.add(line);
 
             lineRef.current = line;
             geometryRef.current = geometry;
@@ -71,8 +69,31 @@ export const ThickLine = forwardRef<ThickLineHandle, ThickLineProps>(
                 current.remove(line);
                 geometry.dispose();
                 material.dispose();
+                lineRef.current = null;
+                geometryRef.current = null;
+                materialRef.current = null;
             };
-        }, [colour, dashSize, dashed, gapSize, linewidth, points, size.height, size.width, worldUnits]);
+        }, []); // Only run once on mount
+
+        // Update all properties whenever they change
+        useEffect(() => {
+            if (!geometryRef.current || !materialRef.current || !lineRef.current) return;
+
+            // Update geometry
+            geometryRef.current.setPositions(points.flat());
+            lineRef.current.computeLineDistances();
+
+            // Update material properties
+            materialRef.current.color.set(colour ?? 'white');
+            materialRef.current.linewidth = linewidth ?? 1;
+            materialRef.current.dashed = dashed ?? false;
+            materialRef.current.dashSize = dashSize;
+            materialRef.current.gapSize = gapSize;
+            materialRef.current.worldUnits = worldUnits ?? false;
+            materialRef.current.resolution.set(size.width, size.height);
+            materialRef.current.needsUpdate = true;
+
+        }, [points, colour, linewidth, dashed, worldUnits, dashSize, gapSize, size.width, size.height]);
 
         return <group ref={groupRef} />;
     }
