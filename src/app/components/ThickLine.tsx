@@ -21,7 +21,7 @@ type ThickLineProps = {
 };
 
 export const ThickLine = forwardRef<ThickLineHandle, ThickLineProps>(
-    ({ points, colour = 0xffffff, linewidth = 5, dashed = false, worldUnits = false, dashSize = 0.5, gapSize = 0.5 }, ref) => {
+    ({ points, colour, linewidth, dashed, worldUnits, dashSize = 0.5, gapSize = 0.5 }, ref) => {
         const groupRef = useRef<THREE.Group>(null);
         const { size } = useThree();
         const lineRef = useRef<Line2>(null);

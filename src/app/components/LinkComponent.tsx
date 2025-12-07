@@ -1,33 +1,35 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useMemo } from "react";
 import { useJModellerContext } from "../context/JModellerContext";
-import { ExitConfig, JunctionLink } from "../includes/types/types";
 import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
 import { getExitWorldPosition } from "../includes/utils";
-import { ExitStructure } from "../includes/types/intersection";
 import { ThickLine, ThickLineHandle } from "./ThickLine";
+import type { ExitConfig, JunctionLink } from "../includes/types/types";
+import type { ExitStructure } from "../includes/types/intersection";
 import React from "react";
 
 type LinkComponentProps = {
     link: JunctionLink;
     config1: ExitConfig;
     config2: ExitConfig;
+    yOffset?: number;
 };
 
-export const LinkComponent = ({ link, config1, config2 }: LinkComponentProps) => {
+export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkComponentProps) => {
     const { junctionObjectRefs } = useJModellerContext();
 
-    const [linkInfo, setLinkInfo] = useState<{
-        laneWidth: number;
-        laneCount: number;
-        numLanesIn: number;
-    } | null>(null);
+    // Precompute lane info
+    const linkInfo = useMemo(() => {
+        if (!config1 || !config2) return null;
+        const laneCount = Math.max(config1.laneCount, config2.laneCount);
+        return { laneWidth: config1.laneWidth, laneCount, numLanesIn: config1.numLanesIn };
+    }, [config1, config2]);
 
     const roadRef = useRef<THREE.Mesh>(null);
-    const edgeTube1 = useRef<THREE.Mesh>(null);
-    const edgeTube2 = useRef<THREE.Mesh>(null);
+    const edgeTube1Ref = useRef<THREE.Mesh>(null);
+    const edgeTube2Ref = useRef<THREE.Mesh>(null);
 
-    const curve = useRef(
+    const curveRef = useRef(
         new THREE.CubicBezierCurve3(
             new THREE.Vector3(),
             new THREE.Vector3(),
@@ -36,128 +38,107 @@ export const LinkComponent = ({ link, config1, config2 }: LinkComponentProps) =>
         )
     );
 
-    // Initialize refs once, max 10 lanes (adjust as needed)
-    const laneRefs = useRef<React.RefObject<ThickLineHandle | null>[]>([]);
-    if (laneRefs.current.length === 0) {
-        laneRefs.current = Array.from({ length: 10 }, () => React.createRef<ThickLineHandle | null>());
-    }
+    const laneRefs = useMemo(() => {
+        if (!linkInfo) return [];
+        return Array.from({ length: linkInfo.laneCount - 1 }, () =>
+            React.createRef<ThickLineHandle>()
+        );
+    }, [linkInfo]);
 
-    // Update link info whenever config changes
-    useEffect(() => {
-        if (!config1 || !config2) return;
+    // Precompute lane offsets once
+    const laneOffsets = useMemo(() => {
+        if (!linkInfo) return [];
+        const offsets: number[] = [];
+        const totalWidth = linkInfo.laneWidth * linkInfo.laneCount;
+        for (let k = 1; k < linkInfo.laneCount; k++) offsets.push(-totalWidth / 2 + k * linkInfo.laneWidth);
+        return offsets;
+    }, [linkInfo]);
 
-        const laneCount = Math.max(config1.laneCount, config2.laneCount);
+    const safePerp = (a: THREE.Vector3, b: THREE.Vector3) => {
+        const d = b.clone().sub(a).setY(0);
+        if (d.lengthSq() < 1e-6) return new THREE.Vector3(1, 0, 0);
+        d.normalize();
+        return new THREE.Vector3(-d.z, 0, d.x);
+    };
 
-        setLinkInfo({
-            laneWidth: config1.laneWidth,
-            laneCount,
-            numLanesIn: config1.numLanesIn,
-        });
-    }, [config1, config2, link]);
-
-
-
-    // Update lane lines
     useFrame(() => {
         if (!linkInfo) return;
 
-        const { laneWidth, laneCount, numLanesIn } = linkInfo;
-        if (laneCount <= 1) return;
-
-        const totalWidth = laneWidth * laneCount;
-        const offsets: number[] = [];
-        for (let k = 1; k < laneCount; k++) offsets.push(-totalWidth / 2 + k * laneWidth);
-
-        const steps = 80;
-        const centrePoints = curve.current.getPoints(steps);
-
-        const safePerp = (a: THREE.Vector3, b: THREE.Vector3) => {
-            const d = b.clone().sub(a).setY(0);
-            if (d.lengthSq() < 1e-6) return new THREE.Vector3(1, 0, 0);
-            d.normalize();
-            return new THREE.Vector3(-d.z, 0, d.x);
-        };
-
-        offsets.forEach((offset, idx) => {
-            const pts = centrePoints.map((p, i) => {
-                const perp = i < centrePoints.length - 1 ? safePerp(centrePoints[i], centrePoints[i + 1]) : safePerp(centrePoints[i - 1], centrePoints[i]);
-                return p.clone().add(perp.multiplyScalar(offset)).toArray();
-            });
-
-            const ref = laneRefs.current[idx];
-            if (ref?.current) {
-                ref.current.updatePoints(pts);
-                
-                // Dividing line should be SOLID (false), others should be DASHED (true)
-                if (idx === linkInfo.laneCount - numLanesIn - 1) {
-                    ref.current.setDashed(false); // Dividing line = solid
-                } 
-                else {
-                    ref.current.setDashed(true);  // Other lines = dashed
-                }
-            }
-        });
-
-        if (!linkInfo) return;
-
         const [exitA, exitB] = link.objectPair;
-
         const groupA = junctionObjectRefs.current.find(g => g.userData.id === exitA.structureID);
         const groupB = junctionObjectRefs.current.find(g => g.userData.id === exitB.structureID);
-
         if (!groupA || !groupB) return;
 
         const infoA: ExitStructure = groupA.userData.exitInfo[exitA.exitIndex];
         const infoB: ExitStructure = groupB.userData.exitInfo[exitB.exitIndex];
 
-        const pA = getExitWorldPosition(groupA, infoA, "end");
-        const pB = getExitWorldPosition(groupB, infoB, "end");
+        const pA = getExitWorldPosition(groupA, infoA, "end").add(new THREE.Vector3(0, yOffset, 0));
+        const pB = getExitWorldPosition(groupB, infoB, "end").add(new THREE.Vector3(0, yOffset, 0));
+
         const dA = pA.clone().sub(getExitWorldPosition(groupA, infoA, "start")).setY(0).normalize();
         const dB = pB.clone().sub(getExitWorldPosition(groupB, infoB, "start")).setY(0).normalize();
-
-        pA.addScaledVector(dA, -0.1);
-        pB.addScaledVector(dB, -0.1);
 
         const pA2 = pA.clone().addScaledVector(dA, 15);
         const pB2 = pB.clone().addScaledVector(dB, 15);
 
-        curve.current.v0.copy(pA);
-        curve.current.v1.copy(pA2);
-        curve.current.v2.copy(pB2);
-        curve.current.v3.copy(pB);
+        const curve = curveRef.current;
+        curve.v0.copy(pA);
+        curve.v1.copy(pA2);
+        curve.v2.copy(pB2);
+        curve.v3.copy(pB);
 
-        if (roadRef.current && linkInfo) {
+        // update road mesh
+        if (roadRef.current) {
             const { laneWidth, laneCount } = linkInfo;
-
             const shape = new THREE.Shape([
                 new THREE.Vector2(0, -laneWidth * laneCount / 2),
                 new THREE.Vector2(0, -laneWidth * laneCount / 2),
                 new THREE.Vector2(0, laneWidth * laneCount / 2),
                 new THREE.Vector2(0, laneWidth * laneCount / 2),
             ]);
-
-            const extrudeSettings = {
-                steps: 50,
-                bevelEnabled: false,
-                extrudePath: curve.current, // your CubicBezierCurve3
-            };
-
-            const geom = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-
+            const geom = new THREE.ExtrudeGeometry(shape, { steps: 50, bevelEnabled: false, extrudePath: curve });
             roadRef.current.geometry.dispose();
             roadRef.current.geometry = geom;
-            roadRef.current.position.y = 0;
+            roadRef.current.position.y = yOffset;
         }
 
-        // if (edgeTube1.current && edgeTube2.current) {
-        //     const geom1 = new THREE.TubeGeometry(offsets., 500, 0.1, 8, false);
-        //     edgeTube1.current.geometry.dispose();
-        //     edgeTube1.current.geometry = geom1; 
-            
+        // compute lane line points
+        const centerPoints = curve.getPoints(500);
+        laneOffsets.forEach((offset, idx) => {
+            const pts = centerPoints.map((p, i) => {
+                const perp = i < centerPoints.length - 1
+                    ? safePerp(centerPoints[i], centerPoints[i + 1])
+                    : safePerp(centerPoints[i - 1], centerPoints[i]);
+                return p.clone().add(perp.multiplyScalar(offset)).toArray();
+            });
 
+            const ref = laneRefs[idx];
+            if (ref?.current) {
+                ref.current.updatePoints(pts);
+                ref.current.setDashed(idx !== linkInfo.laneCount - linkInfo.numLanesIn - 1);
+            }
+        });
 
-        // }
-
+        // update edge tubes
+        if (edgeTube1Ref.current && edgeTube2Ref.current) {
+            const halfWidth = (linkInfo.laneWidth * linkInfo.laneCount) / 2;
+            const edge1Points: THREE.Vector3[] = [];
+            const edge2Points: THREE.Vector3[] = [];
+            centerPoints.forEach((p, i) => {
+                const perp = i < centerPoints.length - 1
+                    ? safePerp(centerPoints[i], centerPoints[i + 1])
+                    : safePerp(centerPoints[i - 1], centerPoints[i]);
+                edge1Points.push(p.clone().add(perp.clone().multiplyScalar(halfWidth)));
+                edge2Points.push(p.clone().add(perp.clone().multiplyScalar(-halfWidth)));
+            });
+            [edgeTube1Ref.current, edgeTube2Ref.current].forEach((tubeRef, i) => {
+                const points = i === 0 ? edge1Points : edge2Points;
+                const tubeCurve = new THREE.CatmullRomCurve3(points);
+                const geom = new THREE.TubeGeometry(tubeCurve, 500, 0.1, 8, false);
+                tubeRef.geometry.dispose();
+                tubeRef.geometry = geom;
+            });
+        }
     });
 
     return (
@@ -167,25 +148,23 @@ export const LinkComponent = ({ link, config1, config2 }: LinkComponentProps) =>
             </mesh>
 
             {linkInfo &&
-                laneRefs.current.slice(0, linkInfo.laneCount - 1).map((refObj, i) => (
+                laneRefs.map((refObj, i) => (
                     <ThickLine
                         key={i}
                         ref={refObj}
-                        points={[[0, 0, 0], [0, 0, 0]]}
+                        points={[[0, yOffset, 0], [0, yOffset, 0]]}
                         colour="white"
-                        linewidth={0.1}
-                        dashed={false} // dashed will be updated via ref.current.setDashed()
-                        worldUnits={true}
+                        linewidth={2.5}
+                        dashed={false} // updated in useFrame
+                        worldUnits={false}
                     />
-                ))}
-            <mesh
-                ref={edgeTube1}
-            >
+                ))
+            }
+
+            <mesh ref={edgeTube1Ref}>
                 <meshStandardMaterial color="grey" emissive="black" emissiveIntensity={0.3} />
             </mesh>
-            <mesh
-                ref={edgeTube2}
-            >
+            <mesh ref={edgeTube2Ref}>
                 <meshStandardMaterial color="grey" emissive="black" emissiveIntensity={0.3} />
             </mesh>
         </group>
