@@ -1,4 +1,4 @@
-import { useRef, useMemo } from "react";
+import { useRef, useMemo, useEffect } from "react";
 import { useJModellerContext } from "../context/JModellerContext";
 import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
@@ -7,6 +7,7 @@ import { ThickLine, ThickLineHandle } from "./ThickLine";
 import type { ExitConfig, JunctionLink } from "../includes/types/types";
 import type { ExitStructure } from "../includes/types/intersection";
 import React from "react"
+import { RoundaboutExitStructure } from "../includes/types/roundabout";
 
 type LinkComponentProps = {
     link: JunctionLink;
@@ -22,7 +23,7 @@ type LinkInfo = {
 }
 
 export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkComponentProps) => {
-    const { junctionObjectRefs, selectedObjects, simIsRunning } = useJModellerContext();
+    const { junctionObjectRefs, simIsRunning } = useJModellerContext();
 
     const prevPositionsRef = useRef<[THREE.Vector3, THREE.Vector3] | null>(null);
     const prevLinkInfoRef = useRef<LinkInfo>(null);
@@ -39,7 +40,8 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
     const roadRef = useRef<THREE.Mesh>(null);
     const edgeTube1Ref = useRef<THREE.Mesh>(null);
     const edgeTube2Ref = useRef<THREE.Mesh>(null);
-    const prevSimRunningRef = useRef<boolean | null>(null);
+    const needsUpdateRef = useRef(true);
+
     const curveRef = useRef(
         new THREE.CubicBezierCurve3(
             new THREE.Vector3(),
@@ -81,6 +83,10 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
         return new THREE.Vector3(-d.z, 0, d.x);
     };
 
+    useEffect(() => {
+        needsUpdateRef.current = true;
+    });
+
     useFrame(() => {
         if (!linkInfo) return;
 
@@ -95,9 +101,8 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
 
 
 
-
-        const infoA: ExitStructure = groupA.userData.exitInfo[exitA.exitIndex];
-        const infoB: ExitStructure = groupB.userData.exitInfo[exitB.exitIndex];
+        const infoA: ExitStructure | RoundaboutExitStructure = groupA.userData.exitInfo[exitA.exitIndex];
+        const infoB: ExitStructure | RoundaboutExitStructure = groupB.userData.exitInfo[exitB.exitIndex];
 
         const pA = getExitWorldPosition(groupA, infoA, "end").add(new THREE.Vector3(0, yOffset, 0));
         const pB = getExitWorldPosition(groupB, infoB, "end").add(new THREE.Vector3(0, yOffset, 0));
@@ -111,20 +116,16 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
             prevLinkInfo.laneWidth !== linkInfo.laneWidth ||
             prevLinkInfo.numLanesIn !== linkInfo.numLanesIn;
 
-        const selectedChanged = !prevSelectedRef.current ||
-            prevSelectedRef.current.length !== selectedObjects.length ||
-            prevSelectedRef.current.some((id, i) => id !== selectedObjects[i]);
-
-        const simRunningChanged = prevSimRunningRef.current !== simIsRunning;
 
         prevPositionsRef.current = [pA.clone(), pB.clone()];
         prevLinkInfoRef.current = { ...linkInfo };
-        prevSelectedRef.current = [...selectedObjects];
-        prevSimRunningRef.current = simIsRunning;
 
 
-        if (!positionsChanged && !configChanged && !selectedChanged && !simRunningChanged) {
-            return; // Nothing changed, skip the frame update
+        const shouldUpdate = needsUpdateRef.current || positionsChanged || configChanged;
+        needsUpdateRef.current = false; // Clear the flag after checking
+
+        if (!shouldUpdate) {
+            return;
         }
 
 

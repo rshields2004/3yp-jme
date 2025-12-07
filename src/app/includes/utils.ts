@@ -424,7 +424,7 @@ export function generateTextAngle(
 };
 
 
-export function getExitWorldPosition(junctionGroup: THREE.Group, exit: ExitStructure, position: string): THREE.Vector3 {
+export function getExitWorldPosition(junctionGroup: THREE.Group, exit: ExitStructure | RoundaboutExitStructure, position: string): THREE.Vector3 {
 
     const points = exit.laneLines.map(lane =>
         position === "start" ? lane.line.start : lane.line.end
