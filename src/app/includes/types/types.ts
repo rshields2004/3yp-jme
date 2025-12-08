@@ -2,14 +2,16 @@ import * as THREE from "three";
 import { IntersectionObject } from "./intersection";
 import { RoundaboutObject } from "./roundabout";
 import { ThickLineHandle } from "@/app/components/ThickLine";
-export type CarProperties = {
-    key: number;
-    position: [number, number, number];
-    scale: number,
-    selected: boolean;
-    colour: string;
-    type: string;
-    onSelect: () => void;
+
+export type Car = {
+    id: string;
+    route: THREE.Vector3[];
+    routeIndex: number;
+    progress: number;
+    speed: number;
+    maxSpeed: number;
+    stopped: boolean;
+    spawnTime: number;
 };
 
 export type LaneLineProperties = {
@@ -34,7 +36,7 @@ export type ExitConfig = {
 
 export type JunctionObject = IntersectionObject | RoundaboutObject; // Later on a | would go here with the other types of object
 
-export type JunctionObjectTypes = "intersection" | "roundabout";
+export type JunctionObjectTypes = "intersection" | "roundabout" | "link";
 
 export type JunctionLink = {
     id: string;
@@ -70,6 +72,9 @@ export type JModellerState = {
     simIsRunning: boolean;
     startSim: () => void;
     haltSim: () => void;
+
+    cars: Car[];
+    setCars: React.Dispatch<React.SetStateAction<Car[]>>;
 };
 
 

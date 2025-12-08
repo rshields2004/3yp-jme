@@ -2,11 +2,12 @@ import { useEffect, useMemo, useRef } from "react";
 import { RoundaboutConfig, RoundaboutExitStructure, RoundaboutStructure } from "../includes/types/roundabout";
 import * as THREE from "three";
 import { useJModellerContext } from "../context/JModellerContext";
-import { ThickLine } from "./ThickLine";
+import { ThickLine, ThickLineHandle } from "./ThickLine";
 import { generateEdgeTubesRound, generateExitMesh, generateLaneLinesRound, generateRingLines, generateRoundaboutFloorMesh, generateStopLineRound, generateTextPosition } from "../includes/utils";
 import React from "react";
 import { Text } from "@react-three/drei";
-import { ThreeEvent } from "@react-three/fiber";
+import { ThreeEvent, useFrame } from "@react-three/fiber";
+import { generateRoundaboutPath } from "../includes/carRouting";
 
 
 
@@ -20,7 +21,8 @@ type RoundaboutProps = {
 export const RoundaboutComponent = ({ id, roundaboutConfig, index }: RoundaboutProps) => {
 
     const groupRef = useRef<THREE.Group>(null);
-
+    const debugLineRef = useRef<ThickLineHandle | null>(null);
+    
     const {
         registerJunctionObject,
         snapToValidPosition,
@@ -63,7 +65,7 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, index }: RoundaboutP
 
         const roundaboutFloor = generateRoundaboutFloorMesh(exitStructures);
         const edgeTubes = generateEdgeTubesRound(outerRadius, exitStructures);
-
+        
         return { id: id, islandGeometry, floorCircle, ringLines, exitStructures, roundaboutFloor, edgeTubes, maxDistanceToStopLine }
     }, [roundaboutConfig]);
 
@@ -75,13 +77,32 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, index }: RoundaboutP
         group.userData.id = id;
         group.userData.type = "roundabout";
         group.userData.maxDistanceToStopLine = roundaboutMemo.maxDistanceToStopLine;
+        group.userData.roundaboutExitStructure = roundaboutMemo.exitStructures;
         group.userData.exitInfo = roundaboutMemo.exitStructures;
+        group.userData.roundaboutRingStructure = roundaboutMemo.ringLines;
         
         // Registration only works if intersection doesnt exist before, contains a check for ID
         registerJunctionObject(group);
         snapToValidPosition(group);
-    }, [roundaboutMemo.id, id, registerJunctionObject, roundaboutMemo.exitStructures, roundaboutMemo.maxDistanceToStopLine, snapToValidPosition]);
+    }, [roundaboutMemo.id, id, registerJunctionObject, roundaboutMemo.exitStructures, roundaboutMemo.ringLines, roundaboutMemo.maxDistanceToStopLine, snapToValidPosition]);
 
+    useFrame(() => {
+        const group = groupRef.current;
+        if (!group || !debugLineRef.current || !group.userData.roundaboutExitStructure || !group.userData.roundaboutRingStructure) return;
+
+        const startExitIndex = 3;
+        const startLaneIndex = 1; // also clamp if needed
+        const endExitIndex = 1;
+        const endLaneIndex = 0;
+
+        const path = generateRoundaboutPath(
+            group,
+            { exitIndex: 3, laneIndex: 1 },
+            { exitIndex: 1, laneIndex: 0 }
+        );
+
+        debugLineRef.current.updatePoints(path);
+    });
 
     const isSelected = groupRef.current ? selectedObjects.includes(groupRef.current.userData.id) : false;
 
@@ -141,6 +162,12 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, index }: RoundaboutP
             key={`r-${id}`}
             ref={groupRef}
         >
+            <ThickLine 
+                ref={debugLineRef}
+                colour={"lime"}
+                linewidth={3}
+                points={[[0, 0, 0], [0, 0, 0]]}
+            />
 
             <Text
                 key={`r-${id}-label`}
@@ -211,7 +238,7 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, index }: RoundaboutP
             </mesh>
 
             {/* Roundabout lane lines */}
-            {roundaboutMemo.ringLines.map((ring, ringIndex) => (
+            {roundaboutMemo.ringLines.slice(1, -1).map((ring, ringIndex) => (
                 <ThickLine
                     key={`r-${id}-ring-${ringIndex}`}
                     points={ring.points}

@@ -3,12 +3,11 @@
 import { useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import { CarProperties } from "../includes/types/types";
 import { carCache } from "./Scene";
 
 
 
-export default function Car(carProps: CarProperties) {
+export default function Car(carProps) {
     const groupRef = useRef<THREE.Group>(null);
     
 

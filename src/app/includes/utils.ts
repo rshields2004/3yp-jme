@@ -251,6 +251,8 @@ export function generateLaneLinesRound(
         }
 
         
+
+        
     }
     return laneLines;
 };
@@ -379,8 +381,8 @@ export function generateRingLines(
 ): RingLaneStructure[] {
 
     const ringLines: RingLaneStructure[] = [];
-    for (let i = 0; i < maxLaneCount - 1; i++) {
-        const radius = islandRadius + (i + 1) * maxLaneWidth;
+    for (let i = 0; i <= maxLaneCount; i++) {
+        const radius = islandRadius + i * maxLaneWidth;
         const points: [number, number, number][] = [];
         for (let j = 0; j <= 256; j++) {
             const theta = (j / 256) * Math.PI * 2;
@@ -440,3 +442,5 @@ export function getExitWorldPosition(junctionGroup: THREE.Group, exit: ExitStruc
     return midpoint.applyMatrix4(junctionGroup.matrixWorld);
 
 };
+
+

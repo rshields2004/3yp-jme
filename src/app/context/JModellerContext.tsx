@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode, useRef  } from "react";
-import { ExitRef, IntersectionTrafficController, JModellerState, JunctionConfig } from "../includes/types/types";
+import { Car, ExitRef, IntersectionTrafficController, JModellerState, JunctionConfig } from "../includes/types/types";
 import { defaultJunctionConfig } from "../includes/defaults";
 import * as THREE from "three";
 
@@ -15,14 +15,14 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
     const [selectedObjects, setSelectedObjects] = useState<string[]>([]);
     const [selectedExits, setSelectedExits] = useState<ExitRef[]>([]);
     const [simIsRunning, setSimIsRunning] = useState<boolean>(false);
+    
 
 
     // Simulation
-
-    
-
     const trafficControllers = useRef<{[id: string]: IntersectionTrafficController}>({});
-    
+    const [cars, setCars] = useState<Car[]>([]);
+
+
 
 
     const junctionObjectRefs = useRef<THREE.Group[]>([]);
@@ -263,6 +263,8 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
             simIsRunning,
             startSim,
             haltSim,
+            cars,
+            setCars
         }}>
             {children}
         </JModellerContext.Provider>

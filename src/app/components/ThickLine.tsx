@@ -80,8 +80,26 @@ export const ThickLine = forwardRef<ThickLineHandle, ThickLineProps>(
             if (!geometryRef.current || !materialRef.current || !lineRef.current) return;
 
             // Update geometry
-            geometryRef.current.setPositions(points.flat());
-            lineRef.current.computeLineDistances();
+            if (geometryRef.current) {
+                const flat = points.flat();
+
+                const geom = geometryRef.current;
+
+                // If the number of points changed, we MUST recreate geometry
+                const oldLength = geom.attributes.position.array.length;
+
+                if (oldLength !== flat.length) {
+                    geom.dispose();
+                    const newGeom = new LineGeometry();
+                    newGeom.setPositions(flat);
+                    lineRef.current.geometry = newGeom;
+                    geometryRef.current = newGeom;
+                } else {
+                    geom.setPositions(flat);
+                }
+
+                lineRef.current.computeLineDistances();
+            }
 
             // Update material properties
             materialRef.current.color.set(colour ?? 'white');

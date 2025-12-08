@@ -8,6 +8,7 @@ import type { ExitConfig, JunctionLink } from "../includes/types/types";
 import type { ExitStructure } from "../includes/types/intersection";
 import React from "react"
 import { RoundaboutExitStructure } from "../includes/types/roundabout";
+import { getMidCurve } from "../includes/carRouting";
 
 type LinkComponentProps = {
     link: JunctionLink;
@@ -23,11 +24,13 @@ type LinkInfo = {
 }
 
 export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkComponentProps) => {
-    const { junctionObjectRefs, simIsRunning } = useJModellerContext();
-
+    const { junctionObjectRefs, registerJunctionObject } = useJModellerContext();
+    const groupRef = useRef<THREE.Group>(null);
+    const debugLineRef = useRef<ThickLineHandle | null>(null);
+    
+    
     const prevPositionsRef = useRef<[THREE.Vector3, THREE.Vector3] | null>(null);
     const prevLinkInfoRef = useRef<LinkInfo>(null);
-    const prevSelectedRef = useRef<string[]>(null);
 
 
     // Precompute lane info
@@ -56,7 +59,7 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
     const laneRefs = useMemo(() => {
         if (!linkInfo) return [];
 
-        const count = linkInfo.laneCount - 1;
+        const count = linkInfo.laneCount + 1;
 
         // Expand pool if needed
         while (laneRefsPool.current.length < count) {
@@ -72,7 +75,7 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
         if (!linkInfo) return [];
         const offsets: number[] = [];
         const totalWidth = linkInfo.laneWidth * linkInfo.laneCount;
-        for (let k = 1; k < linkInfo.laneCount; k++) offsets.push(-totalWidth / 2 + k * linkInfo.laneWidth);
+        for (let k = 0; k <= linkInfo.laneCount; k++) offsets.push(-totalWidth / 2 + k * linkInfo.laneWidth);
         return offsets;
     }, [linkInfo]);
 
@@ -161,18 +164,24 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
 
         // compute lane line points
         const centerPoints = curve.getPoints(500);
+        const laneCurves: [number, number, number][][] = [];
+
         laneOffsets.forEach((offset, idx) => {
-            const pts = centerPoints.map((p, i) => {
+            const pts: [number, number, number][] = centerPoints.map((p, i) => {
                 const perp = i < centerPoints.length - 1
                     ? safePerp(centerPoints[i], centerPoints[i + 1])
                     : safePerp(centerPoints[i - 1], centerPoints[i]);
-                return p.clone().add(perp.multiplyScalar(offset)).toArray();
+                return p.clone().add(perp.multiplyScalar(offset)).toArray() as [number, number, number];
             });
 
+            // Store the points in the array
+            laneCurves[idx] = pts;
+
+            // Update ThickLine if exists
             const ref = laneRefs[idx];
             if (ref?.current) {
                 ref.current.updatePoints(pts);
-                ref.current.setDashed(idx !== linkInfo.laneCount - linkInfo.numLanesIn - 1);
+                ref.current.setDashed(idx !== linkInfo.laneCount - linkInfo.numLanesIn);
             }
         });
 
@@ -196,14 +205,40 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
                 tubeRef.geometry = geom;
             });
         }
+        if (!groupRef.current) {
+            
+            return;
+        }
+        groupRef.current.userData.id = "onlylink";
+        groupRef.current.userData.type = "link";
+        groupRef.current.userData.laneCurves = laneCurves;
+        registerJunctionObject(groupRef.current);
+
+        if (!debugLineRef.current) {
+            return;
+        }
+        const laneIndex = 0; // lane you want
+        const midLanePoints = getMidCurve(laneCurves[laneIndex], laneCurves[laneIndex + 1]);
+
+        // Then use it wherever you need, e.g., for a debug line
+        debugLineRef.current.updatePoints(midLanePoints);
+        
     });
     return (
-        <group>
+        <group
+            ref={groupRef}
+        >
+            <ThickLine 
+                ref={debugLineRef}
+                colour={"lime"}
+                linewidth={3}
+                points={[[0, 0, 0], [0, 0, 0]]}
+            />
             <mesh ref={roadRef}>
                 <meshStandardMaterial color="darkgrey" side={THREE.DoubleSide} />
             </mesh>
 
-            {laneRefs.map((refObj, i) => (
+            {laneRefs.slice(1, -1).map((refObj, i) => (
                 <ThickLine
                     key={`lane-${i}`}
                     ref={refObj}
@@ -225,3 +260,4 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
         </group>
     );
 };
+

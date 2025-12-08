@@ -1,4 +1,4 @@
-import {useEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { ThickLine, ThickLineHandle } from "./ThickLine";
 import * as THREE from "three";
 import { IntersectionConfig, IntersectionStructure } from "../includes/types/intersection";
@@ -6,7 +6,9 @@ import { useJModellerContext } from "../context/JModellerContext";
 import { generateEdgeTubes, generateExitMesh, generateFloorMesh, generateLaneLines, generateStopLine, generateTextPosition } from "../includes/utils";
 import { Text } from "@react-three/drei";
 import React from "react";
-import { ThreeEvent } from "@react-three/fiber";
+import { ThreeEvent, useFrame } from "@react-three/fiber";
+import { generateIntersectionPath } from "../includes/carRouting";
+import { exit } from "process";
 
 
 type IntersectionProps = {
@@ -17,12 +19,12 @@ type IntersectionProps = {
 
 export const IntersectionComponent = ({ id, intersectionConfig, index }: IntersectionProps) => {
     const groupRef = useRef<THREE.Group>(null);
-
-    const { 
-        junction, 
-        selectedObjects, 
-        setSelectedObjects, 
-        registerJunctionObject, 
+    const debugLineRef = useRef<ThickLineHandle | null>(null);
+    const {
+        junction,
+        selectedObjects,
+        setSelectedObjects,
+        registerJunctionObject,
         selectedExits,
         setSelectedExits,
         snapToValidPosition,
@@ -51,7 +53,7 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
 
         const maxExitLength = Math.max(...intersectionConfig.exitConfig.map(c => c.exitLength));
         const midPointStop = exitInfo[0].laneLines[0].line.start.clone().lerp(exitInfo[0].laneLines[exitInfo[0].laneLines.length - 1].line.start.clone(), 0.5);
-        
+
         const maxDistanceToStopLine = maxExitLength + midPointStop.distanceTo(new THREE.Vector3(0, 0, 0)) + 15;
 
         // Add a random ID each time so the below useEffect knows when it needs to re render
@@ -59,29 +61,42 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
     }, [intersectionConfig]);
 
 
-
-
     
-
-
 
     useEffect(() => {
         const group = groupRef.current;
-        if (!group) { 
+        if (!group) {
             return;
         }
         group.userData.id = id;
         group.userData.type = "intersection";
         group.userData.maxDistanceToStopLine = intersectionMemo.maxDistanceToStopLine;
         group.userData.exitInfo = intersectionMemo.exitInfo;
-        
+
         // Registration only works if intersection doesnt exist before, contains a check for ID
         registerJunctionObject(group);
         snapToValidPosition(group);
     }, [id, intersectionMemo.exitInfo, intersectionMemo.maxDistanceToStopLine, registerJunctionObject, snapToValidPosition]);
+
+
+    useFrame(() => {
+        const group = groupRef.current;
+        if (!group || !debugLineRef.current || !group.userData.exitInfo) return;
+
+        const startExitIndex = 4;
+        const startLaneIndex = 1; // also clamp if needed
+        const endExitIndex = 2;
+        const endLaneIndex = 0;
+
+        const path = generateIntersectionPath(
+            group,
+            { exitIndex: 4, laneIndex: 1 },
+            { exitIndex: 2, laneIndex: 0 }
+        );
+
+        debugLineRef.current.updatePoints(path);
+    });
     
-
-
 
     const stopLineRefs: React.RefObject<ThickLineHandle | null>[] = useMemo(
         () => intersectionMemo.exitInfo.map(() => React.createRef<ThickLineHandle>()),
@@ -112,11 +127,11 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
 
 
 
-    
+
     const isSelected = groupRef.current ? selectedObjects.includes(groupRef.current.userData.id) : false;
-    
+
     const handleIntersectionClick = (event: ThreeEvent<PointerEvent>) => {
-        if (event.button !== 2){
+        if (event.button !== 2) {
             return;
         }
         if (simIsRunning) {
@@ -159,18 +174,22 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
 
             if (filteredPrev.length < 2) {
                 return [...filteredPrev, { structureID: group.userData.id, exitIndex }];
-            } 
+            }
             else {
                 return [filteredPrev[1], { structureID: group.userData.id, exitIndex }];
             }
         });
     };
 
+
+
+
     return (
         <group
             key={`i-${id}`}
             ref={groupRef}
         >
+
             <Text
                 key={`i-label-${id}`}
                 font="/fonts/Electrolize-Regular.ttf"
@@ -183,16 +202,16 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
             >
                 Intersection {index}
             </Text>
-            
+
             {/* Selection ring */}
             {isSelected && (
-                <mesh 
+                <mesh
                     key={`i-select-${id}`}
                     rotation={[-Math.PI / 2, 0, 0]}
                     position={[0, 0, 0]}
                 >
-                    <torusGeometry 
-                        args={[intersectionMemo.maxDistanceToStopLine + 0.25, 0.25, 16, 64 ]} 
+                    <torusGeometry
+                        args={[intersectionMemo.maxDistanceToStopLine + 0.25, 0.25, 16, 64]}
                     />
                     <meshBasicMaterial color="black" side={THREE.DoubleSide} />
                 </mesh>
@@ -209,13 +228,13 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
                 <meshStandardMaterial color="darkgrey" side={THREE.DoubleSide} />
             </mesh>
 
-            
+
 
             {/* Edge tubes */}
             {intersectionMemo.edgeTubes.map((tubeGeom, tubeIndex) => (
-                <mesh 
-                    key={`i-tube-${tubeIndex}`} 
-                    geometry={tubeGeom} 
+                <mesh
+                    key={`i-tube-${tubeIndex}`}
+                    geometry={tubeGeom}
                     position={[0, 0, 0]}
                 >
                     <meshStandardMaterial color="grey" emissive="black" emissiveIntensity={0.3} />
@@ -230,7 +249,7 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
                         linkExit.structureID === groupRef.current?.userData.id && linkExit.exitIndex === exitIndex
                     )
                 );
-                const position =  generateTextPosition(exit);
+                const position = generateTextPosition(exit);
                 const dir = new THREE.Vector3().subVectors(new THREE.Vector3(0, 0, 0), position).normalize();
                 const angleY = Math.atan2(dir.x, dir.z);
 
@@ -239,6 +258,12 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
                     <group
                         key={`i-${id}-exit-${exitIndex}`}
                     >
+                        <ThickLine 
+                            ref={debugLineRef}
+                            colour={"lime"}
+                            linewidth={3}
+                            points={[[0, 0, 0], [0, 0, 0]]}
+                        />
                         {/* Exit stop lines - FIXED: Stable key instead of random UUID */}
                         <ThickLine
                             key={`stopline-${exitIndex}`}
@@ -267,13 +292,13 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
                             font="/fonts/Electrolize-Regular.ttf"
                             position={position}
                             rotation={[-Math.PI / 2, 0, angleY]}
-                            fontSize={0.5}         
+                            fontSize={0.5}
                             fontStyle="normal"
-                            fontWeight={1}    
-                            color="white"            
-                            anchorX="center"         
-                            anchorY="middle"  
-                            strokeColor="black"       
+                            fontWeight={1}
+                            color="white"
+                            anchorX="center"
+                            anchorY="middle"
+                            strokeColor="black"
                         >
                             Exit {exitIndex}
                         </Text>
@@ -290,9 +315,9 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
                             }}
                         >
                             <meshBasicMaterial
-                                color={inALink ? "green" : (isSelectedExit ? "red" :  "blue")}
+                                color={inALink ? "green" : (isSelectedExit ? "red" : "blue")}
                                 transparent
-                                opacity={(isSelected || inALink ) ? 0.5 : 0} // keep visible if junction is selected
+                                opacity={(isSelected || inALink) ? 0.5 : 0} // keep visible if junction is selected
                                 side={THREE.DoubleSide}
                             />
                         </mesh>

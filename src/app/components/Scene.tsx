@@ -10,6 +10,10 @@ import { carColours, carTypes, FLOOR_Y } from "../includes/defaults";
 import * as THREE from "three";
 import { MTLLoader, OBJLoader } from "three/examples/jsm/Addons.js";
 import { JunctionComponents } from "./JunctionComponents";
+import { generateIntersectionPath, generateRoundaboutPath, getMidCurve } from "../includes/carRouting";
+import { ThickLine } from "./ThickLine";
+import { link } from "fs";
+import { useFrame } from "@react-three/fiber";
 
 
 
@@ -45,13 +49,22 @@ export async function preloadCars() {
     await Promise.all(loadPromises);
 }
 
-
+type CarState = {
+    mesh: THREE.Group;
+    path: [number, number, number][]; // points
+    segmentIndex: number;             // current segment in path
+    progress: number;                 // 0..1 between points
+    speed: number;                    // units per second
+};
 
 export default function Scene() {
 
-    const { selectedObjects, simIsRunning } = useJModellerContext();
+    const { selectedObjects, junctionObjectRefs } = useJModellerContext();
     const [selectedCarId, setSelectedCarId] = useState(-1);
     const [carsLoaded, setCarsLoaded] = useState<boolean>(false);
+    const carRef = useRef<THREE.Group>(null);
+    const [carIndex, setCarIndex] = useState(0);
+    const speed = 5; // points per second
 
     const controlsRef = useRef<OrbitControlsImpl>(null)
 
@@ -79,10 +92,62 @@ export default function Scene() {
             };
         })
     );
+    
 
-   
+    
 
+    const carPathTest:  [number, number, number][] = [];
 
+    const intersectionRef = junctionObjectRefs.current.find(g => g.userData.id === "i1");
+    const roundaboutRef = junctionObjectRefs.current.find(g => g.userData.id === "r1");
+    const linkRef = junctionObjectRefs.current.find(g => g.userData.type === "link");
+
+    if (intersectionRef && roundaboutRef && linkRef) {
+        const interSectionpath = generateIntersectionPath(
+                intersectionRef,
+                { exitIndex: 4, laneIndex: 1 },
+                { exitIndex: 2, laneIndex: 0 }
+            );
+        const roundaboutPath = generateRoundaboutPath(
+                roundaboutRef,
+                { exitIndex: 3, laneIndex: 1 },
+                { exitIndex: 1, laneIndex: 0 }
+            );
+        
+        const linkPoints = getMidCurve(linkRef.userData.laneCurves[0], linkRef.userData.laneCurves[0 + 1])
+
+        carPathTest.push(...interSectionpath, ...linkPoints, ...roundaboutPath);
+    }
+
+    const [carMesh] = useState(() => {
+        const g = new THREE.Group();
+        const body = new THREE.Mesh(
+            new THREE.BoxGeometry(1, 0.5, 2),
+            new THREE.MeshStandardMaterial({ color: "red" })
+        );
+        g.add(body);
+        return g;
+    });
+
+    useFrame((_, delta) => {
+        if (!carRef.current || carPathTest.length === 0) return;
+
+        let nextIndex = carIndex + speed * delta;
+        if (nextIndex >= carPathTest.length) nextIndex = carPathTest.length - 1;
+
+        const point = carPathTest[Math.floor(nextIndex)];
+        carRef.current.position.set(...point);
+
+        // rotate to face next point
+        if (Math.floor(nextIndex) < carPathTest.length - 1) {
+            const nextPoint = carPathTest[Math.floor(nextIndex) + 1];
+            const dir = new THREE.Vector3(...nextPoint).sub(new THREE.Vector3(...point)).normalize();
+            carRef.current.lookAt(new THREE.Vector3(...point).add(dir));
+        }
+
+        setCarIndex(nextIndex);
+    });
+    
     return (
         <>
             <axesHelper args={[50]} />
@@ -116,17 +181,7 @@ export default function Scene() {
             />
 
             <JunctionComponents />
-            {carsLoaded && carsTest.map((car) => (
-                <Car
-                    key={car.id}
-                    position={car.position}
-                    scale={0.5}
-                    selected={car.id === selectedCarId}
-                    colour={car.colour}
-                    type={car.type}
-                    onSelect={() => setSelectedCarId(car.id)}
-                />
-            ))}
+            <primitive object={carMesh} ref={carRef} />
         </>
     );
 }

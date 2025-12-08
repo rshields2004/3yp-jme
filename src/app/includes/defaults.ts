@@ -1,6 +1,7 @@
+import { LinkComponent } from "../components/LinkComponent";
 import { IntersectionConfig } from "./types/intersection";
 import { RoundaboutConfig } from "./types/roundabout";
-import { JunctionConfig, JunctionObject, LaneLineProperties } from "./types/types";
+import { JunctionConfig, JunctionLink, JunctionObject, LaneLineProperties } from "./types/types";
 
 export const defaultLaneProperties: LaneLineProperties = {
     pattern: "solid",
@@ -17,25 +18,45 @@ export const defaultExitConfig = {
 };
 
 export const defaultIntersectionConfig: IntersectionConfig = {
-    numExits: 4,
-    exitConfig: Array.from({ length: 4 }, () => (defaultExitConfig)),
+    numExits: 5,
+    exitConfig: Array.from({ length: 5 }, () => (defaultExitConfig)),
 };
 
 export const defaultRoundaboutConfig: RoundaboutConfig = {
-    numExits: 4,
-    exitConfig: Array.from({ length: 4 }, () => (defaultExitConfig)),
+    numExits: 5,
+    exitConfig: Array.from({ length: 5 }, () => (defaultExitConfig)),
 };
 
 
-export const defaultJunctionObject: JunctionObject = {
-    id: crypto.randomUUID(),
+export const defaultRoundaboutObject: JunctionObject = {
+    id: "r1",
     type: "roundabout",
+    config: defaultRoundaboutConfig,
+};
+
+export const defaultIntersectionObject: JunctionObject = {
+    id: "i1",
+    type: "intersection",
     config: defaultRoundaboutConfig,
 }
 
+export const defaultLinkObject: JunctionLink = {
+    id: "test",
+    objectPair: 
+    [{
+        structureID: "i1",
+        exitIndex: 2
+    }, 
+    {
+        structureID: "r1",
+        exitIndex: 3
+    }]
+};
+
+
 export const defaultJunctionConfig: JunctionConfig = {
-    junctionObjects: [defaultJunctionObject],
-    junctionLinks: [],
+    junctionObjects: [defaultRoundaboutObject, defaultIntersectionObject],
+    junctionLinks: [defaultLinkObject],
 };
 
 export const carTypes = ["coupe", "hatchback", "micro", "microcargo", "microtransport", "minibus", "mpv", "normal", "pickup", "pickup-small", "station", "van"];
