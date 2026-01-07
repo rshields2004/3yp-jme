@@ -26,9 +26,6 @@ type LinkInfo = {
 export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkComponentProps) => {
     const { junctionObjectRefs, registerJunctionObject } = useJModellerContext();
     const groupRef = useRef<THREE.Group>(null);
-    const debugLineRef = useRef<ThickLineHandle | null>(null);
-    
-    
     const prevPositionsRef = useRef<[THREE.Vector3, THREE.Vector3] | null>(null);
     const prevLinkInfoRef = useRef<LinkInfo>(null);
 
@@ -213,27 +210,12 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
         groupRef.current.userData.type = "link";
         groupRef.current.userData.laneCurves = laneCurves;
         registerJunctionObject(groupRef.current);
-
-        if (!debugLineRef.current) {
-            return;
-        }
-        const laneIndex = 0; // lane you want
-        const midLanePoints = getMidCurve(laneCurves[laneIndex], laneCurves[laneIndex + 1]);
-
-        // Then use it wherever you need, e.g., for a debug line
-        debugLineRef.current.updatePoints(midLanePoints);
-        
     });
+    
     return (
         <group
             ref={groupRef}
         >
-            <ThickLine 
-                ref={debugLineRef}
-                colour={"lime"}
-                linewidth={3}
-                points={[[0, 0, 0], [0, 0, 0]]}
-            />
             <mesh ref={roadRef}>
                 <meshStandardMaterial color="darkgrey" side={THREE.DoubleSide} />
             </mesh>

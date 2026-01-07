@@ -21,7 +21,6 @@ type RoundaboutProps = {
 export const RoundaboutComponent = ({ id, roundaboutConfig, index }: RoundaboutProps) => {
 
     const groupRef = useRef<THREE.Group>(null);
-    const debugLineRef = useRef<ThickLineHandle | null>(null);
     
     const {
         registerJunctionObject,
@@ -86,24 +85,6 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, index }: RoundaboutP
         snapToValidPosition(group);
     }, [roundaboutMemo.id, id, registerJunctionObject, roundaboutMemo.exitStructures, roundaboutMemo.ringLines, roundaboutMemo.maxDistanceToStopLine, snapToValidPosition]);
 
-    useFrame(() => {
-        const group = groupRef.current;
-        if (!group || !debugLineRef.current || !group.userData.roundaboutExitStructure || !group.userData.roundaboutRingStructure) return;
-
-        const startExitIndex = 3;
-        const startLaneIndex = 1; // also clamp if needed
-        const endExitIndex = 1;
-        const endLaneIndex = 0;
-
-        const path = generateRoundaboutPath(
-            group,
-            { exitIndex: 3, laneIndex: 1 },
-            { exitIndex: 1, laneIndex: 0 }
-        );
-
-        debugLineRef.current.updatePoints(path);
-    });
-
     const isSelected = groupRef.current ? selectedObjects.includes(groupRef.current.userData.id) : false;
 
     const handleRoundaboutClick = (event: ThreeEvent<PointerEvent>) => {
@@ -162,13 +143,6 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, index }: RoundaboutP
             key={`r-${id}`}
             ref={groupRef}
         >
-            <ThickLine 
-                ref={debugLineRef}
-                colour={"lime"}
-                linewidth={3}
-                points={[[0, 0, 0], [0, 0, 0]]}
-            />
-
             <Text
                 key={`r-${id}-label`}
                 font="/fonts/Electrolize-Regular.ttf"

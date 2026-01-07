@@ -19,7 +19,6 @@ type IntersectionProps = {
 
 export const IntersectionComponent = ({ id, intersectionConfig, index }: IntersectionProps) => {
     const groupRef = useRef<THREE.Group>(null);
-    const debugLineRef = useRef<ThickLineHandle | null>(null);
     const {
         junction,
         selectedObjects,
@@ -79,24 +78,6 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
     }, [id, intersectionMemo.exitInfo, intersectionMemo.maxDistanceToStopLine, registerJunctionObject, snapToValidPosition]);
 
 
-    useFrame(() => {
-        const group = groupRef.current;
-        if (!group || !debugLineRef.current || !group.userData.exitInfo) return;
-
-        const startExitIndex = 4;
-        const startLaneIndex = 1; // also clamp if needed
-        const endExitIndex = 2;
-        const endLaneIndex = 0;
-
-        const path = generateIntersectionPath(
-            group,
-            { exitIndex: 4, laneIndex: 1 },
-            { exitIndex: 2, laneIndex: 0 }
-        );
-
-        debugLineRef.current.updatePoints(path);
-    });
-    
 
     const stopLineRefs: React.RefObject<ThickLineHandle | null>[] = useMemo(
         () => intersectionMemo.exitInfo.map(() => React.createRef<ThickLineHandle>()),
@@ -258,12 +239,6 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
                     <group
                         key={`i-${id}-exit-${exitIndex}`}
                     >
-                        <ThickLine 
-                            ref={debugLineRef}
-                            colour={"lime"}
-                            linewidth={3}
-                            points={[[0, 0, 0], [0, 0, 0]]}
-                        />
                         {/* Exit stop lines - FIXED: Stable key instead of random UUID */}
                         <ThickLine
                             key={`stopline-${exitIndex}`}

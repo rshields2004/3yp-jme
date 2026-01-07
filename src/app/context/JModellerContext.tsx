@@ -66,7 +66,9 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
         const draggedID = draggedGroup.userData.id;
         const draggedRadius = draggedGroup.userData.maxDistanceToStopLine || 0;
 
-        const otherObjects = junctionObjectRefs.current.filter(g => g.userData.id !== draggedID).map(g => ({
+        const otherObjects = junctionObjectRefs.current.filter(g => g.userData.id !== draggedID)
+        .filter(g => g.userData.type !== "link")
+        .map(g => ({
             pos: g.position,
             radius: g.userData.maxDistanceToStopLine || 0,
         }));

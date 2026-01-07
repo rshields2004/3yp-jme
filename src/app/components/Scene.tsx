@@ -2,7 +2,6 @@
 
 import { OrbitControls } from "@react-three/drei";
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
-import Car from "./Car";
 import { useState, useEffect, useRef } from "react";
 import { Bloom, EffectComposer } from "@react-three/postprocessing";
 import { useJModellerContext } from "../context/JModellerContext";
@@ -18,84 +17,14 @@ import { useFrame } from "@react-three/fiber";
 
 
 
-export const carCache = new Map<string, THREE.Group>();
-export async function preloadCars() {
-    const loadPromises: Promise<void>[] = [];
-    for (const type of carTypes) {
-        for (const colour of carColours) {
-            const key = `${type}-${colour}`;
-            if (!carCache.has(key)) {
-                loadPromises.push((async () => {
-                    try {
-                        const materials = await new Promise<MTLLoader.MaterialCreator>((resolve, reject) => {
-                            new MTLLoader().load(`/models/car-${type}-${colour}.mtl`, resolve, undefined, reject);
-                        });
-                        materials.preload();
-
-                        const obj = await new Promise<THREE.Group>((resolve, reject) => {
-                            new OBJLoader().setMaterials(materials).load(`/models/car-${type}-${colour}.obj`, resolve, undefined, reject);
-                        });
-
-                        carCache.set(key, obj);
-
-                    } catch (err) {
-                        console.error(`Failed to load car ${key}`, err);
-                    }
-                })());
-            }
-        }
-    }
-
-    await Promise.all(loadPromises);
-}
-
-type CarState = {
-    mesh: THREE.Group;
-    path: [number, number, number][]; // points
-    segmentIndex: number;             // current segment in path
-    progress: number;                 // 0..1 between points
-    speed: number;                    // units per second
-};
-
 export default function Scene() {
 
     const { selectedObjects, junctionObjectRefs } = useJModellerContext();
-    const [selectedCarId, setSelectedCarId] = useState(-1);
-    const [carsLoaded, setCarsLoaded] = useState<boolean>(false);
-    const carRef = useRef<THREE.Group>(null);
-    const [carIndex, setCarIndex] = useState(0);
-    const speed = 5; // points per second
-
     const controlsRef = useRef<OrbitControlsImpl>(null)
 
-    // Jonnys Dealership
-    useEffect(() => {
-        const loadAllCars = async () => {
-            await preloadCars(); // waits for all cars to finish loading
-            setCarsLoaded(true); // now safe to render all <Car> components
-        };
-        loadAllCars();
-    }, []);
-
-    const spacing = 1.2;
-    const offsetX = (carColours.length - 1) * spacing / 2;
-    const offsetZ = (carTypes.length - 1) * spacing / 2;
-    const carsTest = carTypes.flatMap((type, typeIndex) =>
-        carColours.map((colour, colourIndex) => {
-            const x = colourIndex * spacing - offsetX; // center on x-axis
-            const z = typeIndex * spacing - offsetZ;   // center on z-axis
-            return {
-                id: typeIndex * carColours.length + colourIndex,
-                type,
-                colour,
-                position: [x - 30, 3, z] as [number, number, number],
-            };
-        })
-    );
     
 
     
-
     const carPathTest:  [number, number, number][] = [];
 
     const intersectionRef = junctionObjectRefs.current.find(g => g.userData.id === "i1");
@@ -119,34 +48,6 @@ export default function Scene() {
         carPathTest.push(...interSectionpath, ...linkPoints, ...roundaboutPath);
     }
 
-    const [carMesh] = useState(() => {
-        const g = new THREE.Group();
-        const body = new THREE.Mesh(
-            new THREE.BoxGeometry(1, 0.5, 2),
-            new THREE.MeshStandardMaterial({ color: "red" })
-        );
-        g.add(body);
-        return g;
-    });
-
-    useFrame((_, delta) => {
-        if (!carRef.current || carPathTest.length === 0) return;
-
-        let nextIndex = carIndex + speed * delta;
-        if (nextIndex >= carPathTest.length) nextIndex = carPathTest.length - 1;
-
-        const point = carPathTest[Math.floor(nextIndex)];
-        carRef.current.position.set(...point);
-
-        // rotate to face next point
-        if (Math.floor(nextIndex) < carPathTest.length - 1) {
-            const nextPoint = carPathTest[Math.floor(nextIndex) + 1];
-            const dir = new THREE.Vector3(...nextPoint).sub(new THREE.Vector3(...point)).normalize();
-            carRef.current.lookAt(new THREE.Vector3(...point).add(dir));
-        }
-
-        setCarIndex(nextIndex);
-    });
     
     return (
         <>
@@ -181,7 +82,6 @@ export default function Scene() {
             />
 
             <JunctionComponents />
-            <primitive object={carMesh} ref={carRef} />
         </>
     );
 }

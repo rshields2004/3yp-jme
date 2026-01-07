@@ -55,8 +55,8 @@ export const defaultLinkObject: JunctionLink = {
 
 
 export const defaultJunctionConfig: JunctionConfig = {
-    junctionObjects: [defaultRoundaboutObject, defaultIntersectionObject],
-    junctionLinks: [defaultLinkObject],
+    junctionObjects: [],
+    junctionLinks: [],
 };
 
 export const carTypes = ["coupe", "hatchback", "micro", "microcargo", "microtransport", "minibus", "mpv", "normal", "pickup", "pickup-small", "station", "van"];
