@@ -19,7 +19,7 @@ export default function DebugPanel() {
 
 
 
-     const handleNumExitsChange = (objID: string, value: number) => {
+    const handleNumExitsChange = (objID: string, value: number) => {
         setJunction(prev => ({
             ...prev,
             junctionObjects: prev.junctionObjects.map(obj =>
@@ -113,11 +113,11 @@ export default function DebugPanel() {
             if (laneCountA === laneCountB && numLaneInA === (laneCountA - numLaneInB)) {
                 setJunction(prev => ({ ...prev, junctionLinks: [...prev.junctionLinks, newLink] }));
                 setSelectedExits([]);
-            } 
+            }
             else {
                 alert("Cannot link exits with different number of lanes...yet!");
             }
-            
+
         }
     };
 
@@ -216,16 +216,37 @@ export default function DebugPanel() {
 
     const handleNumLanesInChange = (objID: string, exitIndex: number, value: number) => {
         setJunction(prev => {
-            // Find any link that contains the current object and exit
-            const link = junction.junctionLinks.find(link =>
-                link.objectPair.some(ref => ref.structureID === objID && ref.exitIndex === exitIndex)
+            // Find object we're editing from *prev* (not closure `junction`)
+            const thisObj = prev.junctionObjects.find(o => o.id === objID);
+            if (!thisObj) return prev;
+
+            // Find any link that contains the current object and exit (use prev)
+            const link = prev.junctionLinks.find(l =>
+                l.objectPair.some(ref => ref.structureID === objID && ref.exitIndex === exitIndex)
             );
 
             // If there is a linked exit, store its object ID and exitIndex
             let linkedRef: ExitRef | null = null;
             if (link) {
-                linkedRef = link.objectPair.find(ref => !(ref.structureID === objID && ref.exitIndex === exitIndex)) || null;
+                linkedRef =
+                    link.objectPair.find(ref => !(ref.structureID === objID && ref.exitIndex === exitIndex)) || null;
             }
+
+            const exits = thisObj.config.exitConfig;
+
+            // ----- Per-exit clamp -----
+            const laneCountHere = exits[exitIndex].laneCount;
+            let clamped = Math.max(0, Math.min(value, laneCountHere));
+
+            // ----- Global clamp: totalIn <= totalOut across all exits of THIS object -----
+            const totalLaneCount = exits.reduce((s, ex) => s + ex.laneCount, 0);
+            const maxTotalIn = Math.floor(totalLaneCount / 2);
+
+            const currentTotalIn = exits.reduce((s, ex) => s + ex.numLanesIn, 0);
+            const currentInOtherExits = currentTotalIn - exits[exitIndex].numLanesIn;
+
+            const maxForThisExitByGlobal = Math.max(0, maxTotalIn - currentInOtherExits);
+            clamped = Math.min(clamped, maxForThisExitByGlobal);
 
             return {
                 ...prev,
@@ -236,31 +257,37 @@ export default function DebugPanel() {
                             ...obj,
                             config: {
                                 ...obj.config,
-                                exitConfig: (obj.config).exitConfig.map((ex, idx) =>
-                                    idx === exitIndex ? { ...ex, numLanesIn: value } : ex
-                                )
-                            }
+                                exitConfig: obj.config.exitConfig.map((ex, idx) =>
+                                    idx === exitIndex ? { ...ex, numLanesIn: clamped } : ex
+                                ),
+                            },
                         };
                     }
 
-                    // Update linked object if exists
+                    // Update linked object if exists:
+                    // Keep TOTAL lanes on that linked exit constant: numLanesIn + numLanesOut = laneCount
                     if (linkedRef && obj.id === linkedRef.structureID) {
                         return {
                             ...obj,
                             config: {
                                 ...obj.config,
-                                exitConfig: (obj.config).exitConfig.map((ex, idx) =>
-                                    idx === linkedRef!.exitIndex ? { ...ex, numLanesIn: ex.laneCount - value } : ex
-                                )
-                            }
+                                exitConfig: obj.config.exitConfig.map((ex, idx) => {
+                                    if (idx !== linkedRef!.exitIndex) return ex;
+
+                                    // value drives the opposite side's in-lanes on the linked exit
+                                    const newLinkedIn = Math.max(0, Math.min(ex.laneCount, ex.laneCount - clamped));
+                                    return { ...ex, numLanesIn: newLinkedIn };
+                                }),
+                            },
                         };
                     }
 
                     return obj;
-                })
+                }),
             };
         });
     };
+
 
     return (
         <>
@@ -268,7 +295,7 @@ export default function DebugPanel() {
                 <h1>Simulation Control</h1>
                 <button
                     disabled={simIsRunning}
-                    onClick={() => startSim()}    
+                    onClick={() => startSim()}
                 >Start Simulation</button>
                 <br />
                 <button
@@ -308,11 +335,11 @@ export default function DebugPanel() {
                             <div key={obj.id} style={{ marginBottom: "1rem" }}>
                                 <h3>Intersection #{i}</h3>
                                 <label># Exits:
-                                    <input 
-                                        type="number" 
-                                        min={2} 
+                                    <input
+                                        type="number"
+                                        min={2}
                                         max={10}
-                                        value={config.numExits} 
+                                        value={config.numExits}
                                         onChange={e => handleNumExitsChange(obj.id, Number(e.target.value))}
                                     />
                                 </label>
@@ -321,33 +348,33 @@ export default function DebugPanel() {
                                     <div key={j}>
                                         <h4>Exit {j}</h4>
                                         <label># Lanes:
-                                            <input 
-                                                type="range" 
-                                                min={2} 
+                                            <input
+                                                type="range"
+                                                min={2}
                                                 max={obj.config.numExits * 2}
-                                                value={exit.laneCount} 
+                                                value={exit.laneCount}
                                                 onChange={e => handleLaneCountChange(obj.id, j, Number(e.target.value))}
                                             />
                                         </label><span>{exit.laneCount}</span>
                                         <br />
                                         <label>Length:
-                                            <input 
-                                                type="range" 
-                                                min={10} 
+                                            <input
+                                                type="range"
+                                                min={10}
                                                 max={70}
-                                                value={exit.exitLength} 
+                                                value={exit.exitLength}
                                                 onChange={e => handleExitLengthChange(obj.id, j, Number(e.target.value))}
                                             />
                                         </label><span>{exit.exitLength}</span>
                                         <br />
                                         <label># Lanes in: {exit.numLanesIn}</label>
-                                            <input
-                                                type="range" 
-                                                min={1} 
-                                                max={exit.laneCount - 1}
-                                                value={exit.numLanesIn} 
-                                                onChange={e => handleNumLanesInChange(obj.id, j, Number(e.target.value))}
-                                            />
+                                        <input
+                                            type="range"
+                                            min={1}
+                                            max={exit.laneCount - 1}
+                                            value={exit.numLanesIn}
+                                            onChange={e => handleNumLanesInChange(obj.id, j, Number(e.target.value))}
+                                        />
                                     </div>
                                 ))}
                             </div>
@@ -363,11 +390,11 @@ export default function DebugPanel() {
                             <div key={obj.id} style={{ marginBottom: "1rem" }}>
                                 <h3>Roundabout #{i}</h3>
                                 <label># Exits:
-                                    <input 
-                                        type="number" 
-                                        min={2} 
+                                    <input
+                                        type="number"
+                                        min={2}
                                         max={6}
-                                        value={config.numExits} 
+                                        value={config.numExits}
                                         onChange={e => handleNumExitsChange(obj.id, Number(e.target.value))}
                                     />
                                 </label>
@@ -377,33 +404,33 @@ export default function DebugPanel() {
                                     <div key={j}>
                                         <h4>Exit {j}</h4>
                                         <label># Lanes:
-                                            <input 
-                                                type="range" 
-                                                min={2} 
+                                            <input
+                                                type="range"
+                                                min={2}
                                                 max={obj.config.numExits * 2}
-                                                value={exit.laneCount} 
+                                                value={exit.laneCount}
                                                 onChange={e => handleLaneCountChange(obj.id, j, Number(e.target.value))}
                                             />
                                         </label><span>{exit.laneCount}</span>
                                         <br />
                                         <label>Length:
-                                            <input 
-                                                type="range" 
-                                                min={20} 
+                                            <input
+                                                type="range"
+                                                min={20}
                                                 max={70}
-                                                value={exit.exitLength} 
+                                                value={exit.exitLength}
                                                 onChange={e => handleExitLengthChange(obj.id, j, Number(e.target.value))}
                                             />
                                         </label><span>{exit.exitLength}</span>
                                         <br />
                                         <label># Lanes in: {exit.numLanesIn}</label>
-                                            <input
-                                                type="range" 
-                                                min={1} 
-                                                max={exit.laneCount - 1}
-                                                value={exit.numLanesIn} 
-                                                onChange={e => handleNumLanesInChange(obj.id, j, Number(e.target.value))}
-                                            />
+                                        <input
+                                            type="range"
+                                            min={1}
+                                            max={exit.laneCount - 1}
+                                            value={exit.numLanesIn}
+                                            onChange={e => handleNumLanesInChange(obj.id, j, Number(e.target.value))}
+                                        />
                                     </div>
                                 ))}
                             </div>
