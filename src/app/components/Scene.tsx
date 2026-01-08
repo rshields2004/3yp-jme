@@ -70,7 +70,7 @@ export default function Scene() {
                 setDebugRoutePts(routesRef.current[next].points);
                 return next;
             });
-        }, 5000);
+        }, 4000);
 
         return () => {
             if (intervalRef.current) {
@@ -104,7 +104,7 @@ export default function Scene() {
                 minPolarAngle={Math.PI / 6}
                 maxPolarAngle={Math.PI / 2.1}
                 minDistance={5}
-                maxDistance={100}
+                maxDistance={200}
             />
 
             {debugCurveDrawPts.length > 1 && (

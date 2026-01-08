@@ -325,7 +325,6 @@ export function generateAllRoutes(junction: JunctionConfig, junctionObjectRefs: 
 
             if (availableExitIndices.length === 0) continue;
 
-            console.log(`\n=== Entry Exit ${eIN}, ${numIncomingLanes} lanes ===`);
 
             // Calculate total outgoing lanes across ALL exits
             const totalOutgoingLanes = availableExitIndices.reduce(
@@ -333,19 +332,16 @@ export function generateAllRoutes(junction: JunctionConfig, junctionObjectRefs: 
                 0
             );
 
-            console.log(`Total outgoing lanes across all exits: ${totalOutgoingLanes}`);
 
             // Apply your logic based on incoming vs total outgoing
             if (numIncomingLanes === totalOutgoingLanes) {
                 // Case 1: Equal - strict 1-to-1 mapping
-                console.log(`  Case 1: Equal lanes (${numIncomingLanes} = ${totalOutgoingLanes})`);
 
                 let globalOutLane = 0;
                 for (const eOUT of availableExitIndices) {
                     const numOutLanes = outCount(exitConfigs[eOUT]);
                     for (let lOUT = 0; lOUT < numOutLanes; lOUT++) {
                         const lIN = globalOutLane;
-                        console.log(`    Lane ${lIN} → Exit ${eOUT} Lane ${lOUT}`);
 
                         const from: LaneEndPoint = {
                             structureID: obj.id,
@@ -373,14 +369,12 @@ export function generateAllRoutes(junction: JunctionConfig, junctionObjectRefs: 
             }
             else if (numIncomingLanes < totalOutgoingLanes) {
                 // Case 2: More outgoing - 1-to-1 then last lane gets remaining
-                console.log(`  Case 2: More outgoing lanes (${numIncomingLanes} < ${totalOutgoingLanes})`);
 
                 let globalOutLane = 0;
                 for (const eOUT of availableExitIndices) {
                     const numOutLanes = outCount(exitConfigs[eOUT]);
                     for (let lOUT = 0; lOUT < numOutLanes; lOUT++) {
                         const lIN = Math.min(globalOutLane, numIncomingLanes - 1);
-                        console.log(`    Lane ${lIN} → Exit ${eOUT} Lane ${lOUT}`);
 
                         const from: LaneEndPoint = {
                             structureID: obj.id,
@@ -408,7 +402,6 @@ export function generateAllRoutes(junction: JunctionConfig, junctionObjectRefs: 
             }
             else {
                 // Case 3: More incoming - 1-to-1 with surplus carrying over (recursive logic)
-                console.log(`  Case 3: More incoming lanes (${numIncomingLanes} > ${totalOutgoingLanes})`);
 
                 let remainingIncomingLanes = numIncomingLanes;
                 let currentIncomingLaneStart = 0;
@@ -418,14 +411,12 @@ export function generateAllRoutes(junction: JunctionConfig, junctionObjectRefs: 
 
                     if (remainingIncomingLanes === 0) break;
 
-                    console.log(`\n    Processing Exit ${eOUT} (${numOutLanes} out lanes), ${remainingIncomingLanes} incoming lanes remaining`);
 
                     // Apply the same logic recursively for this sub-problem
                     if (remainingIncomingLanes === numOutLanes) {
                         // Sub-case 1: Equal
                         for (let i = 0; i < numOutLanes; i++) {
                             const lIN = currentIncomingLaneStart + i;
-                            console.log(`      Lane ${lIN} → Exit ${eOUT} Lane ${i}`);
 
                             const from: LaneEndPoint = {
                                 structureID: obj.id,
@@ -454,7 +445,6 @@ export function generateAllRoutes(junction: JunctionConfig, junctionObjectRefs: 
                         // Sub-case 2: More out lanes
                         for (let i = 0; i < numOutLanes; i++) {
                             const lIN = currentIncomingLaneStart + Math.min(i, remainingIncomingLanes - 1);
-                            console.log(`      Lane ${lIN} → Exit ${eOUT} Lane ${i}`);
 
                             const from: LaneEndPoint = {
                                 structureID: obj.id,
@@ -483,7 +473,6 @@ export function generateAllRoutes(junction: JunctionConfig, junctionObjectRefs: 
                         // Sub-case 3: More in lanes - carry over
                         for (let i = 0; i < numOutLanes; i++) {
                             const lIN = currentIncomingLaneStart + i;
-                            console.log(`      Lane ${lIN} → Exit ${eOUT} Lane ${i}`);
 
                             const from: LaneEndPoint = {
                                 structureID: obj.id,
@@ -548,15 +537,15 @@ export function generateAllRoutes(junction: JunctionConfig, junctionObjectRefs: 
         const lanesAB = Math.min(outA, inB);
         const lanesBA = Math.min(outB, inA);
 
-        console.log(lanesAB + "" + lanesBA);
 
         const outStartA = outboundBoundaryStart(outA, inA, driverSide);
         const inStartA = inboundBoundaryStart(outA, inA, driverSide);
 
         // AB
         for (let i = 0; i < lanesAB; i++) {
-            const leftBoundary = outStartA + i;
-            const rightBoundary = outStartA + i + 1;
+            const flippedI = lanesAB - 1 - i;
+            const leftBoundary = outStartA + flippedI;
+            const rightBoundary = outStartA + flippedI + 1;
 
             if (!laneCurves[leftBoundary] || !laneCurves[rightBoundary]) {
                 console.warn(`Missing boundaries for lane ${i}: ${leftBoundary}, ${rightBoundary}`);
@@ -592,6 +581,7 @@ export function generateAllRoutes(junction: JunctionConfig, junctionObjectRefs: 
             hasOutgoingLink.add(keyOf(from));
             hasIncomingLink.add(keyOf(to));
         }
+        
     }
 
 
