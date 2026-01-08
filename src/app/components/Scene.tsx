@@ -70,7 +70,7 @@ export default function Scene() {
                 setDebugRoutePts(routesRef.current[next].points);
                 return next;
             });
-        }, 6000);
+        }, 500);
 
         return () => {
             if (intervalRef.current) {

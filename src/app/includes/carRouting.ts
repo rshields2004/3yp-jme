@@ -124,9 +124,11 @@ export function generateRoundaboutPath(
 
     const ringLines: RingLaneStructure[] = roundabout.userData.roundaboutRingStructure;
 
-    const innerRingIndex = Math.min(ringLines.length - 2, entry.laneIndex);
-    const innerRadius = ringLines[innerRingIndex].radius;
-    const outerRadius = ringLines[innerRingIndex + 1].radius;
+    const maxStrip = Math.max(0, ringLines.length - 2); // strips = boundaries-1
+    const ringStripIndex = Math.min(maxStrip, Math.max(0, (maxStrip - entry.laneIndex)));
+
+    const innerRadius = ringLines[ringStripIndex].radius;
+    const outerRadius = ringLines[ringStripIndex + 1].radius;
     const midRadius = (innerRadius + outerRadius) / 2;
 
     const startAngle = Math.atan2(midStartL.z, midStartL.x);
@@ -136,24 +138,16 @@ export function generateRoundaboutPath(
 
     const TAU = Math.PI * 2;
     
-    // Calculate both possible angles
     const deltaCCW = THREE.MathUtils.euclideanModulo(endAngle - startAngle, TAU);
-    const deltaCW  = deltaCCW - TAU; // This is negative
+    const deltaCW  = deltaCCW - TAU;
     
-    // **KEY FIX: Always use the angle that matches traffic flow direction**
     let deltaAngle: number;
     
     if (anticlockwise) {
-        // Traffic flows counter-clockwise (right-hand drive)
-        // We ALWAYS want to go CCW, which means:
-        // - If deltaCCW is small (0 to PI), use -deltaCW (go the long way, still CCW)
-        // - If deltaCCW is large (PI to 2PI), use deltaCCW as-is but make it negative
-        // Actually, simpler: we always want NEGATIVE angle for CCW
-        deltaAngle = deltaCW; // This is already negative
-    } else {
-        // Traffic flows clockwise (left-hand drive)
-        // We ALWAYS want to go CW, which means POSITIVE angle
-        deltaAngle = deltaCCW; // This is positive
+        deltaAngle = deltaCW; 
+    } 
+    else {
+        deltaAngle = deltaCCW; 
     }
 
     const segments = 40;
@@ -226,12 +220,6 @@ export function getMidCurve(
     }
 
     return midCurve;
-}
-
-
-function mapInboundLaneToOutboundLane(lIn: number, outLanes: number) {
-    if (outLanes <= 0) return null;
-    return Math.min(lIn, outLanes - 1);
 }
 
 
