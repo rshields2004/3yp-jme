@@ -2,21 +2,23 @@ import * as THREE from "three";
 import { ExitStructure } from "./types/intersection";
 import { RingLaneStructure, RoundaboutExitStructure, RoundaboutObject } from "./types/roundabout";
 import { start } from "repl";
-import { LaneStructure } from "./types/types";
+import { ExitConfig, JunctionConfig, JunctionObject, LaneStructure } from "./types/types";
 import { ThickLineHandle } from "../components/ThickLine";
+import { exit } from "process";
+import { driverSide } from "./defaults";
 
 
-function getLaneWorldPoint
-(
+function getLaneWorldPoint(
     group: THREE.Group,
     exitIndex: number,
     laneIndex: number,
-    which: "start" | "end"
+    which: "start" | "end",
+    dir: "in" | "out"
 ) {
     let exitInfo;
     if (group.userData.type === "roundabout") {
         exitInfo = group.userData.roundaboutExitStructure[exitIndex];
-    }
+    } 
     else {
         exitInfo = group.userData.exitInfo[exitIndex];
     }
@@ -24,21 +26,28 @@ function getLaneWorldPoint
     const lanes = exitInfo.laneLines;
 
     if (lanes.length === 1) {
-        // Only one lane, center = line itself
         const lane = lanes[0];
         return (which === "start" ? lane.line.start : lane.line.end).clone();
     }
 
+    const numLanes = lanes.length - 1;         // boundaries -> strips
+    const clamped = Math.max(0, Math.min(laneIndex, numLanes - 1));
 
-    const leftLane = lanes[laneIndex];
-    const rightLane = lanes[laneIndex + 1] ?? leftLane; // if last lane, use left lane only
 
-    // Compute midpoint between left and right lane line at start or end
+    const idx =
+        driverSide === "left"
+            ? (dir === "in" ? (numLanes - 1 - clamped) : clamped)
+            : (dir === "in" ? clamped : (numLanes - 1 - clamped));
+
+    const leftLane = lanes[idx];
+    const rightLane = lanes[idx + 1] ?? leftLane;
+
     const leftPoint = which === "start" ? leftLane.line.start : leftLane.line.end;
     const rightPoint = which === "start" ? rightLane.line.start : rightLane.line.end;
 
-    return leftPoint.clone().add(rightPoint.clone()).multiplyScalar(0.5);
+    return group.localToWorld(leftPoint.clone().add(rightPoint.clone()).multiplyScalar(0.5));
 }
+
 
 
 export function generateIntersectionPath(
@@ -47,10 +56,11 @@ export function generateIntersectionPath(
     exit: { exitIndex: number, laneIndex: number }
 ): [number, number, number][] {
 
-    const startPoint = getLaneWorldPoint(intersection, entry.exitIndex, entry.laneIndex, "end");
-    const midStart = getLaneWorldPoint(intersection, entry.exitIndex, entry.laneIndex, "start");
-    const midEnd = getLaneWorldPoint(intersection, exit.exitIndex, exit.laneIndex, "start");
-    const endPoint = getLaneWorldPoint(intersection, exit.exitIndex, exit.laneIndex, "end");
+    const startPoint = getLaneWorldPoint(intersection, entry.exitIndex, entry.laneIndex, "end",   "in");
+    const midStart   = getLaneWorldPoint(intersection, entry.exitIndex, entry.laneIndex, "start", "in");
+
+    const midEnd     = getLaneWorldPoint(intersection, exit.exitIndex,  exit.laneIndex,  "start", "out");
+    const endPoint   = getLaneWorldPoint(intersection, exit.exitIndex,  exit.laneIndex,  "end",   "out");
 
     const dirEntry = midStart.clone().sub(startPoint).normalize();
     const dirExit = endPoint.clone().sub(midEnd).normalize();
@@ -59,11 +69,11 @@ export function generateIntersectionPath(
         // Solve p1 + t*d1 = p2 + s*d2
         const a = d1.x, b = -d2.x, c = p2.x - p1.x;
         const d = d1.z, e = -d2.z, f = p2.z - p1.z;
-        const denom = a*e - b*d;
+        const denom = a * e - b * d;
         if (Math.abs(denom) < 1e-6) return null; // parallel
-        const t = (c*e - b*f) / denom;
+        const t = (c * e - b * f) / denom;
         const intersection = p1.clone().add(d1.clone().multiplyScalar(t));
-        intersection.y = (p1.y + p2.y)/2;
+        intersection.y = (p1.y + p2.y) / 2;
         return intersection;
     }
 
@@ -78,7 +88,7 @@ export function generateIntersectionPath(
     if (angle < MIN_CURVE_ANGLE) {
         // Almost straight → just linearly interpolate
         points.push(startPoint, midStart, midEnd, endPoint);
-    } 
+    }
     else {
         // Create a cubic Bézier curve through the centre
         points.push(startPoint, midStart);
@@ -97,75 +107,82 @@ export function generateRoundaboutPath(
     exit: { exitIndex: number, laneIndex: number }
 ): [number, number, number][] {
 
+    // Ensure matrixWorld is correct
+    roundabout.updateWorldMatrix(true, false);
 
-    const startPoint = getLaneWorldPoint(roundabout, entry.exitIndex, entry.laneIndex, "end");
-    const midStart = getLaneWorldPoint(roundabout, entry.exitIndex, entry.laneIndex, "start");
-    const midEnd = getLaneWorldPoint(roundabout, exit.exitIndex, exit.laneIndex, "start");
-    const endPoint = getLaneWorldPoint(roundabout, exit.exitIndex, exit.laneIndex, "end");
+    // ---- World-space lane endpoints ----
+    const startW = getLaneWorldPoint(roundabout, entry.exitIndex, entry.laneIndex, "end",   "in");
+    const midStartW = getLaneWorldPoint(roundabout, entry.exitIndex, entry.laneIndex, "start", "in");
+    const midEndW   = getLaneWorldPoint(roundabout, exit.exitIndex,  exit.laneIndex,  "start", "out");
+    const endW      = getLaneWorldPoint(roundabout, exit.exitIndex,  exit.laneIndex,  "end",   "out");
+
+    // ---- Convert to LOCAL space ----
+    const startL    = roundabout.worldToLocal(startW.clone());
+    const midStartL = roundabout.worldToLocal(midStartW.clone());
+    const midEndL   = roundabout.worldToLocal(midEndW.clone());
+    const endL      = roundabout.worldToLocal(endW.clone());
 
     const ringLines: RingLaneStructure[] = roundabout.userData.roundaboutRingStructure;
 
-    const points: THREE.Vector3[] = [];
-
-    points.push(startPoint);
-    
-    points.push(midStart);
-
     const innerRingIndex = Math.min(ringLines.length - 2, entry.laneIndex);
-
     const innerRadius = ringLines[innerRingIndex].radius;
     const outerRadius = ringLines[innerRingIndex + 1].radius;
-    
-    // Compute middle radius of the lane: average distance from origin
     const midRadius = (innerRadius + outerRadius) / 2;
 
-    // Compute angles for the circular segment
-    const startAngle = Math.atan2(midStart.z, midStart.x);
-    const endAngle = Math.atan2(midEnd.z, midEnd.x);
+    const startAngle = Math.atan2(midStartL.z, midStartL.x);
+    const endAngle   = Math.atan2(midEndL.z,   midEndL.x);
 
-    // Determine shortest rotation direction
-    const clockwise = false; // set true if your roundabout moves clockwise
+    const anticlockwise = driverSide !== "left"; //
+
+    const TAU = Math.PI * 2;
+    const deltaCCW = THREE.MathUtils.euclideanModulo(endAngle - startAngle, TAU);
+    const deltaCW  = -(TAU - deltaCCW);
+
+    const deltaAngle = anticlockwise ? deltaCW : deltaCCW;
+
     const segments = 40;
-    let deltaAngle = endAngle - startAngle;
-    if (clockwise) {
-        if (deltaAngle >= 0) deltaAngle -= 2 * Math.PI;
-    } 
-    else {
-        if (deltaAngle <= 0) deltaAngle += 2 * Math.PI;
-    }
-    
-    
-    const circlePoints: THREE.Vector3[] = [];
+
+    // ---- Circle points in LOCAL space ----
+    const circleL: THREE.Vector3[] = [];
     for (let i = 0; i <= segments; i++) {
         const t = i / segments;
-        const angle = startAngle + deltaAngle * t;
-        const x = Math.cos(angle) * midRadius;
-        const z = Math.sin(angle) * midRadius;
-        circlePoints.push(new THREE.Vector3(x, 0, z));
+        const a = startAngle + deltaAngle * t;
+        circleL.push(
+            new THREE.Vector3(
+                Math.cos(a) * midRadius,
+                midStartL.y,
+                Math.sin(a) * midRadius
+            )
+        );
     }
 
-    // Ensure at least 4 points for Bezier curves
-    const entryCurvePoints = [midStart, circlePoints[1], circlePoints[2], circlePoints[3]];
-    const exitCurvePoints = [
-        circlePoints[circlePoints.length - 4],
-        circlePoints[circlePoints.length - 3],
-        circlePoints[circlePoints.length - 2],
-        midEnd
-    ];
+    // ---- Entry/exit Beziers in LOCAL space ----
+    const curveEntryL = new THREE.CubicBezierCurve3(
+        midStartL,
+        circleL[1],
+        circleL[2],
+        circleL[3]
+    );
 
-    // Create cubic Bezier curves for smooth entry/exit
-    const curveEntry = new THREE.CubicBezierCurve3(...entryCurvePoints);
-    const curveExit = new THREE.CubicBezierCurve3(...exitCurvePoints);
+    const curveExitL = new THREE.CubicBezierCurve3(
+        circleL[circleL.length - 4],
+        circleL[circleL.length - 3],
+        circleL[circleL.length - 2],
+        midEndL
+    );
 
-    // Assemble points
-    points.push(startPoint);
-    points.push(...curveEntry.getPoints(10));           // smooth entry
-    points.push(...circlePoints.slice(3, -3));          // middle of the roundabout
-    points.push(...curveExit.getPoints(10));            // smooth exit
-    points.push(midEnd);
-    points.push(endPoint);
+    // ---- Assemble LOCAL path ----
+    const localPts: THREE.Vector3[] = [];
+    localPts.push(startL, midStartL);
+    localPts.push(...curveEntryL.getPoints(10).slice(1));
+    localPts.push(...circleL.slice(3, -3));
+    localPts.push(...curveExitL.getPoints(10).slice(1));
+    localPts.push(midEndL, endL);
 
-    return points.map(v => [v.x, v.y, v.z] as [number, number, number]);
+    // ---- Convert to WORLD once ----
+    const worldPts = localPts.map(p => roundabout.localToWorld(p.clone()));
+
+    return worldPts.map(v => [v.x, v.y, v.z] as [number, number, number]);
 };
 
 
@@ -193,4 +210,335 @@ export function getMidCurve(
     }
 
     return midCurve;
+}
+
+
+function mapInboundLaneToOutboundLane(lIn: number, outLanes: number) {
+    if (outLanes <= 0) return null;
+    return Math.min(lIn, outLanes - 1);
+}
+
+
+type Direction = "in" | "out";
+
+export type LaneEndPoint = {
+    structureID: string;
+    exitIndex: number;
+    direction: Direction;
+    laneIndex: number;
+};
+
+type NodeKey = string;
+
+const keyOf = (n: LaneEndPoint): NodeKey => `${n.structureID}-${n.exitIndex}-${n.direction}-${n.laneIndex}`;
+
+type Edge = {
+    to: NodeKey;
+    points: [number, number, number][];
+    kind: "internal" | "link";
+};
+
+type Graph = Map<NodeKey, Edge[]>;
+
+const addEdge = (graph: Graph, from: NodeKey, e: Edge) => {
+    const arr = graph.get(from);
+    if (arr) {
+        arr.push(e);
+    }
+    else {
+        graph.set(from, [e]);
+    }
+};
+
+const outCount = (config: ExitConfig) => config.laneCount - config.numLanesIn;
+
+const inCount = (config: ExitConfig) => config.numLanesIn;
+
+const getGroupById = (refs: THREE.Group[], id: string) => refs.find(g => g.userData?.id === id);
+
+const getLinkGroupById = (refs: THREE.Group[], id: string) => refs.find(g => g.userData?.type === "link" && g.userData?.id === id);
+
+function outboundBoundaryStart(outA: number, inA: number, driverSide: "left" | "right") {
+  // laneCurves are boundary lines; strips are between boundary[i] and boundary[i+1]
+  // Convention: laneCurves[0..inA] = one carriageway, laneCurves[inA..inA+outA] = the other
+  return driverSide === "left" ? inA : 0;
+}
+
+function inboundBoundaryStart(outA: number, inA: number, driverSide: "left" | "right") {
+  return driverSide === "left" ? 0 : outA;
+}
+
+export function generateAllRoutes(junction: JunctionConfig, junctionObjectRefs: THREE.Group[], opts?: {
+    maxSteps?: number;
+    disallowUTurn?: boolean;
+}) {
+    const maxSteps = opts?.maxSteps ?? 30;
+    const disallowUTurn = opts?.disallowUTurn ?? true;
+
+    // First we map structure IDs to object configs
+
+    const objByID = new Map<string, JunctionObject>();
+    for (const obj of junction.junctionObjects) {
+        objByID.set(obj.id, obj);
+    }
+
+    // Build route graph
+
+    const mainG: Graph = new Map();
+
+
+    // Trac which lane endpoints are connected by links
+
+    const hasIncomingLink = new Set<NodeKey>();
+    const hasOutgoingLink = new Set<NodeKey>();
+
+    // First we look at internal routing for structures
+
+    for (const obj of junction.junctionObjects) {
+        const group = getGroupById(junctionObjectRefs, obj.id);
+        if (!group) {
+            continue;
+        }
+
+        const exitConfigs = obj.config.exitConfig;
+
+        // Enumerate possible exits into an object
+        for (let eIN = 0; eIN < exitConfigs.length; eIN++) {
+
+            // Enumerate possible lanes into an exit
+            for (let lIN = 0; lIN < inCount(exitConfigs[eIN]); lIN++) {
+
+                // Enumerate possible exits out from that lane
+                for (let eOUT = 0; eOUT < exitConfigs.length; eOUT++) {
+
+                    if (disallowUTurn && eOUT === eIN) {
+                        continue;
+                    }
+
+                    const outLanes = outCount(exitConfigs[eOUT]);
+                    if (outLanes <= 0) {
+                        continue;
+                    }
+
+                    // We want to preserve lane mapping as much as possible so 1st lane takes 1st lane out
+                    const lOUT = mapInboundLaneToOutboundLane(lIN, outLanes);
+                    if (lOUT === null) continue;
+
+                    const from: LaneEndPoint = {
+                        structureID: obj.id,
+                        exitIndex: eIN,
+                        direction: "in",
+                        laneIndex: lIN
+                    };
+
+                    const to: LaneEndPoint = {
+                        structureID: obj.id,
+                        exitIndex: eOUT,
+                        direction: "out",
+                        laneIndex: lOUT
+                    };
+
+                    const points = obj.type === "intersection"
+                        ? generateIntersectionPath(group, { exitIndex: eIN, laneIndex: lIN }, { exitIndex: eOUT, laneIndex: lOUT })
+                        : generateRoundaboutPath(group, { exitIndex: eIN, laneIndex: lIN }, { exitIndex: eOUT, laneIndex: lOUT });
+
+                    addEdge(mainG, keyOf(from), { to: keyOf(to), points, kind: "internal" });
+
+                }
+            }
+        }
+    }
+
+
+
+    // Next we look at links between components
+
+    for (const link of junction.junctionLinks) {
+        const linkGroup = getLinkGroupById(junctionObjectRefs, link.id);
+        if (!linkGroup) {
+            continue;
+        }
+
+        const laneCurves = linkGroup.userData?.laneCurves as [number, number, number][][] | undefined;
+        if (!laneCurves || laneCurves.length < 2) {
+            continue;
+        }
+
+
+        const [a, b] = link.objectPair;
+        const objA = objByID.get(a.structureID);
+        const objB = objByID.get(b.structureID);
+        if (!objA || !objB) {
+            continue;
+        }
+
+
+        const configA = objA.config.exitConfig[a.exitIndex];
+        const configB = objB.config.exitConfig[b.exitIndex];
+
+        const outA = outCount(configA);
+        const inA  = inCount(configA);
+
+        const outB = outCount(configB);
+        const inB  = inCount(configB);
+
+        const lanesAB = Math.min(outA, inB);
+        const lanesBA = Math.min(outB, inA);
+
+        console.log(lanesAB + "" + lanesBA);
+
+        const outStartA = outboundBoundaryStart(outA, inA, driverSide);
+        const inStartA  = inboundBoundaryStart(outA, inA, driverSide);
+
+        // AB
+        for (let i = 0; i < lanesAB; i++) {
+            const leftBoundary = outStartA + i;
+            const rightBoundary = outStartA + i + 1;
+            
+            if (!laneCurves[leftBoundary] || !laneCurves[rightBoundary]) {
+                console.warn(`Missing boundaries for lane ${i}: ${leftBoundary}, ${rightBoundary}`);
+                continue;
+            }
+
+            const points = getMidCurve(laneCurves[leftBoundary], laneCurves[rightBoundary]);
+
+            const from: LaneEndPoint = { structureID: a.structureID, exitIndex: a.exitIndex, direction: "out", laneIndex: i };
+            const to:   LaneEndPoint = { structureID: b.structureID, exitIndex: b.exitIndex, direction: "in",  laneIndex: i };
+
+            addEdge(mainG, keyOf(from), { to: keyOf(to), points, kind: "link" });
+            hasOutgoingLink.add(keyOf(from));
+            hasIncomingLink.add(keyOf(to));
+        }
+
+        // BA
+        for (let i = 0; i < lanesBA; i++) {
+            const leftBoundary = inStartA + i;
+            const rightBoundary = inStartA + i + 1;
+            
+            if (!laneCurves[leftBoundary] || !laneCurves[rightBoundary]) {
+                console.warn(`Missing boundaries for lane ${i}: ${leftBoundary}, ${rightBoundary}`);
+                continue;
+            }
+
+            const points = getMidCurve(laneCurves[rightBoundary], laneCurves[leftBoundary]).slice().reverse();
+
+            const from: LaneEndPoint = { structureID: b.structureID, exitIndex: b.exitIndex, direction: "out", laneIndex: i };
+            const to:   LaneEndPoint = { structureID: a.structureID, exitIndex: a.exitIndex, direction: "in",  laneIndex: i };
+
+            addEdge(mainG, keyOf(from), { to: keyOf(to), points, kind: "link" });
+            hasOutgoingLink.add(keyOf(from));
+            hasIncomingLink.add(keyOf(to));
+        }
+    }
+
+
+    // Indetify world points i.e., unlinked exits
+
+    const starts: NodeKey[] = [];
+    const ends = new Set<NodeKey>();
+
+    for (const obj of junction.junctionObjects) {
+        const exitConfigs = obj.config.exitConfig;
+
+
+        for (let e = 0; e < exitConfigs.length; e++) {
+
+
+            // Start points where inbound lanes that nothing links into
+            for (let l = 0; l < inCount(exitConfigs[e]); l++) {
+
+                const n: LaneEndPoint = {
+                    structureID: obj.id,
+                    exitIndex: e,
+                    direction: "in",
+                    laneIndex: l
+                };
+
+                const kk = keyOf(n);
+                if (!hasIncomingLink.has(kk)) {
+                    starts.push(kk);
+                }
+
+            }
+
+            // End points where outbound lanes that nothing links from
+            for (let l = 0; l < outCount(exitConfigs[e]); l++) {
+
+                const n: LaneEndPoint = {
+                    structureID: obj.id,
+                    exitIndex: e,
+                    direction: "out",
+                    laneIndex: l
+                };
+
+                const kk = keyOf(n);
+
+                if (!hasOutgoingLink.has(kk)) {
+                    ends.add(kk);
+                }
+            }
+        }
+    }
+
+
+    // Now we enumerate the routes with DFS
+
+    type Route = {
+        nodes: NodeKey[];
+        points: [number, number, number][];
+    };
+
+    const routes: Route[] = [];
+
+    for (const s of starts) {
+
+        const stack: {
+            node: NodeKey;
+            nodes: NodeKey[];
+            points: [number, number, number][];
+            visited: Set<NodeKey>
+        }[] = [{
+            node: s,
+            nodes: [s],
+            points: [],
+            visited: new Set([s])
+        }];
+
+
+        while (stack.length) {
+
+            const current = stack.pop()!;
+
+            if (ends.has(current.node)) {
+                routes.push({
+                    nodes: current.nodes,
+                    points: current.points
+                });
+                continue;
+            }
+
+            if (current.nodes.length >= maxSteps) {
+                continue;
+            }
+
+            for (const e of (mainG.get(current.node) ?? [])) {
+
+                if (current.visited.has(e.to)) {
+                    continue;
+                }
+
+                stack.push({
+                    node: e.to,
+                    nodes: [...current.nodes, e.to],
+                    points: [...current.points, ...e.points],
+                    visited: new Set([...current.visited, e.to])
+                });
+
+            }
+
+        }
+    }
+    
+    return { routes, graph: mainG, starts, ends }
+
 }

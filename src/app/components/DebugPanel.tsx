@@ -107,13 +107,17 @@ export default function DebugPanel() {
             const laneCountA = exitAConfig.exitConfig[exitA.exitIndex].laneCount;
             const laneCountB = exitBConfig.exitConfig[exitB.exitIndex].laneCount;
 
-            if (laneCountA === laneCountB) {
+            const numLaneInA = exitAConfig.exitConfig[exitA.exitIndex].numLanesIn;
+            const numLaneInB = exitBConfig.exitConfig[exitB.exitIndex].numLanesIn;
+
+            if (laneCountA === laneCountB && numLaneInA === (laneCountA - numLaneInB)) {
                 setJunction(prev => ({ ...prev, junctionLinks: [...prev.junctionLinks, newLink] }));
                 setSelectedExits([]);
             } 
             else {
                 alert("Cannot link exits with different number of lanes...yet!");
             }
+            
         }
     };
 

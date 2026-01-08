@@ -80,7 +80,9 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
         const d = b.clone().sub(a).setY(0);
         if (d.lengthSq() < 1e-6) return new THREE.Vector3(1, 0, 0);
         d.normalize();
-        return new THREE.Vector3(-d.z, 0, d.x);
+        // Cross product with UP vector gives consistent left/right
+        const up = new THREE.Vector3(0, 1, 0);
+        return new THREE.Vector3().crossVectors(up, d).normalize();
     };
 
     useEffect(() => {
@@ -178,7 +180,7 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
             const ref = laneRefs[idx];
             if (ref?.current) {
                 ref.current.updatePoints(pts);
-                ref.current.setDashed(idx !== linkInfo.laneCount - linkInfo.numLanesIn);
+                ref.current.setDashed(idx !== linkInfo.numLanesIn);
             }
         });
 
@@ -206,7 +208,7 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
             
             return;
         }
-        groupRef.current.userData.id = "onlylink";
+        groupRef.current.userData.id = link.id;
         groupRef.current.userData.type = "link";
         groupRef.current.userData.laneCurves = laneCurves;
         registerJunctionObject(groupRef.current);

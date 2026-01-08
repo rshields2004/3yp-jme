@@ -18,40 +18,16 @@ export const defaultExitConfig = {
 };
 
 export const defaultIntersectionConfig: IntersectionConfig = {
-    numExits: 5,
-    exitConfig: Array.from({ length: 5 }, () => (defaultExitConfig)),
+    numExits: 3,
+    exitConfig: Array.from({ length: 3 }, () => (defaultExitConfig)),
 };
 
 export const defaultRoundaboutConfig: RoundaboutConfig = {
-    numExits: 5,
-    exitConfig: Array.from({ length: 5 }, () => (defaultExitConfig)),
+    numExits: 3,
+    exitConfig: Array.from({ length: 3 }, () => (defaultExitConfig)),
 };
 
-
-export const defaultRoundaboutObject: JunctionObject = {
-    id: "r1",
-    type: "roundabout",
-    config: defaultRoundaboutConfig,
-};
-
-export const defaultIntersectionObject: JunctionObject = {
-    id: "i1",
-    type: "intersection",
-    config: defaultRoundaboutConfig,
-}
-
-export const defaultLinkObject: JunctionLink = {
-    id: "test",
-    objectPair: 
-    [{
-        structureID: "i1",
-        exitIndex: 2
-    }, 
-    {
-        structureID: "r1",
-        exitIndex: 3
-    }]
-};
+export const driverSide: "left" | "right" = "left";
 
 
 export const defaultJunctionConfig: JunctionConfig = {

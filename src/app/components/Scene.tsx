@@ -1,69 +1,95 @@
 "use client";
 
-import { OrbitControls } from "@react-three/drei";
-import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
-import { useState, useEffect, useRef } from "react";
+import { OrbitControls, Line } from "@react-three/drei";
+import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Bloom, EffectComposer } from "@react-three/postprocessing";
 import { useJModellerContext } from "../context/JModellerContext";
-import { carColours, carTypes, FLOOR_Y } from "../includes/defaults";
+import { FLOOR_Y } from "../includes/defaults";
 import * as THREE from "three";
-import { MTLLoader, OBJLoader } from "three/examples/jsm/Addons.js";
 import { JunctionComponents } from "./JunctionComponents";
-import { generateIntersectionPath, generateRoundaboutPath, getMidCurve } from "../includes/carRouting";
-import { ThickLine } from "./ThickLine";
-import { link } from "fs";
-import { useFrame } from "@react-three/fiber";
-
-
-
+import { generateAllRoutes } from "../includes/carRouting";
 
 export default function Scene() {
+    const { selectedObjects, junction, simIsRunning, junctionObjectRefs } = useJModellerContext();
+    const controlsRef = useRef<OrbitControlsImpl>(null);
 
-    const { selectedObjects, junctionObjectRefs } = useJModellerContext();
-    const controlsRef = useRef<OrbitControlsImpl>(null)
+    const [debugRoutePts, setDebugRoutePts] = useState<[number, number, number][]>([]);
+    const [routeIndex, setRouteIndex] = useState(0);
 
-    
+    const routesRef = useRef<{ points: [number, number, number][] }[]>([]);
+    const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-    
-    const carPathTest:  [number, number, number][] = [];
-
-    const intersectionRef = junctionObjectRefs.current.find(g => g.userData.id === "i1");
-    const roundaboutRef = junctionObjectRefs.current.find(g => g.userData.id === "r1");
-    const linkRef = junctionObjectRefs.current.find(g => g.userData.type === "link");
-
-    if (intersectionRef && roundaboutRef && linkRef) {
-        const interSectionpath = generateIntersectionPath(
-                intersectionRef,
-                { exitIndex: 4, laneIndex: 1 },
-                { exitIndex: 2, laneIndex: 0 }
-            );
-        const roundaboutPath = generateRoundaboutPath(
-                roundaboutRef,
-                { exitIndex: 3, laneIndex: 1 },
-                { exitIndex: 1, laneIndex: 0 }
-            );
-        
-        const linkPoints = getMidCurve(linkRef.userData.laneCurves[0], linkRef.userData.laneCurves[0 + 1])
-
-        carPathTest.push(...interSectionpath, ...linkPoints, ...roundaboutPath);
+    function pointsToCatmullCurve(points: [number, number, number][], closed = false) {
+        const vectors = points.map(([x, y, z]) => new THREE.Vector3(x, y, z));
+        const curve = new THREE.CatmullRomCurve3(vectors, closed);
+        curve.curveType = "centripetal";
+        curve.arcLengthDivisions = 2000;
+        return curve;
     }
 
-    
+    const debugCurveDrawPts = useMemo(() => {
+        if (debugRoutePts.length < 2) return [];
+        const curve = pointsToCatmullCurve(debugRoutePts, false);
+        return curve.getPoints(300).map(v => [v.x, v.y + 0.05, v.z] as [number, number, number]);
+    }, [debugRoutePts]);
+
+    /** Generate routes once when sim starts */
+    useEffect(() => {
+        if (!simIsRunning) {
+            routesRef.current = [];
+            setDebugRoutePts([]);
+            setRouteIndex(0);
+            return;
+        }
+
+        const { routes } = generateAllRoutes(junction, junctionObjectRefs.current, {
+            maxSteps: 25,
+            disallowUTurn: true,
+        });
+
+        if (routes.length === 0) return;
+
+        routesRef.current = routes;
+        setRouteIndex(0);
+        setDebugRoutePts(routes[0].points);
+    }, [simIsRunning, junction, junctionObjectRefs]);
+
+    /** Cycle routes every 1 second */
+    useEffect(() => {
+        if (!simIsRunning || routesRef.current.length === 0) return;
+
+        intervalRef.current = setInterval(() => {
+            setRouteIndex(prev => {
+                const next = (prev + 1) % routesRef.current.length;
+
+                console.log(
+                    `Displaying route ${next + 1} / ${routesRef.current.length}`
+                );
+
+                setDebugRoutePts(routesRef.current[next].points);
+                return next;
+            });
+        }, 6000);
+
+        return () => {
+            if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
+            }
+        };
+    }, [simIsRunning]);
+
     return (
         <>
             <axesHelper args={[50]} />
-
             <fog attach="fog" args={["#0a0a0a", 100, 250]} />
 
             <ambientLight intensity={1} />
             <directionalLight position={[20, 50, 20]} intensity={0.6} />
             <pointLight position={[0, 5, 0]} intensity={2} color="#ffaa00" />
 
-            <mesh 
-                rotation={[-Math.PI / 2, 0, 0]} 
-                position={[0, FLOOR_Y-1, 0]}
-                receiveShadow
-            >
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, FLOOR_Y - 1, 0]} receiveShadow>
                 <planeGeometry args={[500, 500]} />
                 <meshStandardMaterial color="#1c1c1c" />
             </mesh>
@@ -80,6 +106,21 @@ export default function Scene() {
                 minDistance={5}
                 maxDistance={100}
             />
+
+            {debugCurveDrawPts.length > 1 && (
+                <Line
+                    points={debugCurveDrawPts}
+                    color="red"
+                    lineWidth={2}
+                />
+            )}
+
+            {debugRoutePts.map(([x, y, z], i) => (
+                <mesh key={i} position={[x, y + 0.08, z]}>
+                    <sphereGeometry args={[0.15, 10, 10]} />
+                    <meshBasicMaterial />
+                </mesh>
+            ))}
 
             <JunctionComponents />
         </>
