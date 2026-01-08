@@ -132,13 +132,29 @@ export function generateRoundaboutPath(
     const startAngle = Math.atan2(midStartL.z, midStartL.x);
     const endAngle   = Math.atan2(midEndL.z,   midEndL.x);
 
-    const anticlockwise = driverSide !== "left"; //
+    const anticlockwise = driverSide !== "left";
 
     const TAU = Math.PI * 2;
+    
+    // Calculate both possible angles
     const deltaCCW = THREE.MathUtils.euclideanModulo(endAngle - startAngle, TAU);
-    const deltaCW  = -(TAU - deltaCCW);
-
-    const deltaAngle = anticlockwise ? deltaCW : deltaCCW;
+    const deltaCW  = deltaCCW - TAU; // This is negative
+    
+    // **KEY FIX: Always use the angle that matches traffic flow direction**
+    let deltaAngle: number;
+    
+    if (anticlockwise) {
+        // Traffic flows counter-clockwise (right-hand drive)
+        // We ALWAYS want to go CCW, which means:
+        // - If deltaCCW is small (0 to PI), use -deltaCW (go the long way, still CCW)
+        // - If deltaCCW is large (PI to 2PI), use deltaCCW as-is but make it negative
+        // Actually, simpler: we always want NEGATIVE angle for CCW
+        deltaAngle = deltaCW; // This is already negative
+    } else {
+        // Traffic flows clockwise (left-hand drive)
+        // We ALWAYS want to go CW, which means POSITIVE angle
+        deltaAngle = deltaCCW; // This is positive
+    }
 
     const segments = 40;
 
@@ -302,6 +318,7 @@ export function generateAllRoutes(junction: JunctionConfig, junctionObjectRefs: 
     }
 
     const exitConfigs = obj.config.exitConfig;
+    
 
     // Enumerate possible exits into an object
     for (let eIN = 0; eIN < exitConfigs.length; eIN++) {
