@@ -1,11 +1,6 @@
 import * as THREE from "three";
-import { ExitStructure } from "./types/intersection";
-import { RingLaneStructure, RoundaboutExitStructure, RoundaboutObject } from "./types/roundabout";
-import { start } from "repl";
-import { ExitConfig, JunctionConfig, JunctionObject, LaneStructure } from "./types/types";
-import { ThickLineHandle } from "../components/ThickLine";
-import { exit } from "process";
-import { driverSide } from "./defaults";
+import { RingLaneStructure } from "./types/roundabout";
+import { ExitConfig, JunctionConfig, JunctionObject } from "./types/types";
 
 
 function getLaneWorldPoint(
@@ -30,14 +25,11 @@ function getLaneWorldPoint(
         return (which === "start" ? lane.line.start : lane.line.end).clone();
     }
 
-    const numLanes = lanes.length - 1;         // boundaries -> strips
+    const numLanes = lanes.length - 1;
     const clamped = Math.max(0, Math.min(laneIndex, numLanes - 1));
 
 
-    const idx =
-        driverSide === "left"
-            ? (dir === "in" ? (numLanes - 1 - clamped) : clamped)
-            : (dir === "in" ? clamped : (numLanes - 1 - clamped));
+    const idx = (dir === "in") ? (numLanes - 1 - clamped) : clamped;
 
     const leftLane = lanes[idx];
     const rightLane = lanes[idx + 1] ?? leftLane;
@@ -107,8 +99,6 @@ export function generateRoundaboutPath(
     exit: { exitIndex: number, laneIndex: number }
 ): [number, number, number][] {
 
-    // Ensure matrixWorld is correct
-    roundabout.updateWorldMatrix(true, false);
 
     // ---- World-space lane endpoints ----
     const startW = getLaneWorldPoint(roundabout, entry.exitIndex, entry.laneIndex, "end", "in");
@@ -134,21 +124,10 @@ export function generateRoundaboutPath(
     const startAngle = Math.atan2(midStartL.z, midStartL.x);
     const endAngle = Math.atan2(midEndL.z, midEndL.x);
 
-    const anticlockwise = driverSide !== "left";
 
     const TAU = Math.PI * 2;
 
     const deltaCCW = THREE.MathUtils.euclideanModulo(endAngle - startAngle, TAU);
-    const deltaCW = deltaCCW - TAU;
-
-    let deltaAngle: number;
-
-    if (anticlockwise) {
-        deltaAngle = deltaCW;
-    }
-    else {
-        deltaAngle = deltaCCW;
-    }
 
     const segments = 40;
 
@@ -156,7 +135,7 @@ export function generateRoundaboutPath(
     const circleL: THREE.Vector3[] = [];
     for (let i = 0; i <= segments; i++) {
         const t = i / segments;
-        const a = startAngle + deltaAngle * t;
+        const a = startAngle + deltaCCW * t;
         circleL.push(
             new THREE.Vector3(
                 Math.cos(a) * midRadius,
@@ -258,19 +237,7 @@ const outCount = (config: ExitConfig) => config.laneCount - config.numLanesIn;
 
 const inCount = (config: ExitConfig) => config.numLanesIn;
 
-const getGroupById = (refs: THREE.Group[], id: string) => refs.find(g => g.userData?.id === id);
 
-const getLinkGroupById = (refs: THREE.Group[], id: string) => refs.find(g => g.userData?.type === "link" && g.userData?.id === id);
-
-function outboundBoundaryStart(outA: number, inA: number, driverSide: "left" | "right") {
-    // laneCurves are boundary lines; strips are between boundary[i] and boundary[i+1]
-    // Convention: laneCurves[0..inA] = one carriageway, laneCurves[inA..inA+outA] = the other
-    return driverSide === "left" ? inA : 0;
-}
-
-function inboundBoundaryStart(outA: number, inA: number, driverSide: "left" | "right") {
-    return driverSide === "left" ? 0 : outA;
-}
 
 export function generateAllRoutes(junction: JunctionConfig, junctionObjectRefs: THREE.Group[], opts?: {
     maxSteps?: number;
@@ -300,7 +267,7 @@ export function generateAllRoutes(junction: JunctionConfig, junctionObjectRefs: 
 
 
     for (const obj of junction.junctionObjects) {
-        const group = getGroupById(junctionObjectRefs, obj.id);
+        const group = junctionObjectRefs.find(g => g.userData?.id === obj.id);
         if (!group) {
             continue;
         }
@@ -506,7 +473,7 @@ export function generateAllRoutes(junction: JunctionConfig, junctionObjectRefs: 
     // Next we look at links between components
 
     for (const link of junction.junctionLinks) {
-        const linkGroup = getLinkGroupById(junctionObjectRefs, link.id);
+        const linkGroup = junctionObjectRefs.find(g => g.userData?.type === "link" && g.userData?.id === link.id);
         if (!linkGroup) {
             continue;
         }
@@ -538,14 +505,11 @@ export function generateAllRoutes(junction: JunctionConfig, junctionObjectRefs: 
         const lanesBA = Math.min(outB, inA);
 
 
-        const outStartA = outboundBoundaryStart(outA, inA, driverSide);
-        const inStartA = inboundBoundaryStart(outA, inA, driverSide);
-
         // AB
         for (let i = 0; i < lanesAB; i++) {
             const flippedI = lanesAB - 1 - i;
-            const leftBoundary = outStartA + flippedI;
-            const rightBoundary = outStartA + flippedI + 1;
+            const leftBoundary = inA + flippedI;
+            const rightBoundary = inA + flippedI + 1;
 
             if (!laneCurves[leftBoundary] || !laneCurves[rightBoundary]) {
                 console.warn(`Missing boundaries for lane ${i}: ${leftBoundary}, ${rightBoundary}`);
@@ -564,8 +528,8 @@ export function generateAllRoutes(junction: JunctionConfig, junctionObjectRefs: 
 
         // BA
         for (let i = 0; i < lanesBA; i++) {
-            const leftBoundary = inStartA + i;
-            const rightBoundary = inStartA + i + 1;
+            const leftBoundary = i;
+            const rightBoundary = i + 1;
 
             if (!laneCurves[leftBoundary] || !laneCurves[rightBoundary]) {
                 console.warn(`Missing boundaries for lane ${i}: ${leftBoundary}, ${rightBoundary}`);
@@ -581,7 +545,7 @@ export function generateAllRoutes(junction: JunctionConfig, junctionObjectRefs: 
             hasOutgoingLink.add(keyOf(from));
             hasIncomingLink.add(keyOf(to));
         }
-        
+
     }
 
 
