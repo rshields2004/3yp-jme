@@ -18,7 +18,7 @@ function getLaneWorldPoint(
     let exitInfo;
     if (group.userData.type === "roundabout") {
         exitInfo = group.userData.roundaboutExitStructure[exitIndex];
-    } 
+    }
     else {
         exitInfo = group.userData.exitInfo[exitIndex];
     }
@@ -56,11 +56,11 @@ export function generateIntersectionPath(
     exit: { exitIndex: number, laneIndex: number }
 ): [number, number, number][] {
 
-    const startPoint = getLaneWorldPoint(intersection, entry.exitIndex, entry.laneIndex, "end",   "in");
-    const midStart   = getLaneWorldPoint(intersection, entry.exitIndex, entry.laneIndex, "start", "in");
+    const startPoint = getLaneWorldPoint(intersection, entry.exitIndex, entry.laneIndex, "end", "in");
+    const midStart = getLaneWorldPoint(intersection, entry.exitIndex, entry.laneIndex, "start", "in");
 
-    const midEnd     = getLaneWorldPoint(intersection, exit.exitIndex,  exit.laneIndex,  "start", "out");
-    const endPoint   = getLaneWorldPoint(intersection, exit.exitIndex,  exit.laneIndex,  "end",   "out");
+    const midEnd = getLaneWorldPoint(intersection, exit.exitIndex, exit.laneIndex, "start", "out");
+    const endPoint = getLaneWorldPoint(intersection, exit.exitIndex, exit.laneIndex, "end", "out");
 
     const dirEntry = midStart.clone().sub(startPoint).normalize();
     const dirExit = endPoint.clone().sub(midEnd).normalize();
@@ -111,16 +111,16 @@ export function generateRoundaboutPath(
     roundabout.updateWorldMatrix(true, false);
 
     // ---- World-space lane endpoints ----
-    const startW = getLaneWorldPoint(roundabout, entry.exitIndex, entry.laneIndex, "end",   "in");
+    const startW = getLaneWorldPoint(roundabout, entry.exitIndex, entry.laneIndex, "end", "in");
     const midStartW = getLaneWorldPoint(roundabout, entry.exitIndex, entry.laneIndex, "start", "in");
-    const midEndW   = getLaneWorldPoint(roundabout, exit.exitIndex,  exit.laneIndex,  "start", "out");
-    const endW      = getLaneWorldPoint(roundabout, exit.exitIndex,  exit.laneIndex,  "end",   "out");
+    const midEndW = getLaneWorldPoint(roundabout, exit.exitIndex, exit.laneIndex, "start", "out");
+    const endW = getLaneWorldPoint(roundabout, exit.exitIndex, exit.laneIndex, "end", "out");
 
     // ---- Convert to LOCAL space ----
-    const startL    = roundabout.worldToLocal(startW.clone());
+    const startL = roundabout.worldToLocal(startW.clone());
     const midStartL = roundabout.worldToLocal(midStartW.clone());
-    const midEndL   = roundabout.worldToLocal(midEndW.clone());
-    const endL      = roundabout.worldToLocal(endW.clone());
+    const midEndL = roundabout.worldToLocal(midEndW.clone());
+    const endL = roundabout.worldToLocal(endW.clone());
 
     const ringLines: RingLaneStructure[] = roundabout.userData.roundaboutRingStructure;
 
@@ -132,22 +132,22 @@ export function generateRoundaboutPath(
     const midRadius = (innerRadius + outerRadius) / 2;
 
     const startAngle = Math.atan2(midStartL.z, midStartL.x);
-    const endAngle   = Math.atan2(midEndL.z,   midEndL.x);
+    const endAngle = Math.atan2(midEndL.z, midEndL.x);
 
     const anticlockwise = driverSide !== "left";
 
     const TAU = Math.PI * 2;
-    
+
     const deltaCCW = THREE.MathUtils.euclideanModulo(endAngle - startAngle, TAU);
-    const deltaCW  = deltaCCW - TAU;
-    
+    const deltaCW = deltaCCW - TAU;
+
     let deltaAngle: number;
-    
+
     if (anticlockwise) {
-        deltaAngle = deltaCW; 
-    } 
+        deltaAngle = deltaCW;
+    }
     else {
-        deltaAngle = deltaCCW; 
+        deltaAngle = deltaCCW;
     }
 
     const segments = 40;
@@ -263,13 +263,13 @@ const getGroupById = (refs: THREE.Group[], id: string) => refs.find(g => g.userD
 const getLinkGroupById = (refs: THREE.Group[], id: string) => refs.find(g => g.userData?.type === "link" && g.userData?.id === id);
 
 function outboundBoundaryStart(outA: number, inA: number, driverSide: "left" | "right") {
-  // laneCurves are boundary lines; strips are between boundary[i] and boundary[i+1]
-  // Convention: laneCurves[0..inA] = one carriageway, laneCurves[inA..inA+outA] = the other
-  return driverSide === "left" ? inA : 0;
+    // laneCurves are boundary lines; strips are between boundary[i] and boundary[i+1]
+    // Convention: laneCurves[0..inA] = one carriageway, laneCurves[inA..inA+outA] = the other
+    return driverSide === "left" ? inA : 0;
 }
 
 function inboundBoundaryStart(outA: number, inA: number, driverSide: "left" | "right") {
-  return driverSide === "left" ? 0 : outA;
+    return driverSide === "left" ? 0 : outA;
 }
 
 export function generateAllRoutes(junction: JunctionConfig, junctionObjectRefs: THREE.Group[], opts?: {
@@ -298,220 +298,220 @@ export function generateAllRoutes(junction: JunctionConfig, junctionObjectRefs: 
 
     // First we look at internal routing for structures
 
-    
+
     for (const obj of junction.junctionObjects) {
-    const group = getGroupById(junctionObjectRefs, obj.id);
-    if (!group) {
-        continue;
+        const group = getGroupById(junctionObjectRefs, obj.id);
+        if (!group) {
+            continue;
+        }
+
+        const exitConfigs = obj.config.exitConfig;
+
+
+        // Enumerate possible exits into an object
+        for (let eIN = 0; eIN < exitConfigs.length; eIN++) {
+
+            const numIncomingLanes = inCount(exitConfigs[eIN]);
+
+            // Get available exit indices (excluding U-turn) in clockwise order from entry
+            const availableExitIndices: number[] = [];
+            for (let offset = 1; offset < exitConfigs.length; offset++) {
+                const e = (eIN + offset) % exitConfigs.length;
+                if (disallowUTurn && e === eIN) continue;
+                if (outCount(exitConfigs[e]) > 0) {
+                    availableExitIndices.push(e);
+                }
+            }
+
+            if (availableExitIndices.length === 0) continue;
+
+            console.log(`\n=== Entry Exit ${eIN}, ${numIncomingLanes} lanes ===`);
+
+            // Calculate total outgoing lanes across ALL exits
+            const totalOutgoingLanes = availableExitIndices.reduce(
+                (sum, e) => sum + outCount(exitConfigs[e]),
+                0
+            );
+
+            console.log(`Total outgoing lanes across all exits: ${totalOutgoingLanes}`);
+
+            // Apply your logic based on incoming vs total outgoing
+            if (numIncomingLanes === totalOutgoingLanes) {
+                // Case 1: Equal - strict 1-to-1 mapping
+                console.log(`  Case 1: Equal lanes (${numIncomingLanes} = ${totalOutgoingLanes})`);
+
+                let globalOutLane = 0;
+                for (const eOUT of availableExitIndices) {
+                    const numOutLanes = outCount(exitConfigs[eOUT]);
+                    for (let lOUT = 0; lOUT < numOutLanes; lOUT++) {
+                        const lIN = globalOutLane;
+                        console.log(`    Lane ${lIN} → Exit ${eOUT} Lane ${lOUT}`);
+
+                        const from: LaneEndPoint = {
+                            structureID: obj.id,
+                            exitIndex: eIN,
+                            direction: "in",
+                            laneIndex: lIN
+                        };
+
+                        const to: LaneEndPoint = {
+                            structureID: obj.id,
+                            exitIndex: eOUT,
+                            direction: "out",
+                            laneIndex: lOUT
+                        };
+
+                        const points = obj.type === "intersection"
+                            ? generateIntersectionPath(group, { exitIndex: eIN, laneIndex: lIN }, { exitIndex: eOUT, laneIndex: lOUT })
+                            : generateRoundaboutPath(group, { exitIndex: eIN, laneIndex: lIN }, { exitIndex: eOUT, laneIndex: lOUT });
+
+                        addEdge(mainG, keyOf(from), { to: keyOf(to), points, kind: "internal" });
+                        globalOutLane++;
+                    }
+                }
+
+            }
+            else if (numIncomingLanes < totalOutgoingLanes) {
+                // Case 2: More outgoing - 1-to-1 then last lane gets remaining
+                console.log(`  Case 2: More outgoing lanes (${numIncomingLanes} < ${totalOutgoingLanes})`);
+
+                let globalOutLane = 0;
+                for (const eOUT of availableExitIndices) {
+                    const numOutLanes = outCount(exitConfigs[eOUT]);
+                    for (let lOUT = 0; lOUT < numOutLanes; lOUT++) {
+                        const lIN = Math.min(globalOutLane, numIncomingLanes - 1);
+                        console.log(`    Lane ${lIN} → Exit ${eOUT} Lane ${lOUT}`);
+
+                        const from: LaneEndPoint = {
+                            structureID: obj.id,
+                            exitIndex: eIN,
+                            direction: "in",
+                            laneIndex: lIN
+                        };
+
+                        const to: LaneEndPoint = {
+                            structureID: obj.id,
+                            exitIndex: eOUT,
+                            direction: "out",
+                            laneIndex: lOUT
+                        };
+
+                        const points = obj.type === "intersection"
+                            ? generateIntersectionPath(group, { exitIndex: eIN, laneIndex: lIN }, { exitIndex: eOUT, laneIndex: lOUT })
+                            : generateRoundaboutPath(group, { exitIndex: eIN, laneIndex: lIN }, { exitIndex: eOUT, laneIndex: lOUT });
+
+                        addEdge(mainG, keyOf(from), { to: keyOf(to), points, kind: "internal" });
+                        globalOutLane++;
+                    }
+                }
+
+            }
+            else {
+                // Case 3: More incoming - 1-to-1 with surplus carrying over (recursive logic)
+                console.log(`  Case 3: More incoming lanes (${numIncomingLanes} > ${totalOutgoingLanes})`);
+
+                let remainingIncomingLanes = numIncomingLanes;
+                let currentIncomingLaneStart = 0;
+
+                for (const eOUT of availableExitIndices) {
+                    const numOutLanes = outCount(exitConfigs[eOUT]);
+
+                    if (remainingIncomingLanes === 0) break;
+
+                    console.log(`\n    Processing Exit ${eOUT} (${numOutLanes} out lanes), ${remainingIncomingLanes} incoming lanes remaining`);
+
+                    // Apply the same logic recursively for this sub-problem
+                    if (remainingIncomingLanes === numOutLanes) {
+                        // Sub-case 1: Equal
+                        for (let i = 0; i < numOutLanes; i++) {
+                            const lIN = currentIncomingLaneStart + i;
+                            console.log(`      Lane ${lIN} → Exit ${eOUT} Lane ${i}`);
+
+                            const from: LaneEndPoint = {
+                                structureID: obj.id,
+                                exitIndex: eIN,
+                                direction: "in",
+                                laneIndex: lIN
+                            };
+
+                            const to: LaneEndPoint = {
+                                structureID: obj.id,
+                                exitIndex: eOUT,
+                                direction: "out",
+                                laneIndex: i
+                            };
+
+                            const points = obj.type === "intersection"
+                                ? generateIntersectionPath(group, { exitIndex: eIN, laneIndex: lIN }, { exitIndex: eOUT, laneIndex: i })
+                                : generateRoundaboutPath(group, { exitIndex: eIN, laneIndex: lIN }, { exitIndex: eOUT, laneIndex: i });
+
+                            addEdge(mainG, keyOf(from), { to: keyOf(to), points, kind: "internal" });
+                        }
+                        remainingIncomingLanes = 0;
+
+                    }
+                    else if (remainingIncomingLanes < numOutLanes) {
+                        // Sub-case 2: More out lanes
+                        for (let i = 0; i < numOutLanes; i++) {
+                            const lIN = currentIncomingLaneStart + Math.min(i, remainingIncomingLanes - 1);
+                            console.log(`      Lane ${lIN} → Exit ${eOUT} Lane ${i}`);
+
+                            const from: LaneEndPoint = {
+                                structureID: obj.id,
+                                exitIndex: eIN,
+                                direction: "in",
+                                laneIndex: lIN
+                            };
+
+                            const to: LaneEndPoint = {
+                                structureID: obj.id,
+                                exitIndex: eOUT,
+                                direction: "out",
+                                laneIndex: i
+                            };
+
+                            const points = obj.type === "intersection"
+                                ? generateIntersectionPath(group, { exitIndex: eIN, laneIndex: lIN }, { exitIndex: eOUT, laneIndex: i })
+                                : generateRoundaboutPath(group, { exitIndex: eIN, laneIndex: lIN }, { exitIndex: eOUT, laneIndex: i });
+
+                            addEdge(mainG, keyOf(from), { to: keyOf(to), points, kind: "internal" });
+                        }
+                        remainingIncomingLanes = 0;
+
+                    }
+                    else {
+                        // Sub-case 3: More in lanes - carry over
+                        for (let i = 0; i < numOutLanes; i++) {
+                            const lIN = currentIncomingLaneStart + i;
+                            console.log(`      Lane ${lIN} → Exit ${eOUT} Lane ${i}`);
+
+                            const from: LaneEndPoint = {
+                                structureID: obj.id,
+                                exitIndex: eIN,
+                                direction: "in",
+                                laneIndex: lIN
+                            };
+
+                            const to: LaneEndPoint = {
+                                structureID: obj.id,
+                                exitIndex: eOUT,
+                                direction: "out",
+                                laneIndex: i
+                            };
+
+                            const points = obj.type === "intersection"
+                                ? generateIntersectionPath(group, { exitIndex: eIN, laneIndex: lIN }, { exitIndex: eOUT, laneIndex: i })
+                                : generateRoundaboutPath(group, { exitIndex: eIN, laneIndex: lIN }, { exitIndex: eOUT, laneIndex: i });
+
+                            addEdge(mainG, keyOf(from), { to: keyOf(to), points, kind: "internal" });
+                        }
+                        currentIncomingLaneStart += numOutLanes;
+                        remainingIncomingLanes -= numOutLanes;
+                    }
+                }
+            }
+        }
     }
-
-    const exitConfigs = obj.config.exitConfig;
-    
-
-    // Enumerate possible exits into an object
-    for (let eIN = 0; eIN < exitConfigs.length; eIN++) {
-
-        const numIncomingLanes = inCount(exitConfigs[eIN]);
-
-        // Get available exit indices (excluding U-turn) in clockwise order from entry
-        const availableExitIndices: number[] = [];
-        for (let offset = 1; offset < exitConfigs.length; offset++) {
-            const e = (eIN + offset) % exitConfigs.length;
-            if (disallowUTurn && e === eIN) continue;
-            if (outCount(exitConfigs[e]) > 0) {
-                availableExitIndices.push(e);
-            }
-        }
-
-        if (availableExitIndices.length === 0) continue;
-
-        console.log(`\n=== Entry Exit ${eIN}, ${numIncomingLanes} lanes ===`);
-
-        // Calculate total outgoing lanes across ALL exits
-        const totalOutgoingLanes = availableExitIndices.reduce(
-            (sum, e) => sum + outCount(exitConfigs[e]), 
-            0
-        );
-
-        console.log(`Total outgoing lanes across all exits: ${totalOutgoingLanes}`);
-
-        // Apply your logic based on incoming vs total outgoing
-        if (numIncomingLanes === totalOutgoingLanes) {
-            // Case 1: Equal - strict 1-to-1 mapping
-            console.log(`  Case 1: Equal lanes (${numIncomingLanes} = ${totalOutgoingLanes})`);
-            
-            let globalOutLane = 0;
-            for (const eOUT of availableExitIndices) {
-                const numOutLanes = outCount(exitConfigs[eOUT]);
-                for (let lOUT = 0; lOUT < numOutLanes; lOUT++) {
-                    const lIN = globalOutLane;
-                    console.log(`    Lane ${lIN} → Exit ${eOUT} Lane ${lOUT}`);
-                    
-                    const from: LaneEndPoint = {
-                        structureID: obj.id,
-                        exitIndex: eIN,
-                        direction: "in",
-                        laneIndex: lIN
-                    };
-
-                    const to: LaneEndPoint = {
-                        structureID: obj.id,
-                        exitIndex: eOUT,
-                        direction: "out",
-                        laneIndex: lOUT
-                    };
-
-                    const points = obj.type === "intersection"
-                        ? generateIntersectionPath(group, { exitIndex: eIN, laneIndex: lIN }, { exitIndex: eOUT, laneIndex: lOUT })
-                        : generateRoundaboutPath(group, { exitIndex: eIN, laneIndex: lIN }, { exitIndex: eOUT, laneIndex: lOUT });
-
-                    addEdge(mainG, keyOf(from), { to: keyOf(to), points, kind: "internal" });
-                    globalOutLane++;
-                }
-            }
-            
-        } 
-        else if (numIncomingLanes < totalOutgoingLanes) {
-            // Case 2: More outgoing - 1-to-1 then last lane gets remaining
-            console.log(`  Case 2: More outgoing lanes (${numIncomingLanes} < ${totalOutgoingLanes})`);
-            
-            let globalOutLane = 0;
-            for (const eOUT of availableExitIndices) {
-                const numOutLanes = outCount(exitConfigs[eOUT]);
-                for (let lOUT = 0; lOUT < numOutLanes; lOUT++) {
-                    const lIN = Math.min(globalOutLane, numIncomingLanes - 1);
-                    console.log(`    Lane ${lIN} → Exit ${eOUT} Lane ${lOUT}`);
-                    
-                    const from: LaneEndPoint = {
-                        structureID: obj.id,
-                        exitIndex: eIN,
-                        direction: "in",
-                        laneIndex: lIN
-                    };
-
-                    const to: LaneEndPoint = {
-                        structureID: obj.id,
-                        exitIndex: eOUT,
-                        direction: "out",
-                        laneIndex: lOUT
-                    };
-
-                    const points = obj.type === "intersection"
-                        ? generateIntersectionPath(group, { exitIndex: eIN, laneIndex: lIN }, { exitIndex: eOUT, laneIndex: lOUT })
-                        : generateRoundaboutPath(group, { exitIndex: eIN, laneIndex: lIN }, { exitIndex: eOUT, laneIndex: lOUT });
-
-                    addEdge(mainG, keyOf(from), { to: keyOf(to), points, kind: "internal" });
-                    globalOutLane++;
-                }
-            }
-            
-        }
-        else {
-            // Case 3: More incoming - 1-to-1 with surplus carrying over (recursive logic)
-            console.log(`  Case 3: More incoming lanes (${numIncomingLanes} > ${totalOutgoingLanes})`);
-            
-            let remainingIncomingLanes = numIncomingLanes;
-            let currentIncomingLaneStart = 0;
-
-            for (const eOUT of availableExitIndices) {
-                const numOutLanes = outCount(exitConfigs[eOUT]);
-                
-                if (remainingIncomingLanes === 0) break;
-
-                console.log(`\n    Processing Exit ${eOUT} (${numOutLanes} out lanes), ${remainingIncomingLanes} incoming lanes remaining`);
-
-                // Apply the same logic recursively for this sub-problem
-                if (remainingIncomingLanes === numOutLanes) {
-                    // Sub-case 1: Equal
-                    for (let i = 0; i < numOutLanes; i++) {
-                        const lIN = currentIncomingLaneStart + i;
-                        console.log(`      Lane ${lIN} → Exit ${eOUT} Lane ${i}`);
-                        
-                        const from: LaneEndPoint = {
-                            structureID: obj.id,
-                            exitIndex: eIN,
-                            direction: "in",
-                            laneIndex: lIN
-                        };
-
-                        const to: LaneEndPoint = {
-                            structureID: obj.id,
-                            exitIndex: eOUT,
-                            direction: "out",
-                            laneIndex: i
-                        };
-
-                        const points = obj.type === "intersection"
-                            ? generateIntersectionPath(group, { exitIndex: eIN, laneIndex: lIN }, { exitIndex: eOUT, laneIndex: i })
-                            : generateRoundaboutPath(group, { exitIndex: eIN, laneIndex: lIN }, { exitIndex: eOUT, laneIndex: i });
-
-                        addEdge(mainG, keyOf(from), { to: keyOf(to), points, kind: "internal" });
-                    }
-                    remainingIncomingLanes = 0;
-                    
-                } 
-                else if (remainingIncomingLanes < numOutLanes) {
-                    // Sub-case 2: More out lanes
-                    for (let i = 0; i < numOutLanes; i++) {
-                        const lIN = currentIncomingLaneStart + Math.min(i, remainingIncomingLanes - 1);
-                        console.log(`      Lane ${lIN} → Exit ${eOUT} Lane ${i}`);
-                        
-                        const from: LaneEndPoint = {
-                            structureID: obj.id,
-                            exitIndex: eIN,
-                            direction: "in",
-                            laneIndex: lIN
-                        };
-
-                        const to: LaneEndPoint = {
-                            structureID: obj.id,
-                            exitIndex: eOUT,
-                            direction: "out",
-                            laneIndex: i
-                        };
-
-                        const points = obj.type === "intersection"
-                            ? generateIntersectionPath(group, { exitIndex: eIN, laneIndex: lIN }, { exitIndex: eOUT, laneIndex: i })
-                            : generateRoundaboutPath(group, { exitIndex: eIN, laneIndex: lIN }, { exitIndex: eOUT, laneIndex: i });
-
-                        addEdge(mainG, keyOf(from), { to: keyOf(to), points, kind: "internal" });
-                    }
-                    remainingIncomingLanes = 0;
-                    
-                } 
-                else {
-                    // Sub-case 3: More in lanes - carry over
-                    for (let i = 0; i < numOutLanes; i++) {
-                        const lIN = currentIncomingLaneStart + i;
-                        console.log(`      Lane ${lIN} → Exit ${eOUT} Lane ${i}`);
-                        
-                        const from: LaneEndPoint = {
-                            structureID: obj.id,
-                            exitIndex: eIN,
-                            direction: "in",
-                            laneIndex: lIN
-                        };
-
-                        const to: LaneEndPoint = {
-                            structureID: obj.id,
-                            exitIndex: eOUT,
-                            direction: "out",
-                            laneIndex: i
-                        };
-
-                        const points = obj.type === "intersection"
-                            ? generateIntersectionPath(group, { exitIndex: eIN, laneIndex: lIN }, { exitIndex: eOUT, laneIndex: i })
-                            : generateRoundaboutPath(group, { exitIndex: eIN, laneIndex: lIN }, { exitIndex: eOUT, laneIndex: i });
-
-                        addEdge(mainG, keyOf(from), { to: keyOf(to), points, kind: "internal" });
-                    }
-                    currentIncomingLaneStart += numOutLanes;
-                    remainingIncomingLanes -= numOutLanes;
-                }
-            }
-        }
-    }
-}
 
 
     // Next we look at links between components
@@ -540,10 +540,10 @@ export function generateAllRoutes(junction: JunctionConfig, junctionObjectRefs: 
         const configB = objB.config.exitConfig[b.exitIndex];
 
         const outA = outCount(configA);
-        const inA  = inCount(configA);
+        const inA = inCount(configA);
 
         const outB = outCount(configB);
-        const inB  = inCount(configB);
+        const inB = inCount(configB);
 
         const lanesAB = Math.min(outA, inB);
         const lanesBA = Math.min(outB, inA);
@@ -551,13 +551,13 @@ export function generateAllRoutes(junction: JunctionConfig, junctionObjectRefs: 
         console.log(lanesAB + "" + lanesBA);
 
         const outStartA = outboundBoundaryStart(outA, inA, driverSide);
-        const inStartA  = inboundBoundaryStart(outA, inA, driverSide);
+        const inStartA = inboundBoundaryStart(outA, inA, driverSide);
 
         // AB
         for (let i = 0; i < lanesAB; i++) {
             const leftBoundary = outStartA + i;
             const rightBoundary = outStartA + i + 1;
-            
+
             if (!laneCurves[leftBoundary] || !laneCurves[rightBoundary]) {
                 console.warn(`Missing boundaries for lane ${i}: ${leftBoundary}, ${rightBoundary}`);
                 continue;
@@ -566,7 +566,7 @@ export function generateAllRoutes(junction: JunctionConfig, junctionObjectRefs: 
             const points = getMidCurve(laneCurves[leftBoundary], laneCurves[rightBoundary]);
 
             const from: LaneEndPoint = { structureID: a.structureID, exitIndex: a.exitIndex, direction: "out", laneIndex: i };
-            const to:   LaneEndPoint = { structureID: b.structureID, exitIndex: b.exitIndex, direction: "in",  laneIndex: i };
+            const to: LaneEndPoint = { structureID: b.structureID, exitIndex: b.exitIndex, direction: "in", laneIndex: i };
 
             addEdge(mainG, keyOf(from), { to: keyOf(to), points, kind: "link" });
             hasOutgoingLink.add(keyOf(from));
@@ -577,7 +577,7 @@ export function generateAllRoutes(junction: JunctionConfig, junctionObjectRefs: 
         for (let i = 0; i < lanesBA; i++) {
             const leftBoundary = inStartA + i;
             const rightBoundary = inStartA + i + 1;
-            
+
             if (!laneCurves[leftBoundary] || !laneCurves[rightBoundary]) {
                 console.warn(`Missing boundaries for lane ${i}: ${leftBoundary}, ${rightBoundary}`);
                 continue;
@@ -586,7 +586,7 @@ export function generateAllRoutes(junction: JunctionConfig, junctionObjectRefs: 
             const points = getMidCurve(laneCurves[rightBoundary], laneCurves[leftBoundary]).slice().reverse();
 
             const from: LaneEndPoint = { structureID: b.structureID, exitIndex: b.exitIndex, direction: "out", laneIndex: i };
-            const to:   LaneEndPoint = { structureID: a.structureID, exitIndex: a.exitIndex, direction: "in",  laneIndex: i };
+            const to: LaneEndPoint = { structureID: a.structureID, exitIndex: a.exitIndex, direction: "in", laneIndex: i };
 
             addEdge(mainG, keyOf(from), { to: keyOf(to), points, kind: "link" });
             hasOutgoingLink.add(keyOf(from));
@@ -652,41 +652,54 @@ export function generateAllRoutes(junction: JunctionConfig, junctionObjectRefs: 
     };
 
     const routes: Route[] = [];
+    const structureIdOf = (k: NodeKey): string => {
+        const parts = k.split("-");
+        // keyOf = `${structureID}-${exitIndex}-${direction}-${laneIndex}`
+        // structureID may contain '-' so it's everything except the last 3 parts
+        return parts.slice(0, -3).join("-");
+    };
 
     for (const s of starts) {
+        const startStructureID = structureIdOf(s);
 
         const stack: {
             node: NodeKey;
             nodes: NodeKey[];
             points: [number, number, number][];
-            visited: Set<NodeKey>
+            visited: Set<NodeKey>;
+            leftStart: boolean; // NEW
         }[] = [{
             node: s,
             nodes: [s],
             points: [],
-            visited: new Set([s])
+            visited: new Set([s]),
+            leftStart: false,
         }];
 
-
         while (stack.length) {
-
             const current = stack.pop()!;
 
             if (ends.has(current.node)) {
-                routes.push({
-                    nodes: current.nodes,
-                    points: current.points
-                });
+                // If you want to exclude only "true loops" (left then came back), this is enough:
+                // current.leftStart could still be false for routes that never leave start object (that's fine).
+                routes.push({ nodes: current.nodes, points: current.points });
                 continue;
             }
 
-            if (current.nodes.length >= maxSteps) {
-                continue;
-            }
+            if (current.nodes.length >= maxSteps) continue;
 
             for (const e of (mainG.get(current.node) ?? [])) {
+                if (current.visited.has(e.to)) continue;
 
-                if (current.visited.has(e.to)) {
+                const toStructureID = structureIdOf(e.to);
+                const nextLeftStart =
+                    current.leftStart || (toStructureID !== startStructureID);
+
+                if (
+                    disallowUTurn &&
+                    current.leftStart &&
+                    toStructureID === startStructureID
+                ) {
                     continue;
                 }
 
@@ -694,14 +707,15 @@ export function generateAllRoutes(junction: JunctionConfig, junctionObjectRefs: 
                     node: e.to,
                     nodes: [...current.nodes, e.to],
                     points: [...current.points, ...e.points],
-                    visited: new Set([...current.visited, e.to])
+                    visited: new Set([...current.visited, e.to]),
+                    leftStart: nextLeftStart,
                 });
-
             }
 
         }
     }
-    
+
+
     return { routes, graph: mainG, starts, ends }
 
 }
