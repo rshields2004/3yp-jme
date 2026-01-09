@@ -8,7 +8,7 @@ import type { ExitConfig, JunctionLink } from "../includes/types/types";
 import type { ExitStructure } from "../includes/types/intersection";
 import React from "react"
 import { RoundaboutExitStructure } from "../includes/types/roundabout";
-import { getMidCurve } from "../includes/carRouting";
+import { getMidCurve } from "../includes/junctionmanagerutils/carRouting";
 
 type LinkComponentProps = {
     link: JunctionLink;

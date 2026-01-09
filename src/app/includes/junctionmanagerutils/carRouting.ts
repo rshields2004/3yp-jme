@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { RingLaneStructure } from "./types/roundabout";
-import { ExitConfig, JunctionConfig, JunctionObject } from "./types/types";
+import { RingLaneStructure } from "../types/roundabout";
+import { ExitConfig, JunctionConfig, JunctionObject } from "../types/types";
 
 
 function getLaneWorldPoint(

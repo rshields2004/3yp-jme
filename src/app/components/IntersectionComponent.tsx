@@ -7,7 +7,7 @@ import { generateEdgeTubes, generateExitMesh, generateFloorMesh, generateLaneLin
 import { Text } from "@react-three/drei";
 import React from "react";
 import { ThreeEvent, useFrame } from "@react-three/fiber";
-import { generateIntersectionPath } from "../includes/carRouting";
+import { generateIntersectionPath } from "../includes/junctionmanagerutils/carRouting";
 import { exit } from "process";
 
 

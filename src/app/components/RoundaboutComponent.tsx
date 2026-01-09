@@ -7,7 +7,7 @@ import { generateEdgeTubesRound, generateExitMesh, generateLaneLinesRound, gener
 import React from "react";
 import { Text } from "@react-three/drei";
 import { ThreeEvent, useFrame } from "@react-three/fiber";
-import { generateRoundaboutPath } from "../includes/carRouting";
+import { generateRoundaboutPath } from "../includes/junctionmanagerutils/carRouting";
 
 
 
