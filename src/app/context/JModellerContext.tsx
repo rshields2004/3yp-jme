@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, ReactNode, useRef  } from "react";
+import React, { createContext, useContext, useState, ReactNode, useRef } from "react";
 import { Car, ExitRef, IntersectionTrafficController, JModellerState, JunctionConfig } from "../includes/types/types";
 import { defaultJunctionConfig } from "../includes/defaults";
 import * as THREE from "three";
@@ -10,16 +10,16 @@ const JModellerContext = createContext<JModellerState | undefined>(undefined);
 
 export const JModellerProvider = ({ children }: { children: ReactNode }) => {
 
-    
+
     const [junction, setJunction] = useState<JunctionConfig>(defaultJunctionConfig);
     const [selectedObjects, setSelectedObjects] = useState<string[]>([]);
     const [selectedExits, setSelectedExits] = useState<ExitRef[]>([]);
     const [simIsRunning, setSimIsRunning] = useState<boolean>(false);
-    
+
 
 
     // Simulation
-    const trafficControllers = useRef<{[id: string]: IntersectionTrafficController}>({});
+    const trafficControllers = useRef<{ [id: string]: IntersectionTrafficController }>({});
     const [cars, setCars] = useState<Car[]>([]);
 
 
@@ -40,7 +40,7 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
 
 
     const unregisterJunctionObject = (group: THREE.Group) => {
-        
+
         junctionObjectRefs.current = junctionObjectRefs.current.filter(g => g !== group);
 
         group.traverse((obj: THREE.Object3D) => {
@@ -58,22 +58,33 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
 
 
     const snapToValidPosition = (draggedGroup: THREE.Group) => {
-        
-        if (!draggedGroup?.userData?.id) {
-            return;
-        }
+        const draggedID = draggedGroup?.userData?.id;
+        if (!draggedID) return;
 
-        const draggedID = draggedGroup.userData.id;
-        const draggedRadius = draggedGroup.userData.maxDistanceToStopLine || 0;
+        // Use world positions (robust if groups move / detach / reparent)
+        const draggedWorld = new THREE.Vector3();
+        draggedGroup.getWorldPosition(draggedWorld);
 
-        const otherObjects = junctionObjectRefs.current.filter(g => g.userData.id !== draggedID)
-        .filter(g => g.userData.type !== "link")
-        .map(g => ({
-            pos: g.position,
-            radius: g.userData.maxDistanceToStopLine || 0,
-        }));
+        const draggedRadius = Number(draggedGroup.userData.maxDistanceToStopLine) || 0;
 
-        const newPos = draggedGroup.position.clone();
+        const tmp = new THREE.Vector3();
+
+        const otherObjects = junctionObjectRefs.current
+            .filter((g): g is THREE.Group => !!g)
+            .filter(g => g !== draggedGroup)                         // prefer reference check
+            .filter(g => !!g.userData?.id)                           // ignore invalid
+            .filter(g => g.userData.type !== "link")
+            .filter(g => !!g.parent)                                 // ignore detached/deleted
+            .map(g => {
+                const pos = new THREE.Vector3();
+                g.getWorldPosition(pos);
+                return {
+                    pos,
+                    radius: Number(g.userData.maxDistanceToStopLine) || 0,
+                };
+            });
+
+        const newWorldPos = draggedWorld.clone();
         let safe = false;
         let maxIterations = 50;
 
@@ -81,37 +92,38 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
             safe = true;
 
             for (const { pos: otherPos, radius: otherRadius } of otherObjects) {
-                const dist = newPos.distanceTo(otherPos);
+                const dist = newWorldPos.distanceTo(otherPos);
                 const minDist = draggedRadius + otherRadius;
 
                 if (dist < minDist) {
                     safe = false;
 
-                    const pushDir = newPos.clone().sub(otherPos);
+                    const pushDir = tmp.copy(newWorldPos).sub(otherPos);
 
-                    // If exactly overlapping or close to running out of iterations, pick a random direction
                     if (pushDir.lengthSq() === 0 || maxIterations < 10) {
                         const angle = Math.random() * 2 * Math.PI;
                         pushDir.set(Math.cos(angle), 0, Math.sin(angle));
-                    } 
-                    else {
+                    } else {
                         pushDir.normalize();
                     }
 
-                    // Move by the overlap amount + small epsilon
-                    newPos.add(pushDir.multiplyScalar(minDist - dist + 0.01));
+                    newWorldPos.add(pushDir.multiplyScalar(minDist - dist + 0.01));
                 }
             }
         }
 
-        // Snap the dragged group to the computed valid position
-        draggedGroup.position.copy(newPos);
+        // Convert world position back into draggedGroup's local space
+        if (draggedGroup.parent) {
+            draggedGroup.parent.worldToLocal(newWorldPos);
+        }
+        draggedGroup.position.copy(newWorldPos);
     };
+
 
     // const setBestRotation = () => {
 
     //     for (const link of junction.junctionLinks) {
-            
+
     //         const [exitRefA, exitRefB] = link.objectPair;
 
     //         const junctionA = junctionObjectRefs.current.find(j => j.userData.id === exitRefA.structureID);
@@ -165,7 +177,7 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
 
             // Only change the current exit
             const current = controller.stopLinesQueue[controller.currentIndex];
-            
+
             const colour = controller.sequence[controller.currentStep];
 
             switch (colour) {
@@ -218,7 +230,7 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
         }));
 
         setSelectedObjects(prev => prev.filter(id => id !== objID));
-        setSelectedExits(prev => prev.filter(exit => exit.structureID!== objID));
+        setSelectedExits(prev => prev.filter(exit => exit.structureID !== objID));
 
         const groupIndex = junctionObjectRefs.current.findIndex(g => g.userData.id === objID);
         if (groupIndex !== -1) {
@@ -244,7 +256,7 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
         junction.junctionObjects.filter(o => o.type === "intersection").forEach(i => stopIntersectionSequence(i.id));
     };
 
-    
+
 
     return (
         <JModellerContext.Provider value={{

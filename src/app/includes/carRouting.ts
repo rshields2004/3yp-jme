@@ -62,7 +62,9 @@ export function generateIntersectionPath(
         const a = d1.x, b = -d2.x, c = p2.x - p1.x;
         const d = d1.z, e = -d2.z, f = p2.z - p1.z;
         const denom = a * e - b * d;
-        if (Math.abs(denom) < 1e-6) return null; // parallel
+        if (Math.abs(denom) < 1e-6) {
+            return null; // parallel
+        }
         const t = (c * e - b * f) / denom;
         const intersection = p1.clone().add(d1.clone().multiplyScalar(t));
         intersection.y = (p1.y + p2.y) / 2;
