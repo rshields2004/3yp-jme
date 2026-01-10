@@ -112,7 +112,7 @@ export const TrafficSimulation = () => {
             vehicleManagerRef.current = new VehicleManager(scene, routes, carModelsRef.current, {
                 mode: "fixedcount",
                 spawnInterval: 1.0,
-                maxVehicles: 5,
+                maxVehicles: 30,
                 minSpawnGap: 15.0,
             });
 
@@ -133,19 +133,15 @@ export const TrafficSimulation = () => {
         const junctionManager = junctionManagerRef.current;
 
         if (!vehicleManager || !junctionManager) return;
+        const vehicles = vehicleManager.getVehicles();
 
         // Update vehicle manager (spawning, physics, removal)
+        junctionManager.update(vehicles, delta);
+        
         vehicleManager.update(delta);
 
         // Update junction manager (state transitions, traffic rules)
-        const vehicles = vehicleManager.getVehicles();
-        junctionManager.update(vehicles, delta);
 
-        // Optional: Log stats every few seconds
-        if (Math.floor(state.clock.elapsedTime) % 5 === 0 && delta < 0.1) {
-            const stats = vehicleManager.getStats();
-            console.log(`Traffic stats - Active: ${stats.active}, Spawned: ${stats.totalSpawned}, Completed: ${stats.totalCompleted}`);
-        }
     });
 
     return (

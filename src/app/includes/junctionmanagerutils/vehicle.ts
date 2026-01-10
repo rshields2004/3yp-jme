@@ -16,6 +16,8 @@ export type VehicleRoute = {
 
 export class Vehicle {
 
+    static nextID: number = 0;
+    readonly ID: number;
     
     model: THREE.Group;
 
@@ -42,6 +44,8 @@ export class Vehicle {
 
     minFollowDistance: number = 2.0;
     timeHeadway: number = 1.5;
+    
+    distanceTravelled: number = 0;
 
     vehicleAhead: Vehicle | null = null;
 
@@ -50,7 +54,7 @@ export class Vehicle {
         const randomIndex = Math.floor(Math.random() * modelTemplates.length);
         const selectedTemplate = modelTemplates[randomIndex];
 
-
+        this.ID = Vehicle.nextID++;
         this.model = selectedTemplate.clone();
 
 
@@ -100,34 +104,29 @@ export class Vehicle {
 
 
     private calculateTargetSpeed(): number {
-
         let desiredSpeed = this.maxSpeed;
 
-
-        switch (this.state) {
-            case VehicleState.WAITING_AT_JUNCTION:
-                const approachDistance = 10;
-                if (this.distanceToNextJunction < approachDistance) {
-                    const slowdownFactor = this.distanceToNextJunction / approachDistance;
-                    desiredSpeed = Math.min(desiredSpeed, this.maxSpeed * slowdownFactor);
-                }
-                break;
-
-            case VehicleState.CROSSING_JUNCTION:
-                desiredSpeed = Math.min(desiredSpeed, this.maxSpeed * this.slowDownFactor);
-                break;
-        }
-
+        // FIRST: Check car following (this takes priority over everything)
         if (this.vehicleAhead) {
             const gap = this.getDistanceToVehicle(this.vehicleAhead);
-
             const desiredGap = this.minFollowDistance + (this.speed * this.timeHeadway);
 
-            if (gap < desiredGap) {
-
-                const speedDiff = this.speed - this.vehicleAhead.speed;
+            // Emergency stop if gap is very small or negative (overlapping)
+            if (gap < 1.0) {
+                return 0;
+            }
+            
+            // If vehicle ahead is stopped, we need to stop too with safe gap
+            if (this.vehicleAhead.speed < 0.1) {
+                if (gap < this.minFollowDistance + 2) {
+                    return 0;
+                }
+                // Slow down proportionally as we approach
+                const approachFactor = Math.max(0.1, (gap - this.minFollowDistance) / 20);
+                desiredSpeed = Math.min(desiredSpeed, this.maxSpeed * approachFactor);
+            }
+            else if (gap < desiredGap) {
                 desiredSpeed = Math.min(desiredSpeed, this.vehicleAhead.speed);
-
 
                 if (gap < this.minFollowDistance) {
                     desiredSpeed = Math.max(0, this.vehicleAhead.speed - 2);
@@ -135,6 +134,26 @@ export class Vehicle {
             }
         }
 
+        // THEN: Check junction state
+        switch (this.state) {
+            case VehicleState.WAITING_AT_JUNCTION:
+                // When told to wait, stop immediately
+                // The junction manager already determines WHEN to set this state
+                // based on distance thresholds, so we just need to obey
+                return 0;
+            
+            case VehicleState.APPROACHING_JUNCTION:
+                const approachDistance = 30;
+                if (this.distanceToNextJunction < approachDistance) {
+                    const slowdownFactor = Math.max(0.3, this.distanceToNextJunction / approachDistance);
+                    desiredSpeed = Math.min(desiredSpeed, this.maxSpeed * slowdownFactor);
+                }
+                break;
+
+            case VehicleState.CROSSING_JUNCTION:
+                desiredSpeed = Math.min(desiredSpeed, this.maxSpeed * 0.6);
+                break;
+        }
 
         return Math.max(0, desiredSpeed);
     }
@@ -166,6 +185,7 @@ export class Vehicle {
         }
 
         const distanceToMove = this.speed * timeDelta;
+        this.distanceTravelled += distanceToMove
         let remainingDistance = distanceToMove;
 
 
@@ -199,8 +219,8 @@ export class Vehicle {
             else {
                 
                 const direction = nextPoint.clone().sub(this.position).normalize();
-                this.position.add(direction.multiplyScalar(remainingDistance));
-                this.direction.copy(direction);
+                this.direction.copy(direction);  // Copy normalized direction FIRST
+                this.position.add(direction.clone().multiplyScalar(remainingDistance));  // Clone before scaling
                 remainingDistance = 0;
             }
         }

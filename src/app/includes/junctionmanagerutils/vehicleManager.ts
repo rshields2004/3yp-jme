@@ -48,14 +48,15 @@ export class VehicleManager {
 
 
     update(timeDelta: number): void {
+        this.updateVehicleRelationships();
 
         this.updateSpawning(timeDelta);
+
 
         for (const vehicle of this.vehicles) {
             vehicle.update(timeDelta);
         }
 
-        this.updateVehicleRelationships();
         this.removeCompletedVehicles();
     }
 
@@ -110,7 +111,6 @@ export class VehicleManager {
     }
 
     private hasSpaceAtRouteStart(route: VehicleRoute): boolean {
-
         if (route.points.length === 0) {
             return false;
         }
@@ -118,17 +118,21 @@ export class VehicleManager {
         const startPoint = new THREE.Vector3(...route.points[0]);
         const minGap = this.config.minSpawnGap ?? 15;
 
+        console.log(`Checking spawn at (${startPoint.x.toFixed(1)}, ${startPoint.z.toFixed(1)}), minGap=${minGap}`);
+        
+        // Check ALL vehicles, regardless of route
         for (const vehicle of this.vehicles) {
-
-            if (vehicle.route === route || this.areRoutesEqual(vehicle.route, route)) {
-                const distance = vehicle.position.distanceTo(startPoint);
-
-                if (distance < minGap && vehicle.routeIndex < route.points.length * 0.2) {
-                    return false;
-                }
-
+            const distance = vehicle.position.distanceTo(startPoint);
+            
+            console.log(`  - Vehicle at (${vehicle.position.x.toFixed(1)}, ${vehicle.position.z.toFixed(1)}), distance=${distance.toFixed(1)}m`);
+            
+            if (distance < minGap) {
+            console.log(`  → TOO CLOSE! Blocking spawn.`);
+            return false;
             }
         }
+        
+        console.log(`  → OK to spawn!`);
         return true;
     }
 
@@ -151,52 +155,51 @@ export class VehicleManager {
     }
 
     private findVehicleAhead(vehicle: Vehicle): Vehicle | null {
-
         let closestVehicle: Vehicle | null = null;
-        let minDistance = Infinity;
+        let minForwardDistance = Infinity;
         const searchRadius = 50;
-
+        const laneWidth = 3.0;
+        
         for (const other of this.vehicles) {
-
-            if (other === vehicle) {
-                continue;
-            }
-
+            if (other === vehicle) continue;
+            
             const distance = vehicle.position.distanceTo(other.position);
+            
             if (distance > searchRadius) {
                 continue;
             }
-
-            if (this.areRoutesEqual(vehicle.route, other.route)) {
-
-                if (other.routeIndex > vehicle.routeIndex && distance < minDistance) {
-
-                    const toOther = other.position.clone().sub(vehicle.position);
-                    const dot = toOther.normalize().dot(vehicle.direction);
-
-                    if (dot > 0.5) {
-                        closestVehicle = other;
-                        minDistance = distance;
-                    }
-                }
+            
+            // Vector from this vehicle to the other
+            const toOther = other.position.clone().sub(vehicle.position);
+            
+            // How far ahead is the other vehicle? (dot product with our direction)
+            const forwardDistance = toOther.dot(vehicle.direction);
+            
+            // If forward distance is negative or zero, other vehicle is behind us
+            if (forwardDistance <= 0.1) {
+                continue;
             }
-            else {
-                const toOther = other.position.clone().sub(vehicle.position);
-                const dot = toOther.normalize().dot(vehicle.direction);
-
-                if (dot > 0.7 && distance < minDistance) {
-                    const directionAlignment = vehicle.direction.dot(other.direction);
-                    if (directionAlignment > 0.5) {
-                        closestVehicle = other;
-                        minDistance = distance;
-                    }
-                }
+            
+            // How far to the side is the other vehicle?
+            const perpendicular = new THREE.Vector3(-vehicle.direction.z, 0, vehicle.direction.x);
+            const lateralDistance = Math.abs(toOther.dot(perpendicular));
+            
+            // If too far to the side, they're in a different lane
+            if (lateralDistance > laneWidth) {
+                continue;
+            }
+            
+            // This vehicle is ahead of us and in our lane - is it the closest?
+            if (forwardDistance < minForwardDistance) {
+                closestVehicle = other;
+                minForwardDistance = forwardDistance;
             }
         }
+        
         return closestVehicle;
     }
 
-
+    
     private removeCompletedVehicles(): void {
 
         const initialCount = this.vehicles.length;
