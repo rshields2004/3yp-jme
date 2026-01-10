@@ -68,7 +68,7 @@ export function generateIntersectionPath(
         const t = (c * e - b * f) / denom;
         const intersection = p1.clone().add(d1.clone().multiplyScalar(t));
         intersection.y = (p1.y + p2.y) / 2;
-        return intersection;
+        return intersection;    
     }
 
     const centrePoint = intersect2D(startPoint, dirEntry, endPoint, dirExit) || intersection.position.clone().applyMatrix4(intersection.matrixWorld);
@@ -670,7 +670,6 @@ export function generateAllRoutes(junction: JunctionConfig, junctionObjectRefs: 
 
         }
     }
-
 
     return { routes, graph: mainG, starts, ends }
 

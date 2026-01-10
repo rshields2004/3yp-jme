@@ -61,7 +61,6 @@ export class IntersectionController extends JunctionController {
     }
 
     canVehicleEnter(vehicle: Vehicle, entryExitIndex: number, entryLaneIndex: number): boolean {
-        
         // TODO
         return this.vehiclesCrossing.size === 0;
     }
@@ -78,7 +77,7 @@ export class RoundaboutController extends JunctionController {
     }
 
     canVehicleEnter(vehicle: Vehicle, entryExitIndex: number, entryLaneIndex: number): boolean {
-        
+
         // TODO
         return this.vehiclesCrossing.size === 0;
     }
@@ -168,7 +167,7 @@ export class JunctionManager {
                     const controller = this.controllers.get(vehicle.currentJunctionID);
                     controller?.onVehicleExited(vehicle);
                 }
-                
+
                 vehicle.state = VehicleState.DRIVING;
                 vehicle.currentJunctionID = null;
                 vehicle.nextJunctionID = null;
@@ -176,41 +175,35 @@ export class JunctionManager {
             }
             return;
         }
-        
 
 
-        const { junctionID, distance, entryExitIndex, entryLaneIndex } = junctionInfo
+
+        const { junctionID, distance, entryExitIndex, entryLaneIndex } = junctionInfo;
         const controller = this.controllers.get(junctionID);
-        if (!controller) {
-            return;
-        }
+        if (!controller) return;
 
         vehicle.nextJunctionID = junctionID;
         vehicle.distanceToNextJunction = distance;
 
-        // State machine based on distance
+        // State machine transitions based on distance
         if (distance > this.approachDistance) {
-            
-            // Far from junction
+            // Far from junction - normal driving
             if (currentState !== VehicleState.DRIVING) {
                 vehicle.state = VehicleState.DRIVING;
             }
         }
         else if (distance > this.waitDistance) {
-            
             // Approaching junction
             if (currentState === VehicleState.DRIVING) {
                 vehicle.state = VehicleState.APPROACHING_JUNCTION;
                 controller.onVehicleApproaching(vehicle);
             }
-            else if (currentState == VehicleState.APPROACHING_JUNCTION) {
-                
-                // Check if vehicle can enter
+            else if (currentState === VehicleState.APPROACHING_JUNCTION) {
+                // Check if we can enter
                 const canEnter = controller.canVehicleEnter(vehicle, entryExitIndex, entryLaneIndex);
 
                 if (!canEnter && distance < this.waitDistance * 2) {
-                    
-                    // Need to stop so make car wait
+                    // Need to stop - transition to waiting
                     vehicle.state = VehicleState.WAITING_AT_JUNCTION;
                     controller.onVehicleWaiting(vehicle);
                 }
@@ -218,7 +211,8 @@ export class JunctionManager {
         }
         else if (distance > 0) {
             // At junction entrance
-            if (currentState === VehicleState.APPROACHING_JUNCTION || currentState === VehicleState.WAITING_AT_JUNCTION) {
+            if (currentState === VehicleState.APPROACHING_JUNCTION ||
+                currentState === VehicleState.WAITING_AT_JUNCTION) {
 
                 const canEnter = controller.canVehicleEnter(vehicle, entryExitIndex, entryLaneIndex);
 
@@ -226,17 +220,16 @@ export class JunctionManager {
                     vehicle.state = VehicleState.CROSSING_JUNCTION;
                     vehicle.currentJunctionID = junctionID;
                     controller.onVehicleCrossing(vehicle);
-                }
-                else {
-                    vehicle.state = VehicleState.WAITING_AT_JUNCTION
+                } else {
+                    vehicle.state = VehicleState.WAITING_AT_JUNCTION;
+                    controller.onVehicleWaiting(vehicle);
                 }
             }
         }
         else {
             // Inside/past junction entrance
-
             if (currentState === VehicleState.CROSSING_JUNCTION) {
-                // Check if junction has been left
+                // Check if we've exited the junction
                 if (this.hasExitedJunction(vehicle, junctionID)) {
                     vehicle.state = VehicleState.EXITING_JUNCTION;
                     controller.onVehicleExited(vehicle);
@@ -245,7 +238,6 @@ export class JunctionManager {
             }
             else if (currentState === VehicleState.EXITING_JUNCTION) {
                 // Transition back to driving after some distance
-
                 if (distance < -this.exitDistance) {
                     vehicle.state = VehicleState.DRIVING;
                 }

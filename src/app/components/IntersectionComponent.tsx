@@ -1,4 +1,6 @@
-import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
+"use client";
+
+import { useEffect, useMemo, useRef } from "react";
 import { ThickLine, ThickLineHandle } from "./ThickLine";
 import * as THREE from "three";
 import { IntersectionConfig, IntersectionStructure } from "../includes/types/intersection";
@@ -6,9 +8,7 @@ import { useJModellerContext } from "../context/JModellerContext";
 import { generateEdgeTubes, generateExitMesh, generateFloorMesh, generateLaneLines, generateStopLine, generateTextPosition } from "../includes/utils";
 import { Text } from "@react-three/drei";
 import React from "react";
-import { ThreeEvent, useFrame } from "@react-three/fiber";
-import { generateIntersectionPath } from "../includes/junctionmanagerutils/carRouting";
-import { exit } from "process";
+import { ThreeEvent } from "@react-three/fiber";
 
 
 type IntersectionProps = {

@@ -1,20 +1,16 @@
 "use client";
 
-import { OrbitControls, Line } from "@react-three/drei";
+import { OrbitControls } from "@react-three/drei";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
-import { MTLLoader, OBJLoader } from "three-stdlib";
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useRef } from "react";
 import { Bloom, EffectComposer } from "@react-three/postprocessing";
-import { useFrame } from "@react-three/fiber";
 import { useJModellerContext } from "../context/JModellerContext";
 import { FLOOR_Y } from "../includes/defaults";
-import * as THREE from "three";
 import { JunctionComponents } from "./JunctionComponents";
-import { generateAllRoutes } from "../includes/junctionmanagerutils/carRouting";
 import { TrafficSimulation } from "./TrafficSimulation";
 
 export default function Scene() {
-    const { selectedObjects, simIsRunning } = useJModellerContext();
+    const { selectedObjects } = useJModellerContext();
     const controlsRef = useRef<OrbitControlsImpl>(null);
 
 

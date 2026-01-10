@@ -5,7 +5,9 @@ import { useJModellerContext } from "../context/JModellerContext";
 import { generateAllRoutes } from "../includes/junctionmanagerutils/carRouting";
 import { JunctionManager } from "../includes/junctionmanagerutils/junctionManager";
 import { VehicleManager } from "../includes/junctionmanagerutils/vehicleManager";
+import { carFiles } from "../includes/types/carTypes";
 import * as THREE from "three";
+
 
 
 export const TrafficSimulation = () => {
@@ -16,98 +18,112 @@ export const TrafficSimulation = () => {
 
     const vehicleManagerRef = useRef<VehicleManager | null>(null);
     const junctionManagerRef = useRef<JunctionManager | null>(null);
+
     const carModelsRef = useRef<THREE.Group[]>([]);
+    const [carsReady, setCarsReady] = useState(false);
+
     const [isInitialized, setIsInitialized] = useState(false);
-    const [loadingStatus, setLoadingStatus] = useState("Initializing...");
+    const [loadingStatus, setLoadingStatus] = useState("Initialising JME...");
+
+
     const wasRunningRef = useRef(false);
 
+
     useEffect(() => {
-    // Detect when simulation stops (transitions from running to not running)
-    if (wasRunningRef.current && !simIsRunning) {
-        console.log("Simulation stopped - clearing all vehicles");
-        
-        if (vehicleManagerRef.current) {
-            vehicleManagerRef.current.clearAll();
+        let cancelled = false;
+
+        (async () => {
+            try {
+                setLoadingStatus("Loading car models...");
+                const carModels = await loadCarModels();
+                if (cancelled) {
+                    return;
+                }
+                carModelsRef.current = carModels;
+                setCarsReady(true);
+                setLoadingStatus(`Loaded ${carModels.length} car models`);
+                console.log(`Loaded ${carModels.length} car models (cached)`);
+            }
+            catch (e) {
+
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [])
+
+
+
+    useEffect(() => {
+        if (wasRunningRef.current && !simIsRunning) {
+            console.log("Simulation stopped - clearing all vehicles");
+            vehicleManagerRef.current?.clearAll();
+            vehicleManagerRef.current?.dispose();
+            vehicleManagerRef.current = null;
+            junctionManagerRef.current = null;
+            setIsInitialized(false);
         }
-        }
-        
+
         wasRunningRef.current = simIsRunning;
     }, [simIsRunning]);
 
-
-    // Initialize the simulation
+    // 3) Build routes + managers EVERY time sim starts (uses cached cars)
     useEffect(() => {
-        if (!junctionConfig || !junctionObjectRefs || junctionObjectRefs.current.length === 0) {
+        if (!simIsRunning) return;
+
+        if (!carsReady || !carModelsRef.current || carModelsRef.current.length === 0) {
+            setLoadingStatus("Waiting for car models to load...");
+            return;
+        }
+
+        if (!junctionConfig || !junctionObjectRefs?.current?.length) {
             setLoadingStatus("Waiting for junction data...");
             return;
         }
 
-        const initialize = async () => {
-            try {
-                setLoadingStatus("Loading car models...");
+        // Important: if Start is pressed multiple times, reset old managers first
+        vehicleManagerRef.current?.dispose();
+        vehicleManagerRef.current = null;
+        junctionManagerRef.current = null;
 
-                // Load car models
-                const carModels = await loadCarModels();
-                carModelsRef.current = carModels;
-                setLoadingStatus(`Loaded ${carModels.length} car models`);
+        try {
+            setLoadingStatus("Updating transforms...");
 
-                setLoadingStatus("Generating routes...");
+            // IMPORTANT: ensure current positions are reflected in matrixWorld
+            junctionObjectRefs.current.forEach(g => g.updateWorldMatrix(true, true));
 
-                // Generate routes from your junction configuration
-                const { routes } = generateAllRoutes(junctionConfig, junctionObjectRefs.current, {
-                    maxSteps: 30,
-                    disallowUTurn: true
-                });
+            setLoadingStatus("Generating routes...");
+            const { routes } = generateAllRoutes(junctionConfig, junctionObjectRefs.current, {
+                maxSteps: 30,
+                disallowUTurn: true,
+            });
 
-                setLoadingStatus(`Generated ${routes.length} routes`);
-
-                if (routes.length === 0) {
-                    setLoadingStatus("Warning: No routes generated!");
-                    return;
-                }
-
-                setLoadingStatus("Creating junction manager...");
-
-                // Create junction manager
-                const junctionManager = new JunctionManager(junctionConfig, junctionObjectRefs.current);
-                junctionManagerRef.current = junctionManager;
-
-                setLoadingStatus("Creating vehicle manager...");
-
-                // Create vehicle manager
-                const vehicleManager = new VehicleManager(scene, routes, carModels, {
-                    mode: "continuous",
-                    spawnInterval: 1.0,
-                    maxVehicles: 20,
-                    minSpawnGap: 15.0
-                });
-                vehicleManagerRef.current = vehicleManager;
-
-                setIsInitialized(true);
-                setLoadingStatus("Ready! Start simulation to spawn vehicles.");
-
-                console.log("Traffic simulation initialized successfully");
-                console.log(`Routes: ${routes.length}, Car models: ${carModels.length}`);
-
-            } catch (error) {
-                console.error("Failed to initialize traffic simulation:", error);
-                const errorMessage = error instanceof Error ? error.message : String(error);
-                setLoadingStatus(`Error: ${errorMessage}`);
+            setLoadingStatus(`Generated ${routes.length} routes`);
+            if (!routes.length) {
+                setLoadingStatus("Warning: No routes generated!");
+                return;
             }
-        };
 
-        initialize();
+            setLoadingStatus("Creating managers...");
+            junctionManagerRef.current = new JunctionManager(junctionConfig, junctionObjectRefs.current);
 
-        // Cleanup on unmount
-        return () => {
-            if (vehicleManagerRef.current) {
-                vehicleManagerRef.current.dispose();
-                vehicleManagerRef.current = null;
-            }
-            carModelsRef.current = [];
-            setIsInitialized(false);
-        };
-    }, [junctionConfig, junctionObjectRefs, scene]);
+            vehicleManagerRef.current = new VehicleManager(scene, routes, carModelsRef.current, {
+                mode: "fixedcount",
+                spawnInterval: 1.0,
+                maxVehicles: 5,
+                minSpawnGap: 15.0,
+            });
+
+            setIsInitialized(true);
+            setLoadingStatus("Running!");
+            console.log("Traffic simulation started (routes regenerated, cars cached)");
+        } catch (e) {
+            console.error("Failed to start simulation:", e);
+            setLoadingStatus(`Error: ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }, [simIsRunning, carsReady, junctionConfig, junctionObjectRefs, scene]);
 
     // Update simulation every frame
     useFrame((state, delta) => {
@@ -153,10 +169,6 @@ async function loadCarModels(): Promise<THREE.Group[]> {
     const mtlLoader = new MTLLoader();
     const objLoader = new OBJLoader();
 
-    // Define your car model files here
-    const carFiles = [
-        { obj: "/models/car-coupe-blue.obj", mtl: "/models/car-coupe-blue.mtl" }
-    ];
 
     const loadedModels: THREE.Group[] = [];
 

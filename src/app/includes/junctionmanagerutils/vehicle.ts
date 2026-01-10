@@ -1,4 +1,3 @@
-import { LaneEndPoint } from "./carRouting";
 import * as THREE from "three";
 
 export enum VehicleState {
@@ -25,11 +24,12 @@ export class Vehicle {
     position: THREE.Vector3;
     direction: THREE.Vector3;
 
-    speed: number = 0;
+    speed: number = 13;
     maxSpeed: number = 13;
     acceleration: number = 5;
     braking: number = 5;
-    comfortBraking = 2.5;
+    comfortBraking: number = 2.5;
+    slowDownFactor: number = 0.1;
 
     state: VehicleState = VehicleState.DRIVING;
 
@@ -114,7 +114,7 @@ export class Vehicle {
                 break;
 
             case VehicleState.CROSSING_JUNCTION:
-                desiredSpeed = Math.min(desiredSpeed, this.maxSpeed * 0.6);
+                desiredSpeed = Math.min(desiredSpeed, this.maxSpeed * this.slowDownFactor);
                 break;
         }
 
@@ -212,7 +212,7 @@ export class Vehicle {
         this.model.position.copy(this.position);
 
         const angle = Math.atan2(this.direction.x, this.direction.z);
-        this.model.rotation.y = -angle * Math.PI;
+        this.model.rotation.y = angle;
     }
 
     private getDistanceToVehicle(other: Vehicle): number {
@@ -237,12 +237,11 @@ export class Vehicle {
         if (this.route.points.length - 1) {
             return 1;
         }
-        else {
-            return this.routeIndex / (this.route.points.length - 1);
-        }
+        return this.routeIndex / (this.route.points.length - 1);
     }
 
     dispose(): void {
+
         this.model.traverse((child) => {
             if (child instanceof THREE.Mesh) {
                 child.geometry.dispose();

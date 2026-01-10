@@ -1,13 +1,14 @@
+"use client";
+
 import { useEffect, useMemo, useRef } from "react";
 import { RoundaboutConfig, RoundaboutExitStructure, RoundaboutStructure } from "../includes/types/roundabout";
 import * as THREE from "three";
 import { useJModellerContext } from "../context/JModellerContext";
-import { ThickLine, ThickLineHandle } from "./ThickLine";
+import { ThickLine } from "./ThickLine";
 import { generateEdgeTubesRound, generateExitMesh, generateLaneLinesRound, generateRingLines, generateRoundaboutFloorMesh, generateStopLineRound, generateTextPosition } from "../includes/utils";
 import React from "react";
 import { Text } from "@react-three/drei";
-import { ThreeEvent, useFrame } from "@react-three/fiber";
-import { generateRoundaboutPath } from "../includes/junctionmanagerutils/carRouting";
+import { ThreeEvent } from "@react-three/fiber";
 
 
 

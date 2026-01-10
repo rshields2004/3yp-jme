@@ -1,6 +1,5 @@
 import * as THREE from "three";
 import { Vehicle, VehicleRoute } from "./vehicle";
-import { start } from "repl";
 
 export type SpawnConfig = {
     mode: "continuous" | "fixedcount" | "surge";
