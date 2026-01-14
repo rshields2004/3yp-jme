@@ -253,11 +253,11 @@ export const TrafficSimulation = () => {
             vehicleManagerRef.current?.reset();
 
             vehicleManagerRef.current = new VehicleManager(scene, carModelsRef.current, routesRef.current, {
-                demandRatePerSec: 10,
+                demandRatePerSec: 3,
                 maxVehicles: 100,
 
                 // Kinematics
-                maxSpeed: 10,      // target cruising speed
+                maxSpeed: 15,      // target cruising speed
                 maxAccel: 4,      // m/s^2-ish
                 maxDecel: 8,      // m/s^2-ish (positive number, applied as braking)
 
