@@ -27,8 +27,6 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
         selectedExits,
         setSelectedExits,
         snapToValidPosition,
-        trafficControllers,
-        stopIntersectionSequence,
         simIsRunning
     } = useJModellerContext();
 
@@ -84,24 +82,33 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
         [intersectionMemo.exitInfo]
     );
 
+
     useEffect(() => {
-        if (!stopLineRefs.length || !trafficControllers.current) return; // make sure refs are ready
+        const group = groupRef.current;
+        if (!group) return;
 
-        trafficControllers.current[id] = {
-            stopLinesQueue: stopLineRefs.map((ref, index) => ({ ref, exitIndex: index })),
-            currentIndex: 0,
-            currentStep: 0,
-            intervalId: null,
-            sequence: ["red", "red-amber", "green", "amber", "red"],
-        };
+        // This will be read by the simulation tick to colour stop lines
+        if (!group.userData.stopLineRefsByEntryKey) {
+            group.userData.stopLineRefsByEntryKey = {};
+        }
 
-        // Cleanup on unmount
+        // VehicleManager groups lanes like: "entry:<UUID>-<exit>-<dir>"
+        // Your stop lines are for approaching traffic => dir = "in"
+        for (let exitIndex = 0; exitIndex < intersectionMemo.exitInfo.length; exitIndex++) {
+            const entryKey = `entry:${id}-${exitIndex}-in`;
+            group.userData.stopLineRefsByEntryKey[entryKey] = stopLineRefs[exitIndex];
+        }
+
+        // cleanup
         return () => {
-            stopIntersectionSequence(id); // stops interval if running
-            delete trafficControllers.current[id]; // remove controller
+            if (!group.userData.stopLineRefsByEntryKey) return;
+            for (let exitIndex = 0; exitIndex < intersectionMemo.exitInfo.length; exitIndex++) {
+            const entryKey = `entry:${id}-${exitIndex}-in`;
+            delete group.userData.stopLineRefsByEntryKey[entryKey];
+            }
         };
+    }, [id, intersectionMemo.exitInfo.length, stopLineRefs]);
 
-    }, [id, stopLineRefs]);
 
 
 

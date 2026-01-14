@@ -8,6 +8,7 @@ import { useJModellerContext } from "../context/JModellerContext";
 import { FLOOR_Y } from "../includes/defaults";
 import { JunctionComponents } from "./JunctionComponents";
 import { TrafficSimulation } from "./TrafficSimulation";
+import { RouteDebug } from "./RouteDebug";
 
 export default function Scene() {
     const { selectedObjects } = useJModellerContext();
@@ -47,6 +48,8 @@ export default function Scene() {
             <JunctionComponents />
 
             <TrafficSimulation />
+            <RouteDebug enabled />
+
         </>
     );
 }

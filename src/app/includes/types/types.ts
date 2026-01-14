@@ -65,10 +65,6 @@ export type JModellerState = {
     snapToValidPosition: (draggedGroup: THREE.Group<THREE.Object3DEventMap>) => void;
     removeObject: (objID: string) => void;
 
-    trafficControllers: React.RefObject<{ [id: string]: IntersectionTrafficController; }>
-    startIntersectionSequence: (intersectionId: string) => void;
-    stopIntersectionSequence: (intersectionId: string) => void;
-
     simIsRunning: boolean;
     startSim: () => void;
     haltSim: () => void;

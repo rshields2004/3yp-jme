@@ -19,7 +19,6 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
 
 
     // Simulation
-    const trafficControllers = useRef<{ [id: string]: IntersectionTrafficController }>({});
     const [cars, setCars] = useState<Car[]>([]);
 
 
@@ -164,62 +163,7 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
     // };
 
 
-    const startIntersectionSequence = (intersectionId: string) => {
-        if (!trafficControllers.current) {
-            return;
-        }
-        const controller = trafficControllers.current[intersectionId]
-        if (!controller || controller.intervalId) return;
-
-        controller.intervalId = setInterval(() => {
-            // Reset all to red
-            controller.stopLinesQueue.forEach(s => s.ref.current?.setRed());
-
-            // Only change the current exit
-            const current = controller.stopLinesQueue[controller.currentIndex];
-
-            const colour = controller.sequence[controller.currentStep];
-
-            switch (colour) {
-                case "red":
-                    current.ref.current?.setRed();
-                    break;
-                case "red-amber":
-                    current.ref.current?.setRedAmber();
-                    break;
-                case "green":
-                    current.ref.current?.setGreen();
-                    break;
-                case "amber":
-                    current.ref.current?.setAmber();
-                    break;
-            }
-
-            controller.currentStep++;
-            if (controller.currentStep >= controller.sequence.length) {
-                controller.currentStep = 0;
-                controller.currentIndex = (controller.currentIndex + 1) % controller.stopLinesQueue.length;
-            }
-        }, 1000); // adjust timing as needed
-    };
-
-
-    const stopIntersectionSequence = (intersectionId: string) => {
-        if (!trafficControllers.current) {
-            return;
-        }
-        const controller = trafficControllers.current[intersectionId]
-        if (!controller) return;
-        if (controller.intervalId) clearInterval(controller.intervalId);
-        controller.intervalId = null;
-        controller.currentIndex = 0;
-        controller.currentStep = 0;
-
-        // Reset all to red
-        controller.stopLinesQueue.forEach(s => s.ref.current?.setRed());
-    };
-
-
+    
 
 
     const removeObject = (objID: string) => {
@@ -248,12 +192,10 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
         setSelectedObjects([]);
         setSelectedExits([]);
         setSimIsRunning(true);
-        junction.junctionObjects.filter(o => o.type === "intersection").forEach(i => startIntersectionSequence(i.id));
     };
 
     const haltSim = () => {
         setSimIsRunning(false);
-        junction.junctionObjects.filter(o => o.type === "intersection").forEach(i => stopIntersectionSequence(i.id));
     };
 
 
@@ -271,9 +213,6 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
             setSelectedExits,
             snapToValidPosition,
             removeObject,
-            trafficControllers,
-            startIntersectionSequence,
-            stopIntersectionSequence,
             simIsRunning,
             startSim,
             haltSim,
