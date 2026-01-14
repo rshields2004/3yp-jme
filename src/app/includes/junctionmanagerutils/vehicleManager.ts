@@ -1,80 +1,11 @@
 import * as THREE from "three";
 import { Route, RouteSegment } from "./carRouting";
 import { IntersectionController } from "./controllers/intersectionController";
+import { Vehicle } from "./vehicle";
+import { JunctionObjectTypes } from "../types/types";
+import { SimConfig, SimulationStats, JunctionStats, JunctionStatsGlobal, LaneOcc } from "../types/simulation";
+import { RoundaboutController } from "./controllers/roundaboutController";
 
-type VehicleSimStats = {
-    active: number;
-    spawned: number;
-    completed: number;
-    spawnQueue: number;
-};
-
-type SimConfig = {
-    // Spawning
-    demandRatePerSec: number;
-    maxVehicles: number;
-    maxSpawnAttemptsPerFrame: number;
-
-    // Motion
-    initialSpeed: number;
-    maxSpeed: number;
-    maxAccel: number;
-    maxDecel: number;
-
-    // Spacing
-    minBumperGap: number;
-    timeHeadway: number;
-
-    // Rendering
-    yOffset: number;
-
-    // Stage 2
-    enableLaneQueuing: boolean;
-    debugLaneQueues: boolean;
-};
-
-class Vehicle {
-    id: number;
-    model: THREE.Group;
-    route: Route;
-
-    // Route distance (world-ish units)
-    s = 0;
-
-    // Pose interpolation on route.points
-    routeIndex = 0;
-    t = 0;
-
-    speed: number;
-    length: number;
-
-    // Segment semantics
-    segmentIndex = 0;
-    currentSegment: RouteSegment | null = null;
-    laneKey = "";
-
-    // stable start-lane identifier for spawn spacing (NOT route-dependent)
-    spawnKey = "";
-
-    constructor(id: number, model: THREE.Group, route: Route, length: number, initialSpeed = 0) {
-        this.id = id;
-        this.model = model;
-        this.route = route;
-        this.length = length;
-        this.speed = initialSpeed;
-
-        if (route.segments?.length) {
-            this.segmentIndex = 0;
-            this.currentSegment = route.segments[0];
-        }
-    }
-}
-
-type LaneOcc = {
-    v: Vehicle;
-    /** lane coordinate (used for sorting); for "reservation" occupants we pin this to start-of-lane */
-    pinnedCoord?: number;
-};
 
 export class VehicleManager {
     private scene: THREE.Scene;
@@ -98,7 +29,16 @@ export class VehicleManager {
     private cfg: SimConfig;
 
     private intersectionControllers = new Map<string, IntersectionController>();
+    private roundaboutControllers = new Map<string, RoundaboutController>();
     private controllersBuilt = false;
+
+    private lastSpawnQueueLogged: number | null = null;
+    private lastActiveLogged: number | null = null;
+
+    private statsSnapshot: SimulationStats | null = null;
+    private junctionCounters = new Map<string, { entered: number; exited: number; blockedDownstream: number }>();
+    private lastVehJunctionTag = new Map<number, { jid: string | null; phase: string | null }>();
+
 
     constructor(scene: THREE.Scene, carModels: THREE.Group[], routes: Route[], cfg?: Partial<SimConfig>) {
         this.scene = scene;
@@ -109,6 +49,7 @@ export class VehicleManager {
             demandRatePerSec: 0.8,
             maxVehicles: 40,
             maxSpawnAttemptsPerFrame: 6,
+            maxSpawnQueue: 25,
 
             initialSpeed: 0,
             maxSpeed: 10,
@@ -119,6 +60,7 @@ export class VehicleManager {
             timeHeadway: 1.5,
 
             yOffset: 0.0,
+            stopLineOffset: 0.4,
 
             enableLaneQueuing: true,
             debugLaneQueues: false,
@@ -133,9 +75,17 @@ export class VehicleManager {
     }
 
     /** Step 5: used by TrafficSimulation.tsx to query light state for colouring stop lines */
-    public getIntersectionController(junctionId: string): IntersectionController | null {
-        return this.intersectionControllers.get(junctionId) ?? null;
+    public getIntersectionController(junctionId: string): IntersectionController | RoundaboutController | null {
+        return this.intersectionControllers.get(junctionId) ?? this.roundaboutControllers.get(junctionId) ?? null;
     }
+    public getRoundaboutController(junctionId: string): RoundaboutController | null {
+        return this.roundaboutControllers.get(junctionId) ?? null;
+    }
+
+    public isRoundabout(junctionId: string): boolean {
+        return this.roundaboutControllers.has(junctionId);
+    }
+
 
     public reset() {
         for (const v of this.vehicles) {
@@ -162,32 +112,38 @@ export class VehicleManager {
         this.laneBasesBuilt = false;
 
         this.intersectionControllers.clear();
+        this.roundaboutControllers.clear();
         this.controllersBuilt = false;
+
+        this.lastSpawnQueueLogged = null;
+        this.lastActiveLogged = null;
+
+        this.statsSnapshot = null;
+        this.junctionCounters.clear();
+        this.lastVehJunctionTag.clear();
     }
 
-    public getStats(): VehicleSimStats {
-        return {
-            active: this.vehicles.length,
-            spawned: this.spawned,
-            completed: this.completed,
-            spawnQueue: this.spawnQueue,
-        };
-    }
 
-    public update(dt: number) {
+    public update(dt: number, junctionObjectRefs: React.RefObject<THREE.Group<THREE.Object3DEventMap>[]>) {
         if (!this.routes.length) return;
 
         if (!this.laneBasesBuilt) this.buildLaneBases();
 
-        this.buildControllersIfNeeded();
+        this.buildControllersIfNeeded(junctionObjectRefs);
         for (const c of this.intersectionControllers.values()) c.update(dt);
+        for (const c of this.roundaboutControllers.values()) c.update(dt);
 
         // 1) demand -> queue
         this.spawnDemand += this.cfg.demandRatePerSec * dt;
         const newCars = Math.floor(this.spawnDemand);
+
         if (newCars > 0) {
             this.spawnDemand -= newCars;
-            this.spawnQueue += newCars;
+
+            this.spawnQueue = Math.min(
+                this.spawnQueue + newCars,
+                this.cfg.maxSpawnQueue
+            );
         }
 
         // 2) serve queue
@@ -202,6 +158,9 @@ export class VehicleManager {
             if (ok) this.spawnQueue--;
             else break;
         }
+
+        this.logSpawnQueueIfChanged();
+        this.logActiveVehiclesIfChanged();
 
         // 3) refresh segment/laneKey before lane logic
         for (const v of this.vehicles) this.updateVehicleSegment(v);
@@ -225,12 +184,49 @@ export class VehicleManager {
             const done = this.applySAndPose(v, target);
 
             if (done) {
+                // Clean up roundabout tracking
+                for (const roundabout of this.roundaboutControllers.values()) {
+                    roundabout.clearVehicle(v.id);
+                }
+
                 this.scene.remove(v.model);
                 this.vehicles.splice(i, 1);
                 this.completed += 1;
             }
         }
+        this.updateStats();
     }
+
+    private logSpawnQueueIfChanged() {
+        if (this.lastSpawnQueueLogged === null) {
+            this.lastSpawnQueueLogged = this.spawnQueue;
+            console.log(`[spawn-queue] ${this.spawnQueue}`);
+            return;
+        }
+
+        if (this.spawnQueue !== this.lastSpawnQueueLogged) {
+            console.log(`[spawn-queue] ${this.spawnQueue} (${this.lastSpawnQueueLogged} -> ${this.spawnQueue})`);
+            this.lastSpawnQueueLogged = this.spawnQueue;
+        }
+    }
+
+    private logActiveVehiclesIfChanged() {
+        const active = this.vehicles.length;
+
+        if (this.lastActiveLogged === null) {
+            this.lastActiveLogged = active;
+            console.log(`[active-vehicles] ${active}`);
+            return;
+        }
+
+        if (active !== this.lastActiveLogged) {
+            console.log(
+                `[active-vehicles] ${this.lastActiveLogged} -> ${active}`
+            );
+            this.lastActiveLogged = active;
+        }
+    }
+
 
     // -----------------------
     // Stage 2: lane queuing + accel/decel
@@ -733,8 +729,16 @@ export class VehicleManager {
     // -----------------------
 
     private laneKeyForSegment(seg: RouteSegment): string {
-        // only queue on physical lanes; ignore junction-internal segments
-        if (seg.phase === "inside") return "";
+        // For roundabouts, we NEED to track "inside" phase to prevent collisions
+        if (seg.phase === "inside") {
+            const junctionId = this.junctionIdFromNodeKey(String(seg.to));
+            const isRoundabout = this.roundaboutControllers.has(junctionId);
+            if (isRoundabout) {
+                // Use the roundabout junction as the lane key
+                return `lane:roundabout:${junctionId}`;
+            }
+            return "";  // Normal intersection - ignore inside phase
+        }
         if (seg.phase === "exit") return `lane:${seg.to}`;
         return `lane:${seg.from}`; // link + approach
     }
@@ -803,8 +807,16 @@ export class VehicleManager {
         return v.s >= maxS - 1e-6;
     }
 
-    private buildControllersIfNeeded() {
+    private buildControllersIfNeeded(
+        junctionObjectRefs: React.RefObject<THREE.Group<THREE.Object3DEventMap>[]>
+    ) {
         if (this.controllersBuilt) return;
+
+        const groups = junctionObjectRefs.current;
+        if (!groups || groups.length === 0) {
+            // refs not ready yet — try again next frame
+            return;
+        }
 
         const incoming = new Map<string, Set<string>>();
 
@@ -822,14 +834,29 @@ export class VehicleManager {
         }
 
         for (const [junctionKey, laneSet] of incoming.entries()) {
-            this.intersectionControllers.set(
-                junctionKey,
-                new IntersectionController(junctionKey, Array.from(laneSet), 8, 1)
-            );
-            console.log("[controller]", junctionKey, Array.from(laneSet));
-        }
+            // Detect roundabout junctions
+            const junctionType = junctionObjectRefs.current.find(
+                (g) => g?.userData?.id === junctionKey
+            )?.userData?.type;
+            const isRoundabout = junctionType === "roundabout" ||
+                junctionKey.toLowerCase().includes("roundabout") ||
+                junctionKey.toLowerCase().includes("rndbt");
 
-        this.controllersBuilt = true;
+            if (isRoundabout) {
+                this.roundaboutControllers.set(
+                    junctionKey,
+                    new RoundaboutController(junctionKey, Array.from(laneSet))
+                );
+            }
+            else {
+                this.intersectionControllers.set(
+                    junctionKey,
+                    new IntersectionController(junctionKey, Array.from(laneSet), 8, 1)
+                );
+            }
+
+            this.controllersBuilt = true;
+        }
     }
 
     /**
@@ -850,7 +877,7 @@ export class VehicleManager {
         if (seg.phase !== "approach") return targetSpeed;
 
         const junctionKey = this.junctionIdFromNodeKey(String(seg.to));
-        const controller = this.intersectionControllers.get(junctionKey);
+        const controller = this.intersectionControllers.get(junctionKey) ?? this.roundaboutControllers.get(junctionKey);
         if (!controller) return targetSpeed;
 
         const entryKey = this.entryGroupKeyFromNodeKey(String(seg.from));
@@ -863,9 +890,11 @@ export class VehicleManager {
             if (exitLaneKey) {
                 const requiredGap = v.length + this.cfg.minBumperGap;
 
-                const nearestAtStart = this.nearestCoordInLaneAfterStart(exitLaneKey, lanes, desiredS);
-                if (nearestAtStart !== null && nearestAtStart < requiredGap) {
-                    // no space to clear -> behave like red (stop at line)
+                const laneStartBase = this.laneStartBaseForExitLane(exitLaneKey, v);
+                const nearest = this.nearestDistanceFromLaneStart(exitLaneKey, laneStartBase, lanes, desiredS);
+
+                if (nearest !== null && nearest.dist < requiredGap) {
+                    // blocked by downstream congestion
                     return this.capToStopline(v, targetSpeed, seg);
                 }
             }
@@ -878,7 +907,11 @@ export class VehicleManager {
 
     private capToStopline(v: Vehicle, targetSpeed: number, seg: RouteSegment): number {
         const frontOffset = 0.5 * v.length;
-        const stopS = (seg.s1 ?? 0) - frontOffset;
+
+        // additional buffer so cars stop *before* the stop line
+        const stopBuffer = this.cfg.stopLineOffset;
+
+        const stopS = (seg.s1 ?? 0) - frontOffset - stopBuffer;
 
         const dist = stopS - v.s;
         if (dist <= 0) return 0;
@@ -886,30 +919,51 @@ export class VehicleManager {
         const vmax = Math.sqrt(2 * this.cfg.maxDecel * dist);
         return Math.min(targetSpeed, vmax);
     }
+    private laneStartBaseForExitLane(exitLaneKey: string, v: Vehicle): number {
+        const segs = v.route.segments ?? [];
+        for (let i = v.segmentIndex + 1; i < segs.length; i++) {
+            const s = segs[i];
+            if (s.phase === "inside") continue;
+
+            const segId = this.segmentId(s);
+            return this.laneBases.get(exitLaneKey)?.get(segId) ?? 0;
+        }
+        return 0;
+    }
+
 
     /** Smallest positive coordinate from the start of the lane (approx) */
-    private nearestCoordInLaneAfterStart(
+    private nearestDistanceFromLaneStart(
         laneKey: string,
+        laneStartBase: number,
         lanes: Map<string, LaneOcc[]>,
         desiredS: Map<Vehicle, number>
-    ): number | null {
+    ): { dist: number; vehicleId: number } | null {
         const occs = lanes.get(laneKey);
         if (!occs || occs.length === 0) return null;
 
-        let best: number | null = null;
+        let bestDist = Infinity;
+        let bestId = -1;
 
         for (const occ of occs) {
             const coord = this.occCoord(occ, laneKey, desiredS);
 
-            // Interpret "lane start" as coordinate 0; if bases aren't zero, coord still works for comparisons
-            if (coord <= 0) continue;
+            // Convert absolute coord -> distance from lane start
+            const distFromStart = coord - laneStartBase;
 
-            if (best === null || coord < best) best = coord;
+            // We only care about vehicles on/after the lane start
+            if (distFromStart < 0) continue;
+
+            if (distFromStart < bestDist) {
+                bestDist = distFromStart;
+                bestId = occ.v.id;
+            }
         }
 
-        // If everyone is pinned at 0 (reservation), best may remain null; treat as blocked in that case
-        return best ?? 0;
+        if (!Number.isFinite(bestDist)) return null;
+        return { dist: bestDist, vehicleId: bestId };
     }
+
 
     /** Determine which *physical exit lane* this vehicle will go onto (first non-"inside" segment ahead). */
     private getExitLaneKeyForVehicle(v: Vehicle): string {
@@ -946,5 +1000,188 @@ export class VehicleManager {
         const exit = parts[5];
         const dir = parts[6];
         return `entry:${uuid}-${exit}-${dir}`;
+    }
+
+    private updateStats(): SimulationStats {
+        const byId: Record<string, JunctionStats> = {};
+
+        const ensure = (jid: string, type: JunctionObjectTypes): JunctionStats => {
+            if (!byId[jid]) {
+                const c = this.junctionCounters.get(jid) ?? { entered: 0, exited: 0, blockedDownstream: 0 };
+                byId[jid] = {
+                    id: jid,
+                    type,
+                    approaching: 0,
+                    waiting: 0,
+                    inside: 0,
+                    exiting: 0,
+                    entered: c.entered,
+                    exited: c.exited,
+                    blockedDownstream: c.blockedDownstream,
+                    currentGreenKey: null,
+                    state: undefined,
+                };
+            }
+            return byId[jid];
+        };
+
+        // ---------
+        // 1) Per-vehicle snapshot counts + entered/exited detection
+        // ---------
+
+        for (const v of this.vehicles) {
+            const seg = v.currentSegment;
+            if (!seg) continue;
+
+            // Decide which junction this segment belongs to (best-effort with current segment encoding)
+            // approach: seg.to is junction node key
+            // inside:   seg.to is usually still junction-ish (in your generator); if not, adjust here
+            // exit:     seg.from is junction node key
+            let jid: string | null = null;
+
+            if (seg.phase === "approach") jid = this.junctionIdFromNodeKey(String(seg.to));
+            else if (seg.phase === "inside") jid = this.junctionIdFromNodeKey(String(seg.to));
+            else if (seg.phase === "exit") jid = this.junctionIdFromNodeKey(String(seg.from));
+
+            // Snapshot counts
+            if (jid) {
+                // Right now we only know intersections exist (controllers map). Roundabouts later.
+                const isRoundabout = this.roundaboutControllers.has(jid);
+                const js = ensure(jid, isRoundabout ? "roundabout" : "intersection");
+
+                if (seg.phase === "approach") js.approaching += 1;
+                else if (seg.phase === "inside") js.inside += 1;
+                else if (seg.phase === "exit") js.exiting += 1;
+
+                // Waiting heuristic (since you don’t have an explicit WAITING state in this file)
+                // "approach + almost stopped + near stopline"
+                if (seg.phase === "approach") {
+                    const nearStop = (seg.s1 ?? 0) - v.s < 2.0; // tweak if needed
+                    const stopped = v.speed < 0.2;
+                    if (nearStop && stopped) js.waiting += 1;
+                }
+
+                // ---------
+                // entered/exited detection (cumulative)
+                // ---------
+                const prev = this.lastVehJunctionTag.get(v.id) ?? { jid: null, phase: null };
+
+                // “entered” when phase becomes inside for a junction
+                if (jid && seg.phase === "inside" && !(prev.jid === jid && prev.phase === "inside")) {
+                    const c = this.junctionCounters.get(jid) ?? { entered: 0, exited: 0, blockedDownstream: 0 };
+                    c.entered += 1;
+                    this.junctionCounters.set(jid, c);
+                    js.entered = c.entered; // keep snapshot aligned
+
+                    // Notify roundabout controller
+                    const roundabout = this.roundaboutControllers.get(jid);
+                    if (roundabout && prev.phase === "approach") {
+                        const entryKey = this.entryGroupKeyFromNodeKey(String(seg.from));
+                        roundabout.registerVehicleEntering(v.id, entryKey);
+                    }
+                }
+
+                // “exited” when phase becomes exit for a junction
+                if (jid && seg.phase === "exit" && !(prev.jid === jid && prev.phase === "exit")) {
+                    const c = this.junctionCounters.get(jid) ?? { entered: 0, exited: 0, blockedDownstream: 0 };
+                    c.exited += 1;
+                    this.junctionCounters.set(jid, c);
+                    js.exited = c.exited;
+
+                    // Notify roundabout controller
+                    const roundabout = this.roundaboutControllers.get(jid);
+                    if (roundabout && prev.phase === "inside") {
+                        const entryKey = this.entryGroupKeyFromNodeKey(String(seg.from));
+                        roundabout.registerVehicleExiting(v.id, entryKey);
+                    }
+                }
+
+                this.lastVehJunctionTag.set(v.id, { jid, phase: seg.phase });
+            } else {
+                // Not in any junction-related segment
+                this.lastVehJunctionTag.set(v.id, { jid: null, phase: seg.phase ?? null });
+            }
+        }
+
+        // Remove tags for vehicles that despawned (prevents Map growth)
+        // (cheap cleanup)
+        for (const [vid] of this.lastVehJunctionTag) {
+            if (!this.vehicles.some(v => v.id === vid)) this.lastVehJunctionTag.delete(vid);
+        }
+
+        // ---------
+        // 2) Attach signal state for intersections
+        // ---------
+        for (const [jid, controller] of this.intersectionControllers.entries()) {
+            const js = ensure(jid, "intersection");
+            js.currentGreenKey = controller.getCurrentGreen?.() ?? null;
+            js.state = controller.getState?.();
+            // Keep counters in sync (in case controller exists but no vehicles near it)
+            const c = this.junctionCounters.get(jid) ?? { entered: 0, exited: 0, blockedDownstream: 0 };
+            js.entered = c.entered;
+            js.exited = c.exited;
+            js.blockedDownstream = c.blockedDownstream;
+        }
+
+        for (const [jid, controller] of this.roundaboutControllers.entries()) {
+            const js = ensure(jid, "roundabout");
+            js.currentGreenKey = controller.getCurrentGreen?.() ?? null;
+            js.state = controller.getState?.();
+            const c = this.junctionCounters.get(jid) ?? { entered: 0, exited: 0, blockedDownstream: 0 };
+            js.entered = c.entered;
+            js.exited = c.exited;
+            js.blockedDownstream = c.blockedDownstream;
+        }
+
+        // ---------
+        // 3) Global junction aggregates
+        // ---------
+        const global: JunctionStatsGlobal = {
+            count: Object.keys(byId).length,
+            approaching: 0,
+            waiting: 0,
+            inside: 0,
+            exiting: 0,
+            entered: 0,
+            exited: 0,
+            blockedDownstream: 0,
+        };
+
+        for (const j of Object.values(byId)) {
+            global.approaching += j.approaching;
+            global.waiting += j.waiting;
+            global.inside += j.inside;
+            global.exiting += j.exiting;
+            global.entered += j.entered;
+            global.exited += j.exited;
+            global.blockedDownstream += j.blockedDownstream;
+        }
+
+        // ---------
+        // 4) Build final SimulationStats snapshot
+        // ---------
+        const snapshot: SimulationStats = {
+            active: this.vehicles.length,
+            spawned: this.spawned,
+            completed: this.completed,
+            spawnQueue: this.spawnQueue,
+            routes: this.routes.length,
+
+            // keep this as a convenience; for now equal to junction waiting aggregate
+            waiting: global.waiting,
+
+            junctions: {
+                global,
+                byId,
+            },
+        };
+
+        this.statsSnapshot = snapshot;
+        return snapshot;
+    }
+
+
+    public getStats(): SimulationStats {
+        return this.statsSnapshot ?? this.updateStats();
     }
 }

@@ -371,7 +371,7 @@ function concatWithoutDuplicateJoints(chunks: [number, number, number][][]): THR
 function resampleCurveFixedSpacing(
     curve: THREE.CatmullRomCurve3,
     spacing: number,
-    denseSegments = 2000
+    denseSegments = 10000
 ): { points: THREE.Vector3[]; distances: number[]; length: number } {
     const dense = curve.getPoints(denseSegments);
     if (dense.length < 2) return { points: dense, distances: [0], length: 0 };

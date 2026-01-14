@@ -1,9 +1,10 @@
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode, useRef } from "react";
-import { Car, ExitRef, IntersectionTrafficController, JModellerState, JunctionConfig } from "../includes/types/types";
+import { ExitRef, JModellerState, JunctionConfig } from "../includes/types/types";
 import { defaultJunctionConfig } from "../includes/defaults";
 import * as THREE from "three";
+import { SimulationStats } from "../includes/types/simulation";
 
 
 const JModellerContext = createContext<JModellerState | undefined>(undefined);
@@ -19,8 +20,27 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
 
 
     // Simulation
-    const [cars, setCars] = useState<Car[]>([]);
-
+    const [stats, setStats] = useState<SimulationStats>({
+            active: 0,
+            spawned: 0,
+            completed: 0,
+            waiting: 0,
+            routes: 0,
+            spawnQueue: 0,
+            junctions: {
+                global: {
+                    count: 0,
+                    approaching: 0,
+                    waiting: 0,
+                    inside: 0,
+                    exiting: 0,
+                    entered: 0,
+                    exited: 0,
+                    blockedDownstream: 0,
+                },
+                byId: {},
+            },
+        });
 
 
 
@@ -216,8 +236,8 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
             simIsRunning,
             startSim,
             haltSim,
-            cars,
-            setCars
+            stats,
+            setStats
         }}>
             {children}
         </JModellerContext.Provider>

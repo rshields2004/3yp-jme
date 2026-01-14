@@ -2,17 +2,8 @@ import * as THREE from "three";
 import { IntersectionObject } from "./intersection";
 import { RoundaboutObject } from "./roundabout";
 import { ThickLineHandle } from "@/app/components/ThickLine";
+import { SimulationStats } from "./simulation";
 
-export type Car = {
-    id: string;
-    route: THREE.Vector3[];
-    routeIndex: number;
-    progress: number;
-    speed: number;
-    maxSpeed: number;
-    stopped: boolean;
-    spawnTime: number;
-};
 
 export type LaneLineProperties = {
     pattern: "solid" | "dashed";
@@ -69,8 +60,9 @@ export type JModellerState = {
     startSim: () => void;
     haltSim: () => void;
 
-    cars: Car[];
-    setCars: React.Dispatch<React.SetStateAction<Car[]>>;
+    stats: SimulationStats;
+    setStats: React.Dispatch<React.SetStateAction<SimulationStats>>;
+    
 };
 
 

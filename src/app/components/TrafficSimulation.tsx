@@ -1,7 +1,7 @@
 "use client";
 
 import { useThree, useFrame } from "@react-three/fiber";
-import { useRef, useState, useEffect, useCallback } from "react";
+import { useRef, useState, useEffect, useCallback, memo } from "react";
 import { MTLLoader, OBJLoader } from "three/examples/jsm/Addons.js";
 import { useJModellerContext } from "../context/JModellerContext";
 import * as THREE from "three";
@@ -9,54 +9,70 @@ import { generateAllRoutes, Route } from "../includes/junctionmanagerutils/carRo
 import { carFiles } from "../includes/types/carTypes";
 import { VehicleManager } from "../includes/junctionmanagerutils/vehicleManager";
 import { ThickLineHandle } from "./ThickLine";
+import { Billboard, Html } from "@react-three/drei";
+import { SimulationStats } from "../includes/types/simulation";
 
 // Global cache for car models (persists across simulation restarts)
 let cachedCarModels: THREE.Group[] | null = null;
 let carModelsLoading: Promise<THREE.Group[]> | null = null;
 
-type SimulationStats = {
-    active: number;
-    spawned: number;
-    completed: number;
-    waiting: number;   // reserved for later
-    routes: number;
-    spawnQueue: number;
-};
 
 
 function applyIntersectionStopLineColours(
     junctionGroups: THREE.Group[],
     vehicleManager: VehicleManager
 ) {
+    
     for (const group of junctionGroups) {
         if (!group?.userData) continue;
         if (group.userData.type !== "intersection") continue;
 
+        
         const junctionId = group.userData.id as string | undefined;
         if (!junctionId) continue;
 
         const controller = vehicleManager.getIntersectionController?.(junctionId);
         if (!controller) continue;
 
-        // Added in step 3: entryKey -> React ref object
-        const stopLineRefsByEntryKey = group.userData.stopLineRefsByEntryKey as
-            | Record<string, React.RefObject<ThickLineHandle>>
-            | undefined;
+        const stopLineRefsByEntryKey = group.userData.stopLineRefsByEntryKey as Record<string, React.RefObject<ThickLineHandle>> | undefined;
 
         if (!stopLineRefsByEntryKey) continue;
+
+
+        
+        // Cache last colours so we only update when a light actually changes
+        const lastColours = (group.userData._stopLineLastColours ??= {}) as Record<string, string>;
 
         for (const [entryKey, refObj] of Object.entries(stopLineRefsByEntryKey)) {
             const handle = refObj?.current;
             if (!handle) continue;
 
-            // Step 4: controller.getLightColour(entryKey) returns "GREEN" | "RED"
             const colour = controller.getLightColour(entryKey);
 
-            if (colour === "GREEN") handle.setGreen();
-            else handle.setRed();
+            if (lastColours[entryKey] === colour) continue; 
+            lastColours[entryKey] = colour;
+
+            switch (colour) {
+                case "GREEN":
+                    handle.setGreen();
+                    break;
+                case "AMBER":
+                    handle.setAmber();
+                    break;
+                case "RED_AMBER":
+                    handle.setRedAmber();
+                    break;
+                case "RED":
+                default:
+                    handle.setRed();
+                    break;
+            }
+
+            
         }
     }
 }
+
 
 
 /**
@@ -142,22 +158,17 @@ function createFallbackCarModels(): THREE.Group[] {
  * Drop this into your Scene component to enable traffic simulation
  */
 export const TrafficSimulation = () => {
-    const { junction, junctionObjectRefs, simIsRunning } = useJModellerContext();
+    const { junction, junctionObjectRefs, simIsRunning, stats, setStats } = useJModellerContext();
     const { scene } = useThree();
 
     const [carsReady, setCarsReady] = useState(false);
     const [isInitialised, setisInitialised] = useState(false);
     const [showDebugRoutes, setShowDebugRoutes] = useState(false);
-    const [showDebugInfo, setShowDebugInfo] = useState(true);
 
-    const [stats, setStats] = useState<SimulationStats>({
-        active: 0,
-        spawned: 0,
-        completed: 0,
-        waiting: 0,
-        routes: 0,
-        spawnQueue: 0,
-    });
+    const statsAccumRef = useRef(0);
+    const lastStatsRef = useRef<SimulationStats | null>(null);
+
+    
 
     const carModelsRef = useRef<THREE.Group[]>([]);
     const routesRef = useRef<Route[]>([]);
@@ -253,18 +264,20 @@ export const TrafficSimulation = () => {
             vehicleManagerRef.current?.reset();
 
             vehicleManagerRef.current = new VehicleManager(scene, carModelsRef.current, routesRef.current, {
-                demandRatePerSec: 3,
+                demandRatePerSec: 10,
                 maxVehicles: 100,
+                maxSpawnQueue: 200,
 
                 // Kinematics
-                maxSpeed: 15,      // target cruising speed
-                maxAccel: 4,      // m/s^2-ish
-                maxDecel: 8,      // m/s^2-ish (positive number, applied as braking)
+                maxSpeed: 10,      // target cruising speed
+                maxAccel: 100,      // m/s^2-ish
+                maxDecel: 100,      // m/s^2-ish (positive number, applied as braking)
 
                 yOffset: 0,
 
                 minBumperGap: 1.5,
-                maxSpawnAttemptsPerFrame: 6,
+                maxSpawnAttemptsPerFrame: 20,
+                stopLineOffset: 0.6,
 
                 enableLaneQueuing: true,
                 debugLaneQueues: true,
@@ -284,6 +297,19 @@ export const TrafficSimulation = () => {
                 spawned: 0,
                 completed: 0,
                 waiting: 0,
+                junctions: {
+                    global: {
+                    count: 0,
+                    approaching: 0,
+                    waiting: 0,
+                    inside: 0,
+                    exiting: 0,
+                    entered: 0,
+                    exited: 0,
+                    blockedDownstream: 0,
+                    },
+                    byId: {},
+                },
             }));
 
             console.log("Traffic simulation initialized!");
@@ -325,6 +351,19 @@ export const TrafficSimulation = () => {
             waiting: 0,
             routes: 0,
             spawnQueue: 0,
+            junctions: {
+                global: {
+                count: 0,
+                approaching: 0,
+                waiting: 0,
+                inside: 0,
+                exiting: 0,
+                entered: 0,
+                exited: 0,
+                blockedDownstream: 0,
+                },
+                byId: {},
+            },
         });
 
         console.log("Traffic simulation cleaned up");
@@ -359,31 +398,143 @@ export const TrafficSimulation = () => {
         if (!vm) return;
 
         // 1) advance sim + controller state
-        vm.update(delta);
+        vm.update(delta, junctionObjectRefs);
 
         // 2) push controller colours into stop lines (visual sync)
         applyIntersectionStopLineColours(junctionObjectRefs.current, vm);
 
         // 3) stats (unchanged)
-        const s = vm.getStats();
-        setStats((prev) => ({
-            ...prev,
-            active: s.active,
-            spawned: s.spawned,
-            completed: s.completed,
-            spawnQueue: s.spawnQueue,
-            waiting: 0,
-        }));
+        // 3) stats (throttled)
+        statsAccumRef.current += delta;
+
+        const s = vm.getStats(); // your full SimulationStats snapshot
+
+        // update React state only 10 times per second
+        if (statsAccumRef.current >= 0.1) {
+        statsAccumRef.current = 0;
+
+        // optional: avoid updating state if nothing changed
+        // (cheap shallow compare for a couple of fields)
+        const prev = lastStatsRef.current;
+        if (
+            !prev ||
+            prev.active !== s.active ||
+            prev.spawnQueue !== s.spawnQueue ||
+            prev.spawned !== s.spawned ||
+            prev.completed !== s.completed ||
+            prev.junctions.global.waiting !== s.junctions.global.waiting ||
+            prev.junctions.global.inside !== s.junctions.global.inside
+        ) {
+            lastStatsRef.current = s;
+            setStats(s);
+        }
+        }
+
     });
+
+
+
+    const JunctionStatsLabels = memo(
+        function JunctionStatsLabels({
+            junctionGroups,
+            stats,
+        }: {
+            junctionGroups: THREE.Group[];
+            stats: SimulationStats;
+        }) {
+            return (
+                <>
+                    {junctionGroups
+                        .filter((g) => g?.userData?.id && g?.userData?.type && g.userData.type !== "link")
+                        .map((g) => {
+                            const id = g.userData.id as string;
+                            const js = stats.junctions.byId?.[id];
+                            if (!js) return null;
+
+                            // position above the object
+                            const pos = new THREE.Vector3();
+                            g.getWorldPosition(pos);
+                            pos.y += 10; // tweak height
+
+                            return (
+                                <group key={id} position={pos}>
+                                    <Billboard follow lockX={false} lockY={false} lockZ={false}>
+                                        <Html center sprite distanceFactor={12} transform>
+                                            <div
+                                                style={{
+                                                    background: "rgba(0,0,0,0.65)",
+                                                    color: "white",
+                                                    padding: "6px 8px",
+                                                    borderRadius: 8,
+                                                    fontSize: 12,
+                                                    lineHeight: 1.2,
+                                                    whiteSpace: "nowrap",
+                                                }}
+                                            >
+                                                <div style={{ fontWeight: 700 }}>
+                                                    {js.type} {id.slice(0, 6)}
+                                                </div>
+                                                <div>Approaching:{js.approaching} W:{js.waiting} I:{js.inside} X:{js.exiting}</div>
+                                                <div>in:{js.entered} out:{js.exited} blk:{js.blockedDownstream}</div>
+                                                {js.state && <div>sig:{js.state}</div>}
+                                            </div>
+                                        </Html>
+                                    </Billboard>
+                                </group>
+                            );
+                        })}
+                </>
+            );
+        },
+        (prevProps, nextProps) => {
+            // Custom comparison function to prevent unnecessary re-renders
+            // Only re-render if junction stats actually changed
+            const prevById = prevProps.stats.junctions.byId;
+            const nextById = nextProps.stats.junctions.byId;
+            
+            // Check if the number of junctions changed
+            const prevKeys = Object.keys(prevById);
+            const nextKeys = Object.keys(nextById);
+            
+            if (prevKeys.length !== nextKeys.length) return false;
+            
+            // Check if any junction stats changed
+            for (const id of nextKeys) {
+                const prev = prevById[id];
+                const next = nextById[id];
+                
+                if (!prev || !next) return false;
+                
+                // Compare all relevant fields
+                if (
+                    prev.approaching !== next.approaching ||
+                    prev.waiting !== next.waiting ||
+                    prev.inside !== next.inside ||
+                    prev.exiting !== next.exiting ||
+                    prev.entered !== next.entered ||
+                    prev.exited !== next.exited ||
+                    prev.blockedDownstream !== next.blockedDownstream ||
+                    prev.state !== next.state
+                ) {
+                    return false; // Stats changed, need to re-render
+                }
+            }
+            
+            return true; // No changes, skip re-render
+        }
+    );
+
+
+    
 
 
     return (
         <>
-            {simIsRunning && !isInitialised && (
-                <mesh position={[0, 5, 0]}>
-                    <sphereGeometry args={[0.5, 16, 16]} />
-                    <meshBasicMaterial color="yellow" />
-                </mesh>
+            {simIsRunning && isInitialised && (
+                <JunctionStatsLabels
+                    junctionGroups={junctionObjectRefs.current}
+                    stats={stats}
+                />
             )}
         </>
     );

@@ -14,7 +14,8 @@ export default function DebugPanel() {
         removeObject,
         simIsRunning,
         startSim,
-        haltSim
+        haltSim,
+        stats
     } = useJModellerContext();
 
 
@@ -289,22 +290,74 @@ export default function DebugPanel() {
     };
 
 
+
+
     return (
         <>
-            <div style={{ position: "absolute", top: 10, right: 500, padding: 10, background: "rgba(0,0,0,0.7)", color: "white", borderRadius: 8, minWidth: 300 }}>
-                <h1>Simulation Control</h1>
-                <button
-                    disabled={simIsRunning}
-                    onClick={() => startSim()}
-                >Start Simulation</button>
+            <div
+                style={{
+                    position: "absolute",
+                    top: 10,
+                    right: 500,
+                    padding: 10,
+                    background: "rgba(0,0,0,0.7)",
+                    color: "white",
+                    borderRadius: 8,
+                    minWidth: 320,
+                    fontFamily: "system-ui, sans-serif"
+                }}
+            >
+                <h1 style={{ margin: "0 0 8px 0", fontSize: 18 }}>Simulation Control</h1>
+
+                <button disabled={simIsRunning} onClick={() => startSim()}>
+                    Start Simulation
+                </button>
                 <br />
-                <button
-                    disabled={!simIsRunning}
-                    onClick={() => haltSim()}
-                >Stop Simulation</button>
+                <button disabled={!simIsRunning} onClick={() => haltSim()}>
+                    Stop Simulation
+                </button>
+
+                <hr style={{ margin: "10px 0", opacity: 0.3 }} />
+
+                <h2 style={{ margin: "0 0 8px 0", fontSize: 14, opacity: 0.9 }}>
+                    Global Stats
+                </h2>
+
+                <div style={{ fontSize: 13, lineHeight: 1.35 }}>
+                    <div><b>Active:</b> {stats.active}</div>
+                    <div><b>Spawn queue:</b> {stats.spawnQueue}</div>
+                    <div><b>Spawned:</b> {stats.spawned}</div>
+                    <div><b>Completed:</b> {stats.completed}</div>
+                    <div><b>Routes:</b> {stats.routes}</div>
+
+                    <hr style={{ margin: "8px 0", opacity: 0.2 }} />
+
+                    <div style={{ opacity: 0.9 }}>
+                        <div style={{ fontWeight: 700, marginBottom: 4 }}>
+                            Junctions ({stats.junctions.global.count})
+                        </div>
+
+                        <div>
+                            <b>Approaching:</b> {stats.junctions.global.approaching}{" "}
+                            <b>Waiting:</b> {stats.junctions.global.waiting}{" "}
+                            <b>Inside:</b> {stats.junctions.global.inside}{" "}
+                            <b>Exiting:</b> {stats.junctions.global.exiting}
+                        </div>
+
+                        <div>
+                            <b>Entered:</b> {stats.junctions.global.entered}{" "}
+                            <b>Exited:</b> {stats.junctions.global.exited}{" "}
+                            <b>Blocked (blk):</b> {stats.junctions.global.blockedDownstream}
+                        </div>
+                    </div>
+                </div>
             </div>
+
             <fieldset
                 disabled={simIsRunning}
+                style={{
+                    fontFamily: "system-ui, sans-serif"
+                }}
             >
                 {/* Add new object */}
                 <div style={{ position: "absolute", top: 10, right: 10, padding: 10, background: "rgba(0,0,0,0.7)", color: "white", borderRadius: 8, minWidth: 300 }}>

@@ -32,7 +32,13 @@ export function generateStopLine(
 
     return {
         line: new THREE.Line3(leftPoint, rightPoint),
-        properties: defaultLaneProperties
+        properties: {
+            ...defaultLaneProperties,
+            pattern: "solid",
+            colour: "white",
+            thickness: 8,
+            glow: 1.3,
+        }
     };
 }
 

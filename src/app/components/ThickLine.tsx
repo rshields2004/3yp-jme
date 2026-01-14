@@ -78,33 +78,37 @@ export const ThickLine = forwardRef<ThickLineHandle, ThickLineProps>(
         }, []); // Only run once on mount
 
         // Update all properties whenever they change
+        // 1) Geometry update (depends ONLY on points)
         useEffect(() => {
-            if (!geometryRef.current || !materialRef.current || !lineRef.current) return;
+            if (!geometryRef.current || !lineRef.current) return;
 
-            // Update geometry
-            if (geometryRef.current) {
-                const flat = points.flat();
+            const flat = points.flat();
+            const geom = geometryRef.current;
 
-                const geom = geometryRef.current;
+            const oldLength = geom.attributes.position.array.length;
 
-                // If the number of points changed, we MUST recreate geometry
-                const oldLength = geom.attributes.position.array.length;
-
-                if (oldLength !== flat.length) {
-                    geom.dispose();
-                    const newGeom = new LineGeometry();
-                    newGeom.setPositions(flat);
-                    lineRef.current.geometry = newGeom;
-                    geometryRef.current = newGeom;
-                } else {
-                    geom.setPositions(flat);
-                }
-
-                lineRef.current.computeLineDistances();
+            if (oldLength !== flat.length) {
+                geom.dispose();
+                const newGeom = new LineGeometry();
+                newGeom.setPositions(flat);
+                lineRef.current.geometry = newGeom;
+                geometryRef.current = newGeom;
+            } else {
+                geom.setPositions(flat);
             }
 
-            // Update material properties
-            materialRef.current.color.set(colour ?? 'white');
+            lineRef.current.computeLineDistances();
+            }, [points]);
+
+            // 2) Material update (does NOT depend on points)
+            useEffect(() => {
+            if (!materialRef.current) return;
+
+            // Only set colour if prop is provided (so imperative setters can take over)
+            if (colour !== undefined) {
+                materialRef.current.color.set(colour as any);
+            }
+
             materialRef.current.linewidth = linewidth ?? 1;
             materialRef.current.dashed = dashed ?? false;
             materialRef.current.dashSize = dashSize;
@@ -112,8 +116,8 @@ export const ThickLine = forwardRef<ThickLineHandle, ThickLineProps>(
             materialRef.current.worldUnits = worldUnits ?? false;
             materialRef.current.resolution.set(size.width, size.height);
             materialRef.current.needsUpdate = true;
+        }, [colour, linewidth, dashed, worldUnits, dashSize, gapSize, size.width, size.height]);
 
-        }, [points, colour, linewidth, dashed, worldUnits, dashSize, gapSize, size.width, size.height]);
 
         return <group ref={groupRef} />;
     }

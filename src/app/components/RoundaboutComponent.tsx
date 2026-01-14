@@ -42,7 +42,7 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, index }: RoundaboutP
         const maxLaneWidth = Math.max(...exitConfig.map(c => c.laneWidth));
         const maxDistanceToStopLine = Math.max(...exitConfig.map(c => c.exitLength)) + 15;
         
-        const islandRadius = maxLaneWidth * (maxLaneCount - maxNumLaneIn);
+        const islandRadius = (maxLaneWidth * (maxLaneCount - maxNumLaneIn)) * 2;
         const outerRadius = islandRadius + maxLaneWidth * maxNumLaneIn;
         
         
