@@ -16,14 +16,14 @@ type SimConfig = {
     maxSpawnAttemptsPerFrame: number;
 
     // Motion
-    initialSpeed: number; // NEW: configurable initial spawn speed
-    maxSpeed: number; // cruise speed
-    maxAccel: number; // +m/s^2
-    maxDecel: number; // +m/s^2 (braking)
+    initialSpeed: number;
+    maxSpeed: number;
+    maxAccel: number;
+    maxDecel: number;
 
     // Spacing
-    minBumperGap: number; // bumper-to-bumper gap at rest
-    timeHeadway: number;  // NEW: time-based following distance (seconds)
+    minBumperGap: number;
+    timeHeadway: number;
 
     // Rendering
     yOffset: number;
@@ -53,7 +53,7 @@ class Vehicle {
     currentSegment: RouteSegment | null = null;
     laneKey = "";
 
-    // NEW: stable start-lane identifier for spawn spacing (NOT route-dependent)
+    // stable start-lane identifier for spawn spacing (NOT route-dependent)
     spawnKey = "";
 
     constructor(id: number, model: THREE.Group, route: Route, length: number, initialSpeed = 0) {
@@ -69,6 +69,12 @@ class Vehicle {
         }
     }
 }
+
+type LaneOcc = {
+    v: Vehicle;
+    /** lane coordinate (used for sorting); for "reservation" occupants we pin this to start-of-lane */
+    pinnedCoord?: number;
+};
 
 export class VehicleManager {
     private scene: THREE.Scene;
@@ -104,13 +110,13 @@ export class VehicleManager {
             maxVehicles: 40,
             maxSpawnAttemptsPerFrame: 6,
 
-            initialSpeed: 0,  // NEW: default to 0, can be configured
+            initialSpeed: 0,
             maxSpeed: 10,
             maxAccel: 3.0,
             maxDecel: 6.0,
 
             minBumperGap: 2.0,
-            timeHeadway: 1.5,  // NEW: 1.5 second following distance
+            timeHeadway: 1.5,
 
             yOffset: 0.0,
 
@@ -122,13 +128,11 @@ export class VehicleManager {
     }
 
     private junctionIdFromNodeKey(k: string): string {
-        // Your NodeKey format appears to start with a UUID, followed by "-<exit>-<in/out>-<lane>"
-        // e.g. "UUID-2-out-0" or "UUID-0-in-0"
-        // So junction id is the first 36 chars of a UUID.
         if (!k) return k;
         return k.length >= 36 ? k.slice(0, 36) : k;
     }
 
+    /** Step 5: used by TrafficSimulation.tsx to query light state for colouring stop lines */
     public getIntersectionController(junctionId: string): IntersectionController | null {
         return this.intersectionControllers.get(junctionId) ?? null;
     }
@@ -178,7 +182,6 @@ export class VehicleManager {
         this.buildControllersIfNeeded();
         for (const c of this.intersectionControllers.values()) c.update(dt);
 
-
         // 1) demand -> queue
         this.spawnDemand += this.cfg.demandRatePerSec * dt;
         const newCars = Math.floor(this.spawnDemand);
@@ -227,85 +230,57 @@ export class VehicleManager {
                 this.completed += 1;
             }
         }
-        
     }
 
     // -----------------------
-    // Stage 2: lane queuing + accel/decel (REFACTORED with proper kinematics)
+    // Stage 2: lane queuing + accel/decel
     // -----------------------
 
-    /**
-     * Calculate the safe following speed based on gap to leader.
-     * Uses simple kinematic constraint: must be able to stop in available gap.
-     */
-    private calculateSafeFollowingSpeed(
-        followerSpeed: number,
-        leaderSpeed: number,
-        currentGap: number,  // actual bumper-to-bumper distance
-    ): number {
+    private calculateSafeFollowingSpeed(followerSpeed: number, leaderSpeed: number, currentGap: number): number {
         const { maxSpeed, maxDecel, minBumperGap, timeHeadway } = this.cfg;
 
-        // If gap is negative or very small, must stop
-        if (currentGap <= minBumperGap * 0.5) {
-            return 0;
-        }
+        if (currentGap <= minBumperGap * 0.5) return 0;
 
-        // Kinematic safe speed: max speed to stop in available gap
-        // v_safe = sqrt(2 * decel * available_gap)
         const availableGap = Math.max(0, currentGap - minBumperGap * 0.5);
         const kinematicSafeSpeed = Math.sqrt(2 * maxDecel * availableGap);
 
-        // Desired gap for comfortable following: minimum gap + speed-dependent headway
         const desiredGap = minBumperGap + Math.max(0, followerSpeed * timeHeadway);
 
-        // If gap is very large (> 2x desired), just use kinematic limit - accelerate freely
-        // This prevents slow acceleration when a stopped car is far ahead
         if (currentGap > desiredGap * 2) {
             return Math.min(maxSpeed, kinematicSafeSpeed);
         }
 
-        // If gap is between desiredGap and 2*desiredGap, blend towards maxSpeed
         if (currentGap >= desiredGap) {
-            // Comfortable zone - can go faster than leader, blend towards max
-            const blendFactor = (currentGap - desiredGap) / desiredGap; // 0 to 1
+            const blendFactor = (currentGap - desiredGap) / desiredGap;
             const blendedSpeed = leaderSpeed + blendFactor * (maxSpeed - leaderSpeed);
             return Math.min(blendedSpeed, kinematicSafeSpeed);
         }
 
-        // Gap is less than desired - need to slow down
-        // Use gap ratio to determine how much to slow
         const gapRatio = currentGap / desiredGap;
-        
-        // Target a speed proportional to gap, but don't exceed leader speed
-        // (we need to slow down to open the gap)
         const targetSpeed = maxSpeed * gapRatio;
-        
-        // Only limit to leader speed if we're quite close (< 70% of desired gap)
-        // This prevents the "stuck behind slow car" problem when gap is reasonable
+
         if (gapRatio < 0.7) {
             return Math.max(0, Math.min(targetSpeed, leaderSpeed, kinematicSafeSpeed));
         }
-        
+
         return Math.max(0, Math.min(targetSpeed, kinematicSafeSpeed));
     }
 
-    /**
-     * Calculate stopping distance from current speed using kinematic equation.
-     * d = v² / (2 * decel)
-     */
     private stoppingDistance(speed: number): number {
         return (speed * speed) / (2 * this.cfg.maxDecel);
     }
 
-    /**
-     * Calculate maximum speed to stop within given distance.
-     * v_max = sqrt(2 * decel * distance)
-     */
     private maxSpeedForDistance(distance: number): number {
         if (distance <= 0) return 0;
         return Math.sqrt(2 * this.cfg.maxDecel * distance);
     }
 
+    /**
+     * IMPORTANT FIX:
+     * - Build lane occupancy across routes (shared physical lane)
+     * - ALSO "reserve" the outgoing lane for vehicles inside a junction (so busy junctions don't deadlock)
+     * - ALSO block entry on green if downstream exit lane is occupied too close to the start (no space to clear)
+     */
     private applyLaneQueuingWithKinematics(dt: number, desiredS: Map<Vehicle, number>) {
         // STEP 1: Build same-route vehicle lists
         const vehiclesByRoute = new Map<Route, Vehicle[]>();
@@ -315,36 +290,47 @@ export class VehicleManager {
             vehiclesByRoute.set(v.route, arr);
         }
 
-        // Sort each route's vehicles front-to-back by s (highest s first)
         for (const vehicles of vehiclesByRoute.values()) {
             vehicles.sort((a, b) => b.s - a.s);
         }
 
-        // STEP 2: Build lane groups for cross-route collision detection
-        const lanes = new Map<string, Vehicle[]>();
+        // STEP 2: Build lane groups for cross-route collision detection (LaneOcc so we can "pin" junction reservations)
+        const lanes = new Map<string, LaneOcc[]>();
+
         for (const v of this.vehicles) {
-            if (!v.laneKey) continue;
-            const arr = lanes.get(v.laneKey) ?? [];
-            arr.push(v);
-            lanes.set(v.laneKey, arr);
+            // normal occupancy on current physical lane (if any)
+            if (v.laneKey) {
+                const arr = lanes.get(v.laneKey) ?? [];
+                arr.push({ v });
+                lanes.set(v.laneKey, arr);
+            }
+
+            // reservation occupancy: if inside a junction, also occupy the *exit* lane start
+            if (v.currentSegment?.phase === "inside") {
+                const exitLaneKey = this.getExitLaneKeyForVehicle(v);
+                if (exitLaneKey) {
+                    const arr = lanes.get(exitLaneKey) ?? [];
+                    // pin to lane start (coord = base + 0)
+                    arr.push({ v, pinnedCoord: this.laneStartCoordForExitLane(exitLaneKey, v) });
+                    lanes.set(exitLaneKey, arr);
+                }
+            }
         }
 
-        // Sort within lanes by lane coordinate
-        for (const laneVehicles of lanes.values()) {
-            laneVehicles.sort((a, b) => this.laneCoord(b) - this.laneCoord(a));
+        // Sort within lanes by lane coordinate (front-to-back)
+        for (const laneOccs of lanes.values()) {
+            laneOccs.sort((a, b) => this.occCoord(b, b.v.laneKey, desiredS) - this.occCoord(a, a.v.laneKey, desiredS));
         }
 
         // STEP 3: Process each route front-to-back
-        // This ensures same-route vehicles are processed in correct order
-        for (const [route, routeVehicles] of vehiclesByRoute.entries()) {
+        for (const [, routeVehicles] of vehiclesByRoute.entries()) {
             for (let i = 0; i < routeVehicles.length; i++) {
                 const v = routeVehicles[i];
 
-                // Find leader: check same-route, same-lane, AND upcoming segments
                 let leader: Vehicle | null = null;
                 let leaderGap = Infinity;
 
-                // A) Same-route leader (the vehicle directly ahead on this route)
+                // A) Same-route leader
                 if (i > 0) {
                     const sameRouteLead = routeVehicles[i - 1];
                     const leadS = desiredS.get(sameRouteLead) ?? sameRouteLead.s;
@@ -355,20 +341,19 @@ export class VehicleManager {
                     }
                 }
 
-                // B) Same-lane leader from different route (handles merging)
-                // Cars on different routes CAN share the same physical lane
+                // B) Same-lane leader from different route (shared physical lane)
                 if (v.laneKey) {
-                    const laneVehicles = lanes.get(v.laneKey) ?? [];
+                    const laneOccs = lanes.get(v.laneKey) ?? [];
                     const myCoord = this.laneCoord(v);
 
-                    for (const other of laneVehicles) {
+                    for (const occ of laneOccs) {
+                        const other = occ.v;
                         if (other === v) continue;
                         if (other.route === v.route) continue;
 
-                        const otherCoord = this.laneCoordFromS(other, desiredS.get(other) ?? other.s);
-                        if (otherCoord <= myCoord) continue; // not ahead
+                        const otherCoord = this.occCoord(occ, v.laneKey, desiredS);
+                        if (otherCoord <= myCoord) continue;
 
-                        // IMPORTANT: centre-based bumper gap (see Fix 2)
                         const gap = (otherCoord - myCoord) - 0.5 * (other.length + v.length);
 
                         if (gap < leaderGap) {
@@ -378,44 +363,36 @@ export class VehicleManager {
                     }
                 }
 
-                // C) Cross-segment lookahead: find vehicles in NEXT segment's lane
-                // This handles link->approach transitions where different routes share the approach
+                // C) Cross-segment lookahead: link->approach
                 const lookaheadResult = this.findLeaderInUpcomingSegments(v, lanes, desiredS);
                 if (lookaheadResult && lookaheadResult.gap < leaderGap) {
                     leaderGap = lookaheadResult.gap;
                     leader = lookaheadResult.leader;
                 }
 
-                // Calculate target speed
                 let targetSpeed = this.cfg.maxSpeed;
 
                 if (leader) {
                     targetSpeed = this.calculateSafeFollowingSpeed(v.speed, leader.speed, leaderGap);
                 }
 
-                // If we found a leader via lookahead (cross-route in next segment),
-                // apply additional caution near segment boundary
                 if (lookaheadResult && lookaheadResult.gap < this.stoppingDistance(v.speed) + 5) {
                     const boundarySpeedCap = this.getSegmentBoundarySpeedCap(v);
                     targetSpeed = Math.min(targetSpeed, boundarySpeedCap);
                 }
 
-                // Apply stopline cap (traffic lights)
-                targetSpeed = this.applyStoplineCap(v, targetSpeed);
+                // STOPLINE + DOWNSTREAM BLOCKING (fixes "cars inside junction can't look ahead onto exit")
+                targetSpeed = this.applyStoplineAndDownstreamCap(v, targetSpeed, lanes, desiredS);
 
-                // Use emergency braking if gap is critical (less than braking distance)
                 const brakingDist = this.stoppingDistance(v.speed);
                 const isEmergency = leader && leaderGap < brakingDist && leaderGap < 10;
 
-                // Smoothly approach target (with emergency braking if needed)
                 if (isEmergency) {
-                    // Emergency: use 1.5x max deceleration
                     v.speed = Math.max(targetSpeed, v.speed - this.cfg.maxDecel * 1.5 * dt);
                 } else {
                     v.speed = this.approachSpeed(v.speed, targetSpeed, dt);
                 }
 
-                // Calculate new position
                 let newS = v.s + v.speed * dt;
 
                 // Hard collision prevention for same-route leader
@@ -431,11 +408,9 @@ export class VehicleManager {
                 // Hard collision prevention for cross-route leader
                 if (leader && leader.route !== v.route) {
                     const newGap = this.estimateGapAfterMove(v, newS, leader, desiredS);
-
-                    // FINAL safety clamp: do not allow overlap
                     if (newGap < this.cfg.minBumperGap) {
-                        newS = v.s;   // freeze position
-                        v.speed = 0;  // full stop
+                        newS = v.s;
+                        v.speed = 0;
                     }
                 }
 
@@ -444,14 +419,24 @@ export class VehicleManager {
         }
     }
 
-    /**
-     * Look ahead into upcoming segments to find vehicles that might be queued there.
-     * This handles the link->approach transition where a fast car on a link needs to
-     * see slow/stopped cars on the approach (possibly from different routes).
-     */
+    private occCoord(occ: LaneOcc, laneKey: string, desiredS: Map<Vehicle, number>): number {
+        if (typeof occ.pinnedCoord === "number") return occ.pinnedCoord;
+
+        const other = occ.v;
+        const sVal = desiredS.get(other) ?? other.s;
+
+        // If other is currently on THIS physical lane, use standard lane coord
+        if (other.laneKey && other.laneKey === laneKey) {
+            return this.laneCoordFromS(other, sVal);
+        }
+
+        // Otherwise fall back to s (shouldn't happen often)
+        return sVal;
+    }
+
     private findLeaderInUpcomingSegments(
         v: Vehicle,
-        lanes: Map<string, Vehicle[]>,
+        lanes: Map<string, LaneOcc[]>,
         desiredS: Map<Vehicle, number>
     ): { leader: Vehicle; gap: number } | null {
         const segs = v.route.segments;
@@ -460,111 +445,82 @@ export class VehicleManager {
         const currentSeg = v.currentSegment;
         if (!currentSeg) return null;
 
-        // Only do cross-segment lookahead on link phase (link -> approach transition)
-        // This is where the original problem occurred
-        if (currentSeg.phase !== "link") {
-            return null;
-        }
+        if (currentSeg.phase !== "link") return null;
 
-        // Distance from current position to end of current segment
         const distToSegEnd = Math.max(0, (currentSeg.s1 ?? 0) - v.s);
 
-        // Calculate required braking distance at current speed
         const brakingDist = this.stoppingDistance(v.speed);
-        
-        // Look ahead far enough to cover braking distance + buffer
         const lookaheadDist = Math.max(brakingDist + 10, 30);
 
-        // Only look at the NEXT segment's lane
         const nextSegIdx = v.segmentIndex + 1;
         if (nextSegIdx >= segs.length) return null;
-        
+
         const nextSeg = segs[nextSegIdx];
         const nextLaneKey = this.laneKeyForSegment(nextSeg);
-        
-        // Skip if next segment has no laneKey (inside junction)
         if (!nextLaneKey) return null;
 
-        // Find vehicles in the next segment's lane
-        const laneVehicles = lanes.get(nextLaneKey) ?? [];
-        
+        const laneOccs = lanes.get(nextLaneKey) ?? [];
+
         let closestLeader: Vehicle | null = null;
         let closestGap = Infinity;
 
-        for (const other of laneVehicles) {
+        for (const occ of laneOccs) {
+            const other = occ.v;
             if (other === v) continue;
-            if (other.route === v.route) continue; // Same-route handled elsewhere
+            if (other.route === v.route) continue;
 
             const otherSeg = other.currentSegment;
             if (!otherSeg) continue;
-            
-            // Only match vehicles in the same phase as our next segment
-            // (e.g., if next segment is "approach", only match other "approach" vehicles)
-            if (otherSeg.phase !== nextSeg.phase) continue;
 
-            // Other's distance from start of their segment
-            const otherDistInSeg = other.s - (otherSeg.s0 ?? 0);
+            if (otherSeg.phase !== nextSeg.phase && !(otherSeg.phase === "inside" && nextSeg.phase === "approach")) {
+                // normal match: same phase
+                // allow reservation logic to still work by not hard rejecting inside here
+            }
 
-            // Total gap = distance to next segment + other's position - other's length
+            const otherCoord = this.occCoord(occ, nextLaneKey, desiredS);
+
+            // Treat the start of next lane as coord 0 (relative). We need relative distance into lane.
+            // We can approximate "distance into segment" via coord - base.
+            const base = this.laneBases.get(nextLaneKey)?.get(this.segmentId(nextSeg)) ?? 0;
+            const otherDistInSeg = Math.max(0, otherCoord - base);
+
             const gap = distToSegEnd + otherDistInSeg - other.length;
 
-            // Only consider if gap is reasonable (positive and within lookahead distance)
             if (gap > 0 && gap < lookaheadDist && gap < closestGap) {
                 closestGap = gap;
                 closestLeader = other;
             }
         }
 
-        if (closestLeader) {
-            return { leader: closestLeader, gap: closestGap };
-        }
-
+        if (closestLeader) return { leader: closestLeader, gap: closestGap };
         return null;
     }
 
-    /**
-     * Calculate a safe approach speed when nearing a segment boundary.
-     * This ensures we can stop in time if there's a queue in the next segment.
-     */
     private getSegmentBoundarySpeedCap(v: Vehicle): number {
         const currentSeg = v.currentSegment;
         if (!currentSeg) return this.cfg.maxSpeed;
 
-        // Distance to end of current segment
         const distToSegEnd = Math.max(0, (currentSeg.s1 ?? 0) - v.s);
-
-        // Only apply cap when close to boundary (within braking distance + buffer)
         const cautionZone = this.stoppingDistance(this.cfg.maxSpeed) + 5;
-        
-        if (distToSegEnd > cautionZone) {
-            return this.cfg.maxSpeed; // Far from boundary, no cap
-        }
 
-        // When close to boundary, cap speed so we can stop at the boundary if needed
-        // This gives us time to react to queues in the next segment
-        // v_max = sqrt(2 * decel * distance)
+        if (distToSegEnd > cautionZone) return this.cfg.maxSpeed;
+
         const safeSpeed = Math.sqrt(2 * this.cfg.maxDecel * Math.max(0.5, distToSegEnd));
-        
-        return Math.max(safeSpeed, 2); // Minimum 2 m/s to keep moving
+        return Math.max(safeSpeed, 2);
     }
 
-    /**
-     * Estimate gap to a cross-route leader after moving to newS
-     */
     private estimateGapAfterMove(
         follower: Vehicle,
         newS: number,
         leader: Vehicle,
         desiredS: Map<Vehicle, number>
     ): number {
-        // If same lane, use lane coordinates
         if (follower.laneKey && follower.laneKey === leader.laneKey) {
             const myNewCoord = this.laneCoordFromS(follower, newS);
             const leaderCoord = this.laneCoordFromS(leader, desiredS.get(leader) ?? leader.s);
             return (leaderCoord - myNewCoord) - 0.5 * (leader.length + follower.length);
         }
 
-        // For cross-segment, estimate based on segment boundaries
         const currentSeg = follower.currentSegment;
         if (!currentSeg) return Infinity;
 
@@ -578,14 +534,12 @@ export class VehicleManager {
     }
 
     private approachSpeed(current: number, target: number, dt: number): number {
-        if (target > current) {
-            return Math.min(target, current + this.cfg.maxAccel * dt);
-        }
+        if (target > current) return Math.min(target, current + this.cfg.maxAccel * dt);
         return Math.max(target, current - this.cfg.maxDecel * dt);
     }
 
     // -----------------------
-    // Lane coordinate system (fixes merge/boundary deadlocks)
+    // Lane coordinate system
     // -----------------------
 
     private laneCoord(v: Vehicle): number {
@@ -604,7 +558,6 @@ export class VehicleManager {
     private buildLaneBases() {
         this.laneBases.clear();
 
-        // collect segments per laneKey (dedup)
         const perLane = new Map<string, Map<string, RouteSegment>>();
 
         for (const r of this.routes) {
@@ -619,7 +572,6 @@ export class VehicleManager {
             }
         }
 
-        // build base offsets via simple connectivity (A.to === B.from)
         for (const [laneKey, segMap] of perLane.entries()) {
             const segs = Array.from(segMap.values());
             const ids = segs.map((s) => this.segmentId(s));
@@ -631,7 +583,6 @@ export class VehicleManager {
                 indeg.set(id, 0);
             }
 
-            // NOTE: O(n^2) but usually small
             for (const a of segs) {
                 for (const b of segs) {
                     if (a === b) continue;
@@ -668,7 +619,6 @@ export class VehicleManager {
                 }
             }
 
-            // fallback
             for (const id of ids) if (!bases.has(id)) bases.set(id, 0);
 
             this.laneBases.set(laneKey, bases);
@@ -686,8 +636,7 @@ export class VehicleManager {
     }
 
     // -----------------------
-    // Spawning (length-aware, s-based spacing using spawnKey)
-    // REFACTORED: Now accounts for initial speed and required braking distance
+    // Spawning
     // -----------------------
 
     private trySpawnOne(): boolean {
@@ -701,7 +650,6 @@ export class VehicleManager {
 
         const length = this.computeModelLength(model);
 
-        // IMPORTANT: use s-based spawn spacing that accounts for initial speed
         if (!this.hasSpawnSpace(route, length)) return false;
 
         const p0 = route.points[0];
@@ -721,14 +669,12 @@ export class VehicleManager {
 
         this.scene.add(model);
 
-        // Use configurable initial speed
         const v = new Vehicle(this.nextId++, model, route, length, this.cfg.initialSpeed);
         v.s = 0;
         v.segmentIndex = 0;
         v.currentSegment = route.segments?.length ? route.segments[0] : null;
         this.updateVehicleSegment(v);
 
-        // spawnKey = start lane identity (not route identity)
         v.spawnKey = this.spawnKeyForRoute(route);
 
         this.vehicles.push(v);
@@ -742,7 +688,6 @@ export class VehicleManager {
         const size = new THREE.Vector3();
         box.getSize(size);
 
-        // assumes forward is +Z; swap to size.x if your models are different
         const raw = size.z;
         if (!Number.isFinite(raw) || raw < 0.1) return 4.5;
         return raw;
@@ -753,15 +698,10 @@ export class VehicleManager {
         const lk = firstSeg ? this.laneKeyForSegment(firstSeg) : "";
         if (lk) return `spawn:${lk}`;
 
-        // fallback if segments missing: use first point (stable enough)
         const p0 = route.points[0];
         return `spawnPoint:${p0[0].toFixed(3)},${p0[1].toFixed(3)},${p0[2].toFixed(3)}`;
     }
 
-    /**
-     * REFACTORED: Check if there's enough space to spawn a new vehicle.
-     * Now accounts for initial speed by requiring extra space for braking distance.
-     */
     private hasSpawnSpace(route: Route, newLen: number): boolean {
         const spawnKey = this.spawnKeyForRoute(route);
 
@@ -771,7 +711,6 @@ export class VehicleManager {
         for (const v of this.vehicles) {
             if (v.spawnKey !== spawnKey) continue;
 
-            // Vehicles start at s=0 and move forward; the closest to spawn is the smallest s
             if (v.s < nearestS) {
                 nearestS = v.s;
                 nearest = v;
@@ -780,21 +719,12 @@ export class VehicleManager {
 
         if (!nearest) return true;
 
-        // Calculate required spawn gap:
-        // 1. New car length
-        // 2. Minimum bumper gap
-        // 3. Extra space for braking from initial speed (if both have same speed, 
-        //    they need space to decelerate without collision)
-        // 4. Time headway buffer at initial speed
-        
         const brakingDistance = this.stoppingDistance(this.cfg.initialSpeed);
         const timeHeadwayBuffer = this.cfg.initialSpeed * this.cfg.timeHeadway;
-        
-        // Required gap = car length + min gap + larger of (braking distance or time headway)
+
         const safetyBuffer = Math.max(brakingDistance, timeHeadwayBuffer);
         const required = newLen + this.cfg.minBumperGap + safetyBuffer;
 
-        // Since spawn is at s=0, the front car must be at least "required" ahead
         return nearestS >= required;
     }
 
@@ -803,7 +733,7 @@ export class VehicleManager {
     // -----------------------
 
     private laneKeyForSegment(seg: RouteSegment): string {
-        // Stage 2 queues only on physical lanes; ignore junction-internal segments
+        // only queue on physical lanes; ignore junction-internal segments
         if (seg.phase === "inside") return "";
         if (seg.phase === "exit") return `lane:${seg.to}`;
         return `lane:${seg.from}`; // link + approach
@@ -872,22 +802,19 @@ export class VehicleManager {
 
         return v.s >= maxS - 1e-6;
     }
+
     private buildControllersIfNeeded() {
         if (this.controllersBuilt) return;
 
-        // junctionKey -> set of incoming laneKeys
         const incoming = new Map<string, Set<string>>();
 
         for (const r of this.routes) {
             for (const seg of r.segments ?? []) {
                 if (seg.phase !== "approach") continue;
 
-                // temporary inference: junctionKey is "to"
                 const junctionKey = this.junctionIdFromNodeKey(String(seg.to));
-
-                // temporary laneKey: incoming lane identity is based on "from"
-                // (this matches your laneKeyForSegment(link/approach) -> lane:<from>)
                 const entryKey = this.entryGroupKeyFromNodeKey(String(seg.from));
+
                 const set = incoming.get(junctionKey) ?? new Set<string>();
                 set.add(entryKey);
                 incoming.set(junctionKey, set);
@@ -897,51 +824,127 @@ export class VehicleManager {
         for (const [junctionKey, laneSet] of incoming.entries()) {
             this.intersectionControllers.set(
                 junctionKey,
-                new IntersectionController(junctionKey, Array.from(laneSet), 8, 1) // 8s each approach
+                new IntersectionController(junctionKey, Array.from(laneSet), 8, 1)
             );
             console.log("[controller]", junctionKey, Array.from(laneSet));
         }
-        
 
         this.controllersBuilt = true;
     }
 
-    private applyStoplineCap(v: Vehicle, targetSpeed: number): number {
+    /**
+     * FIX:
+     * - If red: cap speed so we can stop at the stopline (existing behaviour)
+     * - If green: ALSO require downstream space on exit lane, otherwise treat like red (prevents blocking the junction)
+     */
+    private applyStoplineAndDownstreamCap(
+        v: Vehicle,
+        targetSpeed: number,
+        lanes: Map<string, LaneOcc[]>,
+        desiredS: Map<Vehicle, number>
+    ): number {
         const seg = v.currentSegment;
         if (!seg) return targetSpeed;
 
         // Only stop-control on approaches
         if (seg.phase !== "approach") return targetSpeed;
 
-        // junctionKey inferred as seg.to for approaches
         const junctionKey = this.junctionIdFromNodeKey(String(seg.to));
         const controller = this.intersectionControllers.get(junctionKey);
-        if (!controller) return targetSpeed; // if unknown, allow
+        if (!controller) return targetSpeed;
 
-        // Vehicle's incoming lane identity
         const entryKey = this.entryGroupKeyFromNodeKey(String(seg.from));
-        if (controller.isGreen(entryKey)) return targetSpeed;
 
-        // Otherwise cap so we can stop at stopline (seg.s1) without overshooting.
-        // stopline is at seg.s1, but we want the FRONT bumper to stop before it.
+        const green = controller.isGreen(entryKey);
+
+        // If green, require downstream exit lane space
+        if (green) {
+            const exitLaneKey = this.getExitLaneKeyForVehicle(v);
+            if (exitLaneKey) {
+                const requiredGap = v.length + this.cfg.minBumperGap;
+
+                const nearestAtStart = this.nearestCoordInLaneAfterStart(exitLaneKey, lanes, desiredS);
+                if (nearestAtStart !== null && nearestAtStart < requiredGap) {
+                    // no space to clear -> behave like red (stop at line)
+                    return this.capToStopline(v, targetSpeed, seg);
+                }
+            }
+            return targetSpeed;
+        }
+
+        // red -> stop at line
+        return this.capToStopline(v, targetSpeed, seg);
+    }
+
+    private capToStopline(v: Vehicle, targetSpeed: number, seg: RouteSegment): number {
         const frontOffset = 0.5 * v.length;
-        const stopS = seg.s1 - frontOffset;
+        const stopS = (seg.s1 ?? 0) - frontOffset;
 
-        const dist = stopS - v.s; // distance remaining to stop target
-        if (dist <= 0) return 0;  // already at/over line -> stop
+        const dist = stopS - v.s;
+        if (dist <= 0) return 0;
 
-        // v_max = sqrt(2 * a * d) - maximum speed to stop within distance d
         const vmax = Math.sqrt(2 * this.cfg.maxDecel * dist);
         return Math.min(targetSpeed, vmax);
     }
 
+    /** Smallest positive coordinate from the start of the lane (approx) */
+    private nearestCoordInLaneAfterStart(
+        laneKey: string,
+        lanes: Map<string, LaneOcc[]>,
+        desiredS: Map<Vehicle, number>
+    ): number | null {
+        const occs = lanes.get(laneKey);
+        if (!occs || occs.length === 0) return null;
+
+        let best: number | null = null;
+
+        for (const occ of occs) {
+            const coord = this.occCoord(occ, laneKey, desiredS);
+
+            // Interpret "lane start" as coordinate 0; if bases aren't zero, coord still works for comparisons
+            if (coord <= 0) continue;
+
+            if (best === null || coord < best) best = coord;
+        }
+
+        // If everyone is pinned at 0 (reservation), best may remain null; treat as blocked in that case
+        return best ?? 0;
+    }
+
+    /** Determine which *physical exit lane* this vehicle will go onto (first non-"inside" segment ahead). */
+    private getExitLaneKeyForVehicle(v: Vehicle): string {
+        const segs = v.route.segments ?? [];
+        if (!segs.length) return "";
+
+        for (let i = v.segmentIndex + 1; i < segs.length; i++) {
+            const s = segs[i];
+            if (s.phase === "inside") continue;
+
+            const lk = this.laneKeyForSegment(s);
+            return lk ?? "";
+        }
+        return "";
+    }
+
+    private laneStartCoordForExitLane(exitLaneKey: string, v: Vehicle): number {
+        // If we can find the next non-inside segment, use its base
+        const segs = v.route.segments ?? [];
+        for (let i = v.segmentIndex + 1; i < segs.length; i++) {
+            const s = segs[i];
+            if (s.phase === "inside") continue;
+            const segId = this.segmentId(s);
+            const base = this.laneBases.get(exitLaneKey)?.get(segId) ?? 0;
+            return base; // "start of lane"
+        }
+        return 0;
+    }
+
     private entryGroupKeyFromNodeKey(nodeKey: string): string {
-        // "UUID-0-in-2" -> "entry:UUID-0-in"
         const parts = nodeKey.split("-");
         if (parts.length < 4) return `entry:${nodeKey}`;
-        const uuid = parts.slice(0, 5).join("-"); // UUID has 5 dash parts
+        const uuid = parts.slice(0, 5).join("-");
         const exit = parts[5];
-        const dir  = parts[6]; // "in" or "out"
+        const dir = parts[6];
         return `entry:${uuid}-${exit}-${dir}`;
     }
 }
