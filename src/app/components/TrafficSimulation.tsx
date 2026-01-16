@@ -368,14 +368,14 @@ export const TrafficSimulation = () => {
 
             vehicleManagerRef.current = new VehicleManager(scene, carModelsRef.current, routesRef.current, {
                 // Spawning
-                demandRatePerSec: 10,
+                demandRatePerSec: 2,
                 maxVehicles: 100,
                 maxSpawnAttemptsPerFrame: 20,
                 maxSpawnQueue: 25,
 
                 // Motion
                 initialSpeed: 0,
-                maxSpeed: 10,
+                maxSpeed: 100,
                 maxAccel: 4,
                 maxDecel: 8,
                 comfortDecel: 4,
