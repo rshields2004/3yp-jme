@@ -329,6 +329,7 @@ export default function DebugPanel() {
                     <div><b>Spawned:</b> {stats.spawned}</div>
                     <div><b>Completed:</b> {stats.completed}</div>
                     <div><b>Routes:</b> {stats.routes}</div>
+                    <div><b>Elapsed Time:</b> {stats.elapsedTime.toFixed(1)}s</div>
 
                     <hr style={{ margin: "8px 0", opacity: 0.2 }} />
 
@@ -348,6 +349,10 @@ export default function DebugPanel() {
                             <b>Entered:</b> {stats.junctions.global.entered}{" "}
                             <b>Exited:</b> {stats.junctions.global.exited}{" "}
                             <b>Blocked (blk):</b> {stats.junctions.global.blockedDownstream}
+                        </div>
+                        
+                        <div>
+                            <b>Avg Wait Time:</b> {stats.junctions.global.avgWaitTime.toFixed(1)}s
                         </div>
                     </div>
                 </div>
@@ -386,7 +391,7 @@ export default function DebugPanel() {
                         const config = obj.config as IntersectionConfig;
                         return (
                             <div key={obj.id} style={{ marginBottom: "1rem" }}>
-                                <h3>Intersection #{i}</h3>
+                                <h3>Intersection {obj.id.slice(0, 6)}</h3>
                                 <label># Exits:
                                     <input
                                         type="number"
@@ -441,7 +446,7 @@ export default function DebugPanel() {
                         const config = obj.config as IntersectionConfig;
                         return (
                             <div key={obj.id} style={{ marginBottom: "1rem" }}>
-                                <h3>Roundabout #{i}</h3>
+                                <h3>Roundabout {obj.id.slice(0, 6)}</h3>
                                 <label># Exits:
                                     <input
                                         type="number"

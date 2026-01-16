@@ -17,7 +17,7 @@ export type JunctionStats = {
     // flow counters (optional but useful)
     entered: number;         // cumulative since sim start/reset
     exited: number;          // cumulative since sim start/reset
-    blockedDownstream: number; // cumulative “couldn't enter due to downstream full” events
+    avgWaitTime: number;     // average wait time in seconds
 
     // signals (optional)
     currentGreenKey?: string | null;
@@ -32,7 +32,7 @@ export type JunctionStatsGlobal = {
     exiting: number;
     entered: number;
     exited: number;
-    blockedDownstream: number;
+    avgWaitTime: number;     // global average wait time in seconds
 };
 
 export type SimulationStats = {
@@ -41,8 +41,7 @@ export type SimulationStats = {
     completed: number;
     waiting: number;  // you can keep this as “global waiting at any junction”
     routes: number;
-    spawnQueue: number;
-
+    spawnQueue: number;    elapsedTime: number; // time elapsed since simulation start in seconds
     junctions: {
         global: JunctionStatsGlobal;
         byId: Record<string, JunctionStats>;
@@ -61,6 +60,8 @@ export type SimConfig = {
     maxSpeed: number;
     maxAccel: number;
     maxDecel: number;
+    comfortDecel: number;
+    maxJerk: number;
 
     // Spacing
     minBumperGap: number;

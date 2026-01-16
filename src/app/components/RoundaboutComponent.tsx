@@ -154,7 +154,7 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, index }: RoundaboutP
                 anchorX="center"
                 anchorY="middle"
             >
-                Roundabout {index}
+                Roundabout {id.slice(0, 6)}
             </Text>
 
             {/* Selection ring */}

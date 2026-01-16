@@ -27,6 +27,7 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
             waiting: 0,
             routes: 0,
             spawnQueue: 0,
+            elapsedTime: 0,
             junctions: {
                 global: {
                     count: 0,
@@ -36,7 +37,7 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
                     exiting: 0,
                     entered: 0,
                     exited: 0,
-                    blockedDownstream: 0,
+                    avgWaitTime: 0,
                 },
                 byId: {},
             },

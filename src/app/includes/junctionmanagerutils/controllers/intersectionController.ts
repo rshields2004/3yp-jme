@@ -47,8 +47,13 @@ export class IntersectionController {
     }
 
     update(dt: number) {
-        // If no control needed, do nothing
-        if (this.laneKeys.length <= 1) return;
+        // If no control needed, keep green and exit
+        if (this.laneKeys.length <= 1) {
+            this.state = "GREEN";
+            this.timer = 0;
+            this.greenIndex = 0;
+            return;
+        }
 
         this.timer += dt;
 
@@ -84,6 +89,13 @@ export class IntersectionController {
                 break;
             }
         }
+    }
+
+    setTimings(greenSeconds: number, amberSeconds: number, redAmberSeconds: number, allRedSeconds: number) {
+        this.greenSeconds = Math.max(1, greenSeconds);
+        this.amberSeconds = Math.max(1, amberSeconds);
+        this.redAmberSeconds = Math.max(0.5, redAmberSeconds);
+        this.allRedSeconds = Math.max(0.5, allRedSeconds);
     }
 
     /** True only during GREEN phase for the currently-served approach. */

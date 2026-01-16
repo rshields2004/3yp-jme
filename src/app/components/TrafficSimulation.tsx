@@ -5,7 +5,7 @@ import { useRef, useState, useEffect, useCallback, memo } from "react";
 import { MTLLoader, OBJLoader } from "three/examples/jsm/Addons.js";
 import { useJModellerContext } from "../context/JModellerContext";
 import * as THREE from "three";
-import { generateAllRoutes, Route } from "../includes/junctionmanagerutils/carRouting";
+import { generateAllRoutes, Route, getRoutePoints } from "../includes/junctionmanagerutils/carRouting";
 import { carFiles } from "../includes/types/carTypes";
 import { VehicleManager } from "../includes/junctionmanagerutils/vehicleManager";
 import { ThickLineHandle } from "./ThickLine";
@@ -154,6 +154,107 @@ function createFallbackCarModels(): THREE.Group[] {
 }
 
 /**
+ * Junction Stats Labels Component - displays stats above each junction
+ * Defined outside TrafficSimulation to ensure stable memoization
+ */
+const JunctionStatsLabels = memo(
+    function JunctionStatsLabels({
+        junctionGroups,
+        stats,
+        positionsCache,
+    }: {
+        junctionGroups: THREE.Group[];
+        stats: SimulationStats;
+        positionsCache: Map<string, THREE.Vector3>;
+    }) {
+        return (
+            <>
+                {junctionGroups
+                    .filter((g) => g?.userData?.id && g?.userData?.type && g.userData.type !== "link")
+                    .map((g) => {
+                        const id = g.userData.id as string;
+                        const js = stats.junctions.byId?.[id];
+                        if (!js) return null;
+
+                        // Use cached position or calculate once
+                        let pos = positionsCache.get(id);
+                        if (!pos) {
+                            pos = new THREE.Vector3();
+                            g.getWorldPosition(pos);
+                            pos.y += 10; // tweak height
+                            positionsCache.set(id, pos);
+                        }
+
+                        return (
+                            <group key={id} position={pos}>
+                                <Billboard follow lockX={false} lockY={false} lockZ={false}>
+                                    <Html center sprite distanceFactor={12} transform>
+                                        <div
+                                            style={{
+                                                background: "rgba(0,0,0,0.65)",
+                                                color: "white",
+                                                padding: "6px 8px",
+                                                borderRadius: 8,
+                                                fontSize: 12,
+                                                lineHeight: 1.2,
+                                                whiteSpace: "nowrap",
+                                            }}
+                                        >
+                                            <div style={{ fontWeight: 700 }}>
+                                                {js.type} {id.slice(0, 6)}
+                                            </div>
+                                            <div>Approaching:{js.approaching} W:{js.waiting} I:{js.inside} X:{js.exiting}</div>
+                                            <div>in:{js.entered} out:{js.exited}</div>
+                                            <div>Avg Wait: {js.avgWaitTime.toFixed(1)}s</div>
+                                            {js.state && <div>sig:{js.state}</div>}
+                                        </div>
+                                    </Html>
+                                </Billboard>
+                            </group>
+                        );
+                    })}
+            </>
+        );
+    },
+    (prevProps, nextProps) => {
+        // Custom comparison function to prevent unnecessary re-renders
+        // Only re-render if junction stats actually changed meaningfully
+        const prevById = prevProps.stats.junctions.byId;
+        const nextById = nextProps.stats.junctions.byId;
+        
+        // Check if the number of junctions changed
+        const prevKeys = Object.keys(prevById);
+        const nextKeys = Object.keys(nextById);
+        
+        if (prevKeys.length !== nextKeys.length) return false;
+        
+        // Check if any junction stats changed
+        for (const id of nextKeys) {
+            const prev = prevById[id];
+            const next = nextById[id];
+            
+            if (!prev || !next) return false;
+            
+            // Compare all relevant fields (use tolerance for avgWaitTime to avoid flickering)
+            if (
+                prev.approaching !== next.approaching ||
+                prev.waiting !== next.waiting ||
+                prev.inside !== next.inside ||
+                prev.exiting !== next.exiting ||
+                prev.entered !== next.entered ||
+                prev.exited !== next.exited ||
+                prev.state !== next.state ||
+                Math.abs(prev.avgWaitTime - next.avgWaitTime) > 0.05
+            ) {
+                return false; // Stats changed, need to re-render
+            }
+        }
+        
+        return true; // No changes, skip re-render
+    }
+);
+
+/**
  * Traffic Simulation Component
  * Drop this into your Scene component to enable traffic simulation
  */
@@ -210,7 +311,8 @@ export const TrafficSimulation = () => {
 
         routesRef.current.forEach((route, i) => {
             const color = colors[i % colors.length];
-            const points = route.points.map((p) => new THREE.Vector3(p[0], p[1] + 0.1, p[2]));
+            const routePoints = getRoutePoints(route);
+            const points = routePoints.map((p: [number, number, number]) => new THREE.Vector3(p[0], p[1] + 0.1, p[2]));
             if (points.length < 2) return;
 
             const geometry = new THREE.BufferGeometry().setFromPoints(points);
@@ -249,7 +351,7 @@ export const TrafficSimulation = () => {
             const { routes } = generateAllRoutes(junction, junctionObjectRefs.current, {
                 maxSteps: 30,
                 disallowUTurn: true,
-                spacing: 0.5,
+                spacing: 0.01,
             });
 
             routesRef.current = routes;
@@ -270,8 +372,8 @@ export const TrafficSimulation = () => {
 
                 // Kinematics
                 maxSpeed: 10,      // target cruising speed
-                maxAccel: 100,      // m/s^2-ish
-                maxDecel: 100,      // m/s^2-ish (positive number, applied as braking)
+                maxAccel: 4,      // m/s^2-ish
+                maxDecel: 8,      // m/s^2-ish (positive number, applied as braking)
 
                 yOffset: 0,
 
@@ -299,14 +401,14 @@ export const TrafficSimulation = () => {
                 waiting: 0,
                 junctions: {
                     global: {
-                    count: 0,
-                    approaching: 0,
-                    waiting: 0,
-                    inside: 0,
-                    exiting: 0,
-                    entered: 0,
-                    exited: 0,
-                    blockedDownstream: 0,
+                        count: 0,
+                        approaching: 0,
+                        waiting: 0,
+                        inside: 0,
+                        exiting: 0,
+                        entered: 0,
+                        exited: 0,
+                        avgWaitTime: 0,                    
                     },
                     byId: {},
                 },
@@ -353,17 +455,18 @@ export const TrafficSimulation = () => {
             spawnQueue: 0,
             junctions: {
                 global: {
-                count: 0,
-                approaching: 0,
-                waiting: 0,
-                inside: 0,
-                exiting: 0,
-                entered: 0,
-                exited: 0,
-                blockedDownstream: 0,
+                    count: 0,
+                    approaching: 0,
+                    waiting: 0,
+                    inside: 0,
+                    exiting: 0,
+                    entered: 0,
+                    exited: 0,
+                    avgWaitTime: 0,
                 },
                 byId: {},
             },
+            elapsedTime: 0,
         });
 
         console.log("Traffic simulation cleaned up");
@@ -434,99 +537,8 @@ export const TrafficSimulation = () => {
 
 
 
-    const JunctionStatsLabels = memo(
-        function JunctionStatsLabels({
-            junctionGroups,
-            stats,
-        }: {
-            junctionGroups: THREE.Group[];
-            stats: SimulationStats;
-        }) {
-            return (
-                <>
-                    {junctionGroups
-                        .filter((g) => g?.userData?.id && g?.userData?.type && g.userData.type !== "link")
-                        .map((g) => {
-                            const id = g.userData.id as string;
-                            const js = stats.junctions.byId?.[id];
-                            if (!js) return null;
-
-                            // position above the object
-                            const pos = new THREE.Vector3();
-                            g.getWorldPosition(pos);
-                            pos.y += 10; // tweak height
-
-                            return (
-                                <group key={id} position={pos}>
-                                    <Billboard follow lockX={false} lockY={false} lockZ={false}>
-                                        <Html center sprite distanceFactor={12} transform>
-                                            <div
-                                                style={{
-                                                    background: "rgba(0,0,0,0.65)",
-                                                    color: "white",
-                                                    padding: "6px 8px",
-                                                    borderRadius: 8,
-                                                    fontSize: 12,
-                                                    lineHeight: 1.2,
-                                                    whiteSpace: "nowrap",
-                                                }}
-                                            >
-                                                <div style={{ fontWeight: 700 }}>
-                                                    {js.type} {id.slice(0, 6)}
-                                                </div>
-                                                <div>Approaching:{js.approaching} W:{js.waiting} I:{js.inside} X:{js.exiting}</div>
-                                                <div>in:{js.entered} out:{js.exited} blk:{js.blockedDownstream}</div>
-                                                {js.state && <div>sig:{js.state}</div>}
-                                            </div>
-                                        </Html>
-                                    </Billboard>
-                                </group>
-                            );
-                        })}
-                </>
-            );
-        },
-        (prevProps, nextProps) => {
-            // Custom comparison function to prevent unnecessary re-renders
-            // Only re-render if junction stats actually changed
-            const prevById = prevProps.stats.junctions.byId;
-            const nextById = nextProps.stats.junctions.byId;
-            
-            // Check if the number of junctions changed
-            const prevKeys = Object.keys(prevById);
-            const nextKeys = Object.keys(nextById);
-            
-            if (prevKeys.length !== nextKeys.length) return false;
-            
-            // Check if any junction stats changed
-            for (const id of nextKeys) {
-                const prev = prevById[id];
-                const next = nextById[id];
-                
-                if (!prev || !next) return false;
-                
-                // Compare all relevant fields
-                if (
-                    prev.approaching !== next.approaching ||
-                    prev.waiting !== next.waiting ||
-                    prev.inside !== next.inside ||
-                    prev.exiting !== next.exiting ||
-                    prev.entered !== next.entered ||
-                    prev.exited !== next.exited ||
-                    prev.blockedDownstream !== next.blockedDownstream ||
-                    prev.state !== next.state
-                ) {
-                    return false; // Stats changed, need to re-render
-                }
-            }
-            
-            return true; // No changes, skip re-render
-        }
-    );
-
-
-    
-
+    // Cache junction positions to avoid recalculating every frame
+    const junctionPositionsRef = useRef<Map<string, THREE.Vector3>>(new Map());
 
     return (
         <>
@@ -534,6 +546,7 @@ export const TrafficSimulation = () => {
                 <JunctionStatsLabels
                     junctionGroups={junctionObjectRefs.current}
                     stats={stats}
+                    positionsCache={junctionPositionsRef.current}
                 />
             )}
         </>

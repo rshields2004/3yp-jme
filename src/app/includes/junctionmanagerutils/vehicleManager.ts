@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { Route, RouteSegment } from "./carRouting";
+import { Route, RouteSegment, getRoutePoints, estimateRouteSpacing, computeSegmentDistances } from "./carRouting";
 import { IntersectionController } from "./controllers/intersectionController";
 import { Vehicle } from "./vehicle";
 import { JunctionObjectTypes } from "../types/types";
@@ -26,6 +26,13 @@ export class VehicleManager {
     private laneBases = new Map<string, Map<string, number>>();
     private laneBasesBuilt = false;
 
+    // Cache for segment distance info (s0, s1) per route
+    private routeSegmentDistances = new Map<Route, Array<{ s0: number; s1: number }>>();
+    
+    // Cache for route points and spacing
+    private routePointsCache = new Map<Route, [number, number, number][]>();
+    private routeSpacingCache = new Map<Route, number>();
+
     private cfg: SimConfig;
 
     private intersectionControllers = new Map<string, IntersectionController>();
@@ -36,8 +43,11 @@ export class VehicleManager {
     private lastActiveLogged: number | null = null;
 
     private statsSnapshot: SimulationStats | null = null;
-    private junctionCounters = new Map<string, { entered: number; exited: number; blockedDownstream: number }>();
+    private junctionCounters = new Map<string, { entered: number; exited: number; totalWaitTime: number; waitCount: number }>();
     private lastVehJunctionTag = new Map<number, { jid: string | null; phase: string | null }>();
+    private elapsedTime = 0;
+    // Track when each vehicle started waiting at a junction (vehicleId -> { junctionId, startTime })
+    private vehicleWaitStart = new Map<number, { jid: string; startTime: number }>();
 
 
     constructor(scene: THREE.Scene, carModels: THREE.Group[], routes: Route[], cfg?: Partial<SimConfig>) {
@@ -55,6 +65,8 @@ export class VehicleManager {
             maxSpeed: 10,
             maxAccel: 3.0,
             maxDecel: 6.0,
+            comfortDecel: 3,
+            maxJerk: 10,
 
             minBumperGap: 2.0,
             timeHeadway: 1.5,
@@ -69,9 +81,39 @@ export class VehicleManager {
         };
     }
 
-    private junctionIdFromNodeKey(k: string): string {
-        if (!k) return k;
-        return k.length >= 36 ? k.slice(0, 36) : k;
+    /** Convert a Node object to a string key */
+    private nodeToKey(node: { structureID: string; exitIndex: number; direction: string; laneIndex: number }): string {
+        return `${node.structureID}-${node.exitIndex}-${node.direction}-${node.laneIndex}`;
+    }
+
+    /** Helper: get cached segment distances for a route */
+    private getSegmentDistances(route: Route): Array<{ s0: number; s1: number }> {
+        let cached = this.routeSegmentDistances.get(route);
+        if (!cached) {
+            cached = computeSegmentDistances(route);
+            this.routeSegmentDistances.set(route, cached);
+        }
+        return cached;
+    }
+
+    /** Helper: get cached route points */
+    private getRoutePointsCached(route: Route): [number, number, number][] {
+        let cached = this.routePointsCache.get(route);
+        if (!cached) {
+            cached = getRoutePoints(route);
+            this.routePointsCache.set(route, cached);
+        }
+        return cached;
+    }
+
+    /** Helper: get cached route spacing */
+    private getRouteSpacing(route: Route): number {
+        let cached = this.routeSpacingCache.get(route);
+        if (!cached) {
+            cached = estimateRouteSpacing(route);
+            this.routeSpacingCache.set(route, cached);
+        }
+        return cached;
     }
 
     /** Step 5: used by TrafficSimulation.tsx to query light state for colouring stop lines */
@@ -111,6 +153,10 @@ export class VehicleManager {
         this.laneBases.clear();
         this.laneBasesBuilt = false;
 
+        this.routeSegmentDistances.clear();
+        this.routePointsCache.clear();
+        this.routeSpacingCache.clear();
+
         this.intersectionControllers.clear();
         this.roundaboutControllers.clear();
         this.controllersBuilt = false;
@@ -121,11 +167,15 @@ export class VehicleManager {
         this.statsSnapshot = null;
         this.junctionCounters.clear();
         this.lastVehJunctionTag.clear();
+        this.elapsedTime = 0;
+        this.vehicleWaitStart.clear();
     }
 
 
     public update(dt: number, junctionObjectRefs: React.RefObject<THREE.Group<THREE.Object3DEventMap>[]>) {
         if (!this.routes.length) return;
+
+        this.elapsedTime += dt;
 
         if (!this.laneBasesBuilt) this.buildLaneBases();
 
@@ -172,7 +222,7 @@ export class VehicleManager {
             this.applyLaneQueuingWithKinematics(dt, desiredS);
         } else {
             for (const v of this.vehicles) {
-                v.speed = this.approachSpeed(v.speed, this.cfg.maxSpeed, dt);
+                v.speed = this.approachSpeed(v.speed, v.preferredSpeed, dt, v);
                 desiredS.set(v, v.s + v.speed * dt);
             }
         }
@@ -194,6 +244,50 @@ export class VehicleManager {
                 this.completed += 1;
             }
         }
+        // --- Wait time tracking (event-based: track start/end of waiting) ---
+        for (const v of this.vehicles) {
+            const seg = v.currentSegment;
+            const jid = seg?.to?.structureID ?? seg?.from?.structureID;
+            
+            // Check if vehicle is currently waiting (approach phase, stopped, near stopline)
+            let isWaiting = false;
+            let waitJid: string | null = null;
+            if (seg && seg.phase === "approach" && jid) {
+                const segDists = this.getSegmentDistances(v.route);
+                const segInfo = segDists[v.segmentIndex];
+                const nearStop = (segInfo?.s1 ?? 0) - v.s < 2.0;
+                const stopped = v.speed < 0.2;
+                isWaiting = nearStop && stopped;
+                waitJid = jid;
+            }
+            
+            const existing = this.vehicleWaitStart.get(v.id);
+            
+            if (isWaiting && waitJid) {
+                // Vehicle is waiting - start tracking if not already
+                if (!existing) {
+                    this.vehicleWaitStart.set(v.id, { jid: waitJid, startTime: this.elapsedTime });
+                }
+            } else {
+                // Vehicle is not waiting - if it was waiting before, record the wait duration
+                if (existing) {
+                    const waitDuration = this.elapsedTime - existing.startTime;
+                    const c = this.junctionCounters.get(existing.jid) ?? { entered: 0, exited: 0, blockedDownstream: 0, totalWaitTime: 0, waitCount: 0 };
+                    c.totalWaitTime += waitDuration;
+                    c.waitCount += 1;
+                    this.junctionCounters.set(existing.jid, c);
+                    this.vehicleWaitStart.delete(v.id);
+                }
+            }
+        }
+        
+        // Clean up wait tracking for despawned vehicles
+        for (const [vid] of this.vehicleWaitStart) {
+            if (!this.vehicles.some(v => v.id === vid)) {
+                this.vehicleWaitStart.delete(vid);
+            }
+        }
+        
         this.updateStats();
     }
 
@@ -232,28 +326,30 @@ export class VehicleManager {
     // Stage 2: lane queuing + accel/decel
     // -----------------------
 
-    private calculateSafeFollowingSpeed(followerSpeed: number, leaderSpeed: number, currentGap: number): number {
-        const { maxSpeed, maxDecel, minBumperGap, timeHeadway } = this.cfg;
+    private calculateSafeFollowingSpeed(follower: Vehicle, leaderSpeed: number, currentGap: number): number {
+        const { maxSpeed, minBumperGap } = this.cfg;
+        const maxDecel = follower.maxDecel;
+        const timeHeadway = follower.timeHeadway;
 
         if (currentGap <= minBumperGap * 0.5) return 0;
 
         const availableGap = Math.max(0, currentGap - minBumperGap * 0.5);
         const kinematicSafeSpeed = Math.sqrt(2 * maxDecel * availableGap);
 
-        const desiredGap = minBumperGap + Math.max(0, followerSpeed * timeHeadway);
+        const desiredGap = minBumperGap + Math.max(0, follower.speed * timeHeadway);
 
         if (currentGap > desiredGap * 2) {
-            return Math.min(maxSpeed, kinematicSafeSpeed);
+            return Math.min(follower.preferredSpeed, kinematicSafeSpeed);
         }
 
         if (currentGap >= desiredGap) {
             const blendFactor = (currentGap - desiredGap) / desiredGap;
-            const blendedSpeed = leaderSpeed + blendFactor * (maxSpeed - leaderSpeed);
+            const blendedSpeed = leaderSpeed + blendFactor * (follower.preferredSpeed - leaderSpeed);
             return Math.min(blendedSpeed, kinematicSafeSpeed);
         }
 
         const gapRatio = currentGap / desiredGap;
-        const targetSpeed = maxSpeed * gapRatio;
+        const targetSpeed = follower.preferredSpeed * gapRatio;
 
         if (gapRatio < 0.7) {
             return Math.max(0, Math.min(targetSpeed, leaderSpeed, kinematicSafeSpeed));
@@ -262,13 +358,15 @@ export class VehicleManager {
         return Math.max(0, Math.min(targetSpeed, kinematicSafeSpeed));
     }
 
-    private stoppingDistance(speed: number): number {
-        return (speed * speed) / (2 * this.cfg.maxDecel);
+    private stoppingDistance(speed: number, vehicle?: Vehicle): number {
+        const decel = vehicle ? vehicle.maxDecel : this.cfg.maxDecel;
+        return (speed * speed) / (2 * decel);
     }
 
-    private maxSpeedForDistance(distance: number): number {
+    private maxSpeedForDistance(distance: number, vehicle?: Vehicle): number {
         if (distance <= 0) return 0;
-        return Math.sqrt(2 * this.cfg.maxDecel * distance);
+        const decel = vehicle ? vehicle.maxDecel : this.cfg.maxDecel;
+        return Math.sqrt(2 * decel * distance);
     }
 
     /**
@@ -366,27 +464,37 @@ export class VehicleManager {
                     leader = lookaheadResult.leader;
                 }
 
-                let targetSpeed = this.cfg.maxSpeed;
+                let targetSpeed = v.preferredSpeed;
 
                 if (leader) {
-                    targetSpeed = this.calculateSafeFollowingSpeed(v.speed, leader.speed, leaderGap);
+                    targetSpeed = this.calculateSafeFollowingSpeed(v, leader.speed, leaderGap);
                 }
 
-                if (lookaheadResult && lookaheadResult.gap < this.stoppingDistance(v.speed) + 5) {
+                if (lookaheadResult && lookaheadResult.gap < this.stoppingDistance(v.speed, v) + 5) {
                     const boundarySpeedCap = this.getSegmentBoundarySpeedCap(v);
                     targetSpeed = Math.min(targetSpeed, boundarySpeedCap);
                 }
 
                 // STOPLINE + DOWNSTREAM BLOCKING (fixes "cars inside junction can't look ahead onto exit")
-                targetSpeed = this.applyStoplineAndDownstreamCap(v, targetSpeed, lanes, desiredS);
+                const stoplineSpeed = this.applyStoplineAndDownstreamCap(v, targetSpeed, lanes, desiredS);
+                
+                // For safety-critical signals (red lights), bypass smoothing for immediate response
+                // Check both current approach segments AND link segments looking ahead to red lights
+                const isOnApproach = v.currentSegment?.phase === "approach";
+                const isLookingAheadToStopline = v.currentSegment?.phase === "link" && stoplineSpeed < targetSpeed;
+                const isStoppingForLight = stoplineSpeed < targetSpeed && (isOnApproach || isLookingAheadToStopline);
+                
+                // Apply speed smoothing for more natural behavior (but not for red lights)
+                const smoothedSpeed = isStoppingForLight ? stoplineSpeed : v.smoothTargetSpeed(dt, stoplineSpeed);
 
-                const brakingDist = this.stoppingDistance(v.speed);
+                const brakingDist = this.stoppingDistance(v.speed, v);
                 const isEmergency = leader && leaderGap < brakingDist && leaderGap < 10;
 
-                if (isEmergency) {
-                    v.speed = Math.max(targetSpeed, v.speed - this.cfg.maxDecel * 1.5 * dt);
+                if (isEmergency || isStoppingForLight) {
+                    // Immediate response for emergencies and red lights
+                    v.speed = Math.max(smoothedSpeed, v.speed - v.maxDecel * 1.5 * dt);
                 } else {
-                    v.speed = this.approachSpeed(v.speed, targetSpeed, dt);
+                    v.speed = this.approachSpeed(v.speed, smoothedSpeed, dt, v);
                 }
 
                 let newS = v.s + v.speed * dt;
@@ -443,9 +551,11 @@ export class VehicleManager {
 
         if (currentSeg.phase !== "link") return null;
 
-        const distToSegEnd = Math.max(0, (currentSeg.s1 ?? 0) - v.s);
+        const segDists = this.getSegmentDistances(v.route);
+        const segInfo = segDists[v.segmentIndex];
+        const distToSegEnd = Math.max(0, (segInfo?.s1 ?? 0) - v.s);
 
-        const brakingDist = this.stoppingDistance(v.speed);
+        const brakingDist = this.stoppingDistance(v.speed, v);
         const lookaheadDist = Math.max(brakingDist + 10, 30);
 
         const nextSegIdx = v.segmentIndex + 1;
@@ -494,14 +604,16 @@ export class VehicleManager {
 
     private getSegmentBoundarySpeedCap(v: Vehicle): number {
         const currentSeg = v.currentSegment;
-        if (!currentSeg) return this.cfg.maxSpeed;
+        if (!currentSeg) return v.preferredSpeed;
 
-        const distToSegEnd = Math.max(0, (currentSeg.s1 ?? 0) - v.s);
-        const cautionZone = this.stoppingDistance(this.cfg.maxSpeed) + 5;
+        const segDists = this.getSegmentDistances(v.route);
+        const segInfo = segDists[v.segmentIndex];
+        const distToSegEnd = Math.max(0, (segInfo?.s1 ?? 0) - v.s);
+        const cautionZone = this.stoppingDistance(v.preferredSpeed, v) + 5;
 
-        if (distToSegEnd > cautionZone) return this.cfg.maxSpeed;
+        if (distToSegEnd > cautionZone) return v.preferredSpeed;
 
-        const safeSpeed = Math.sqrt(2 * this.cfg.maxDecel * Math.max(0.5, distToSegEnd));
+        const safeSpeed = Math.sqrt(2 * v.maxDecel * Math.max(0.5, distToSegEnd));
         return Math.max(safeSpeed, 2);
     }
 
@@ -520,18 +632,25 @@ export class VehicleManager {
         const currentSeg = follower.currentSegment;
         if (!currentSeg) return Infinity;
 
-        const distToSegEnd = Math.max(0, (currentSeg.s1 ?? 0) - newS);
+        const followerSegDists = this.getSegmentDistances(follower.route);
+        const followerSegInfo = followerSegDists[follower.segmentIndex];
+        const distToSegEnd = Math.max(0, (followerSegInfo?.s1 ?? 0) - newS);
         const leaderSeg = leader.currentSegment;
         if (!leaderSeg) return Infinity;
 
-        const leaderDistInSeg = leader.s - (leaderSeg.s0 ?? 0);
+        const leaderSegDists = this.getSegmentDistances(leader.route);
+        const leaderSegInfo = leaderSegDists[leader.segmentIndex];
+        const leaderDistInSeg = leader.s - (leaderSegInfo?.s0 ?? 0);
 
         return distToSegEnd + leaderDistInSeg - leader.length;
     }
 
-    private approachSpeed(current: number, target: number, dt: number): number {
-        if (target > current) return Math.min(target, current + this.cfg.maxAccel * dt);
-        return Math.max(target, current - this.cfg.maxDecel * dt);
+    private approachSpeed(current: number, target: number, dt: number, vehicle: Vehicle): number {
+        const maxAccel = vehicle.maxAccel;
+        const maxDecel = vehicle.maxDecel;
+        
+        if (target > current) return Math.min(target, current + maxAccel * dt);
+        return Math.max(target, current - maxDecel * dt);
     }
 
     // -----------------------
@@ -548,7 +667,9 @@ export class VehicleManager {
 
         const segId = this.segmentId(seg);
         const base = this.laneBases.get(v.laneKey)?.get(segId) ?? 0;
-        return base + (sValue - (seg.s0 ?? 0));
+        const segDists = this.getSegmentDistances(v.route);
+        const segInfo = segDists[v.segmentIndex];
+        return base + (sValue - (segInfo?.s0 ?? 0));
     }
 
     private buildLaneBases() {
@@ -624,11 +745,21 @@ export class VehicleManager {
     }
 
     private segmentId(seg: RouteSegment): string {
-        return `${seg.phase}|${seg.from}|${seg.to}|${(seg.s0 ?? 0).toFixed(3)}|${(seg.s1 ?? 0).toFixed(3)}`;
+        const fromKey = `${seg.from.structureID}-${seg.from.exitIndex}-${seg.from.direction}-${seg.from.laneIndex}`;
+        const toKey = `${seg.to.structureID}-${seg.to.exitIndex}-${seg.to.direction}-${seg.to.laneIndex}`;
+        return `${seg.phase}|${fromKey}|${toKey}`;
     }
 
     private segmentLen(seg: RouteSegment): number {
-        return Math.max(0, (seg.s1 ?? 0) - (seg.s0 ?? 0));
+        if (!seg.points || seg.points.length < 2) return 0;
+        let len = 0;
+        for (let i = 1; i < seg.points.length; i++) {
+            const dx = seg.points[i][0] - seg.points[i-1][0];
+            const dy = seg.points[i][1] - seg.points[i-1][1];
+            const dz = seg.points[i][2] - seg.points[i-1][2];
+            len += Math.sqrt(dx*dx + dy*dy + dz*dz);
+        }
+        return len;
     }
 
     // -----------------------
@@ -639,7 +770,8 @@ export class VehicleManager {
         if (!this.routes.length || !this.carModels.length) return false;
 
         const route = this.routes[Math.floor(Math.random() * this.routes.length)];
-        if (!route?.points || route.points.length < 2) return false;
+        const points = this.getRoutePointsCached(route);
+        if (!points || points.length < 2) return false;
 
         const template = this.carModels[Math.floor(Math.random() * this.carModels.length)];
         const model = template.clone(true);
@@ -648,8 +780,8 @@ export class VehicleManager {
 
         if (!this.hasSpawnSpace(route, length)) return false;
 
-        const p0 = route.points[0];
-        const p1 = route.points[1];
+        const p0 = points[0];
+        const p1 = points[1];
 
         const pos0 = new THREE.Vector3(p0[0], p0[1] + this.cfg.yOffset, p0[2]);
         const pos1 = new THREE.Vector3(p1[0], p1[1] + this.cfg.yOffset, p1[2]);
@@ -666,6 +798,15 @@ export class VehicleManager {
         this.scene.add(model);
 
         const v = new Vehicle(this.nextId++, model, route, length, this.cfg.initialSpeed);
+        
+        // Initialize per-vehicle characteristics based on config with variation
+        const random = () => 0.85 + Math.random() * 0.3;
+        v.maxAccel = this.cfg.maxAccel * random();
+        v.maxDecel = this.cfg.maxDecel * random();
+        v.preferredSpeed = this.cfg.maxSpeed * random();
+        v.reactionTime = 0.15 + Math.random() * 0.25;
+        v.timeHeadway = this.cfg.timeHeadway * (0.8 + Math.random() * 0.4);
+        
         v.s = 0;
         v.segmentIndex = 0;
         v.currentSegment = route.segments?.length ? route.segments[0] : null;
@@ -694,7 +835,8 @@ export class VehicleManager {
         const lk = firstSeg ? this.laneKeyForSegment(firstSeg) : "";
         if (lk) return `spawn:${lk}`;
 
-        const p0 = route.points[0];
+        const points = this.getRoutePointsCached(route);
+        const p0 = points[0];
         return `spawnPoint:${p0[0].toFixed(3)},${p0[1].toFixed(3)},${p0[2].toFixed(3)}`;
     }
 
@@ -715,7 +857,7 @@ export class VehicleManager {
 
         if (!nearest) return true;
 
-        const brakingDistance = this.stoppingDistance(this.cfg.initialSpeed);
+        const brakingDistance = (this.cfg.initialSpeed * this.cfg.initialSpeed) / (2 * this.cfg.maxDecel);
         const timeHeadwayBuffer = this.cfg.initialSpeed * this.cfg.timeHeadway;
 
         const safetyBuffer = Math.max(brakingDistance, timeHeadwayBuffer);
@@ -731,7 +873,7 @@ export class VehicleManager {
     private laneKeyForSegment(seg: RouteSegment): string {
         // For roundabouts, we NEED to track "inside" phase to prevent collisions
         if (seg.phase === "inside") {
-            const junctionId = this.junctionIdFromNodeKey(String(seg.to));
+            const junctionId = seg.to.structureID;
             const isRoundabout = this.roundaboutControllers.has(junctionId);
             if (isRoundabout) {
                 // Use the roundabout junction as the lane key
@@ -739,8 +881,10 @@ export class VehicleManager {
             }
             return "";  // Normal intersection - ignore inside phase
         }
-        if (seg.phase === "exit") return `lane:${seg.to}`;
-        return `lane:${seg.from}`; // link + approach
+        const toKey = `${seg.to.structureID}-${seg.to.exitIndex}-${seg.to.direction}-${seg.to.laneIndex}`;
+        const fromKey = `${seg.from.structureID}-${seg.from.exitIndex}-${seg.from.direction}-${seg.from.laneIndex}`;
+        if (seg.phase === "exit") return `lane:${toKey}`;
+        return `lane:${fromKey}`; // link + approach
     }
 
     private updateVehicleSegment(v: Vehicle) {
@@ -752,7 +896,8 @@ export class VehicleManager {
             return;
         }
 
-        while (v.segmentIndex < segs.length - 1 && v.s > (segs[v.segmentIndex].s1 ?? 0)) {
+        const segDists = this.getSegmentDistances(v.route);
+        while (v.segmentIndex < segs.length - 1 && v.s > (segDists[v.segmentIndex]?.s1 ?? 0)) {
             v.segmentIndex++;
         }
 
@@ -765,10 +910,10 @@ export class VehicleManager {
     // -----------------------
 
     private applySAndPose(v: Vehicle, targetS: number): boolean {
-        const pts = v.route.points;
+        const pts = this.getRoutePointsCached(v.route);
         if (!pts || pts.length < 2) return true;
 
-        const spacing = v.route.spacing ?? 0.5;
+        const spacing = this.getRouteSpacing(v.route);
         const maxS = (pts.length - 1) * spacing;
 
         v.s = Math.max(0, Math.min(targetS, maxS));
@@ -824,8 +969,8 @@ export class VehicleManager {
             for (const seg of r.segments ?? []) {
                 if (seg.phase !== "approach") continue;
 
-                const junctionKey = this.junctionIdFromNodeKey(String(seg.to));
-                const entryKey = this.entryGroupKeyFromNodeKey(String(seg.from));
+                const junctionKey = seg.to.structureID;
+                const entryKey = this.entryGroupKeyFromNodeKey(this.nodeToKey(seg.from));
 
                 const set = incoming.get(junctionKey) ?? new Set<string>();
                 set.add(entryKey);
@@ -863,6 +1008,7 @@ export class VehicleManager {
      * FIX:
      * - If red: cap speed so we can stop at the stopline (existing behaviour)
      * - If green: ALSO require downstream space on exit lane, otherwise treat like red (prevents blocking the junction)
+     * - Also look ahead from link segments to upcoming stop lines
      */
     private applyStoplineAndDownstreamCap(
         v: Vehicle,
@@ -873,31 +1019,98 @@ export class VehicleManager {
         const seg = v.currentSegment;
         if (!seg) return targetSpeed;
 
-        // Only stop-control on approaches
-        if (seg.phase !== "approach") return targetSpeed;
+        // Check current segment if it's an approach
+        if (seg.phase === "approach") {
+            return this.applyStoplineLogic(v, targetSpeed, seg, lanes, desiredS);
+        }
 
-        const junctionKey = this.junctionIdFromNodeKey(String(seg.to));
+        // Look ahead from link segments to the next approach segment
+        if (seg.phase === "link") {
+            const segs = v.route.segments;
+            if (!segs || v.segmentIndex >= segs.length - 1) return targetSpeed;
+
+            const nextSegIdx = v.segmentIndex + 1;
+            const nextSeg = segs[nextSegIdx];
+            
+            if (nextSeg && nextSeg.phase === "approach") {
+                // Calculate distance to the stop line in the next segment
+                const segDists = this.getSegmentDistances(v.route);
+                const currentSegInfo = segDists[v.segmentIndex];
+                const nextSegInfo = segDists[nextSegIdx];
+                
+                const distToCurrentSegEnd = Math.max(0, (currentSegInfo?.s1 ?? 0) - v.s);
+                const nextSegLength = Math.max(0, (nextSegInfo?.s1 ?? 0) - (nextSegInfo?.s0 ?? 0));
+                const totalDistToStopline = distToCurrentSegEnd + nextSegLength;
+                
+                // Only start slowing down if stopline is within lookahead distance
+                const brakingDist = this.stoppingDistance(v.speed, v);
+                const lookaheadDist = Math.max(brakingDist * 1.5, 20); // Start slowing earlier
+                
+                if (totalDistToStopline < lookaheadDist) {
+                    // Check if the light will be red
+                    const junctionKey = nextSeg.to.structureID;
+                    const controller = this.intersectionControllers.get(junctionKey) ?? this.roundaboutControllers.get(junctionKey);
+                    
+                    if (controller) {
+                        const entryKey = this.entryGroupKeyFromNodeKey(this.nodeToKey(nextSeg.from));
+                        const green = controller.isGreen(entryKey);
+                        
+                        if (!green) {
+                            // Red light ahead - start slowing down
+                            const frontOffset = 0.5 * v.length;
+                            const stopBuffer = this.cfg.stopLineOffset;
+                            const adjustedDist = totalDistToStopline - frontOffset - stopBuffer;
+                            
+                            if (adjustedDist > 0) {
+                                const vmax = Math.sqrt(2 * v.maxDecel * adjustedDist);
+                                return Math.min(targetSpeed, vmax);
+                            }
+                            return 0;
+                        }
+                    }
+                }
+            }
+        }
+
+        return targetSpeed;
+    }
+
+    private applyStoplineLogic(
+        v: Vehicle,
+        targetSpeed: number,
+        seg: RouteSegment,
+        lanes: Map<string, LaneOcc[]>,
+        desiredS: Map<Vehicle, number>
+    ): number {
+        const junctionKey = seg.to.structureID;
         const controller = this.intersectionControllers.get(junctionKey) ?? this.roundaboutControllers.get(junctionKey);
         if (!controller) return targetSpeed;
 
-        const entryKey = this.entryGroupKeyFromNodeKey(String(seg.from));
+        const entryKey = this.entryGroupKeyFromNodeKey(this.nodeToKey(seg.from));
 
         const green = controller.isGreen(entryKey);
 
-        // If green, require downstream exit lane space
+        // If green, check downstream space ONLY for regular intersections
+        // Roundabouts: if green, just go (roundabout controller manages yield)
         if (green) {
-            const exitLaneKey = this.getExitLaneKeyForVehicle(v);
-            if (exitLaneKey) {
-                const requiredGap = v.length + this.cfg.minBumperGap;
+            const isRoundabout = this.roundaboutControllers.has(junctionKey);
+            if (!isRoundabout) {
+                // Intersections: check for downstream blocking
+                const exitLaneKey = this.getExitLaneKeyForVehicle(v);
+                if (exitLaneKey) {
+                    const safetyMargin = Math.max(v.speed * v.timeHeadway * 0.5, this.cfg.minBumperGap);
+                    const requiredGap = v.length + safetyMargin;
 
-                const laneStartBase = this.laneStartBaseForExitLane(exitLaneKey, v);
-                const nearest = this.nearestDistanceFromLaneStart(exitLaneKey, laneStartBase, lanes, desiredS);
+                    const laneStartBase = this.laneStartBaseForExitLane(exitLaneKey, v);
+                    const nearest = this.nearestDistanceFromLaneStart(exitLaneKey, laneStartBase, lanes, desiredS);
 
-                if (nearest !== null && nearest.dist < requiredGap) {
-                    // blocked by downstream congestion
-                    return this.capToStopline(v, targetSpeed, seg);
+                    if (nearest !== null && nearest.dist < requiredGap) {
+                        // blocked by downstream congestion
+                        return this.capToStopline(v, targetSpeed, seg);
+                    }
                 }
             }
+            // If green: roundabout vehicles just go, intersection vehicles go if not blocked
             return targetSpeed;
         }
 
@@ -911,12 +1124,14 @@ export class VehicleManager {
         // additional buffer so cars stop *before* the stop line
         const stopBuffer = this.cfg.stopLineOffset;
 
-        const stopS = (seg.s1 ?? 0) - frontOffset - stopBuffer;
+        const segDists = this.getSegmentDistances(v.route);
+        const segInfo = segDists[v.segmentIndex];
+        const stopS = (segInfo?.s1 ?? 0) - frontOffset - stopBuffer;
 
         const dist = stopS - v.s;
         if (dist <= 0) return 0;
 
-        const vmax = Math.sqrt(2 * this.cfg.maxDecel * dist);
+        const vmax = Math.sqrt(2 * v.maxDecel * dist);
         return Math.min(targetSpeed, vmax);
     }
     private laneStartBaseForExitLane(exitLaneKey: string, v: Vehicle): number {
@@ -932,7 +1147,7 @@ export class VehicleManager {
     }
 
 
-    /** Smallest positive coordinate from the start of the lane (approx) */
+    /** Smallest positive coordinate from the start of the lane to the back of the nearest vehicle */
     private nearestDistanceFromLaneStart(
         laneKey: string,
         laneStartBase: number,
@@ -948,14 +1163,17 @@ export class VehicleManager {
         for (const occ of occs) {
             const coord = this.occCoord(occ, laneKey, desiredS);
 
-            // Convert absolute coord -> distance from lane start
-            const distFromStart = coord - laneStartBase;
+            // Convert absolute coord -> distance from lane start to vehicle center
+            const distToCenter = coord - laneStartBase;
 
             // We only care about vehicles on/after the lane start
-            if (distFromStart < 0) continue;
+            if (distToCenter < 0) continue;
 
-            if (distFromStart < bestDist) {
-                bestDist = distFromStart;
+            // Calculate distance to the back of the vehicle (subtract half length)
+            const distToBack = Math.max(0, distToCenter - occ.v.length * 0.5);
+
+            if (distToBack < bestDist) {
+                bestDist = distToBack;
                 bestId = occ.v.id;
             }
         }
@@ -1007,7 +1225,7 @@ export class VehicleManager {
 
         const ensure = (jid: string, type: JunctionObjectTypes): JunctionStats => {
             if (!byId[jid]) {
-                const c = this.junctionCounters.get(jid) ?? { entered: 0, exited: 0, blockedDownstream: 0 };
+                const c = this.junctionCounters.get(jid) ?? { entered: 0, exited: 0, blockedDownstream: 0, totalWaitTime: 0, waitCount: 0 };
                 byId[jid] = {
                     id: jid,
                     type,
@@ -1017,7 +1235,7 @@ export class VehicleManager {
                     exiting: 0,
                     entered: c.entered,
                     exited: c.exited,
-                    blockedDownstream: c.blockedDownstream,
+                    avgWaitTime: c.waitCount > 0 ? c.totalWaitTime / c.waitCount : 0,
                     currentGreenKey: null,
                     state: undefined,
                 };
@@ -1039,9 +1257,9 @@ export class VehicleManager {
             // exit:     seg.from is junction node key
             let jid: string | null = null;
 
-            if (seg.phase === "approach") jid = this.junctionIdFromNodeKey(String(seg.to));
-            else if (seg.phase === "inside") jid = this.junctionIdFromNodeKey(String(seg.to));
-            else if (seg.phase === "exit") jid = this.junctionIdFromNodeKey(String(seg.from));
+            if (seg.phase === "approach") jid = seg.to.structureID;
+            else if (seg.phase === "inside") jid = seg.to.structureID;
+            else if (seg.phase === "exit") jid = seg.from.structureID;
 
             // Snapshot counts
             if (jid) {
@@ -1056,7 +1274,9 @@ export class VehicleManager {
                 // Waiting heuristic (since you don’t have an explicit WAITING state in this file)
                 // "approach + almost stopped + near stopline"
                 if (seg.phase === "approach") {
-                    const nearStop = (seg.s1 ?? 0) - v.s < 2.0; // tweak if needed
+                    const segDists = this.getSegmentDistances(v.route);
+                    const segInfo = segDists[v.segmentIndex];
+                    const nearStop = (segInfo?.s1 ?? 0) - v.s < 2.0; // tweak if needed
                     const stopped = v.speed < 0.2;
                     if (nearStop && stopped) js.waiting += 1;
                 }
@@ -1068,7 +1288,7 @@ export class VehicleManager {
 
                 // “entered” when phase becomes inside for a junction
                 if (jid && seg.phase === "inside" && !(prev.jid === jid && prev.phase === "inside")) {
-                    const c = this.junctionCounters.get(jid) ?? { entered: 0, exited: 0, blockedDownstream: 0 };
+                    const c = this.junctionCounters.get(jid) ?? { entered: 0, exited: 0, blockedDownstream: 0, totalWaitTime: 0, waitCount: 0 };
                     c.entered += 1;
                     this.junctionCounters.set(jid, c);
                     js.entered = c.entered; // keep snapshot aligned
@@ -1076,14 +1296,14 @@ export class VehicleManager {
                     // Notify roundabout controller
                     const roundabout = this.roundaboutControllers.get(jid);
                     if (roundabout && prev.phase === "approach") {
-                        const entryKey = this.entryGroupKeyFromNodeKey(String(seg.from));
+                        const entryKey = this.entryGroupKeyFromNodeKey(this.nodeToKey(seg.from));
                         roundabout.registerVehicleEntering(v.id, entryKey);
                     }
                 }
 
                 // “exited” when phase becomes exit for a junction
                 if (jid && seg.phase === "exit" && !(prev.jid === jid && prev.phase === "exit")) {
-                    const c = this.junctionCounters.get(jid) ?? { entered: 0, exited: 0, blockedDownstream: 0 };
+                    const c = this.junctionCounters.get(jid) ?? { entered: 0, exited: 0, blockedDownstream: 0, totalWaitTime: 0, waitCount: 0 };
                     c.exited += 1;
                     this.junctionCounters.set(jid, c);
                     js.exited = c.exited;
@@ -1091,7 +1311,7 @@ export class VehicleManager {
                     // Notify roundabout controller
                     const roundabout = this.roundaboutControllers.get(jid);
                     if (roundabout && prev.phase === "inside") {
-                        const entryKey = this.entryGroupKeyFromNodeKey(String(seg.from));
+                        const entryKey = this.entryGroupKeyFromNodeKey(this.nodeToKey(seg.from));
                         roundabout.registerVehicleExiting(v.id, entryKey);
                     }
                 }
@@ -1117,20 +1337,18 @@ export class VehicleManager {
             js.currentGreenKey = controller.getCurrentGreen?.() ?? null;
             js.state = controller.getState?.();
             // Keep counters in sync (in case controller exists but no vehicles near it)
-            const c = this.junctionCounters.get(jid) ?? { entered: 0, exited: 0, blockedDownstream: 0 };
+            const c = this.junctionCounters.get(jid) ?? { entered: 0, exited: 0, blockedDownstream: 0, totalWaitTime: 0, waitCount: 0 };
             js.entered = c.entered;
             js.exited = c.exited;
-            js.blockedDownstream = c.blockedDownstream;
         }
 
         for (const [jid, controller] of this.roundaboutControllers.entries()) {
             const js = ensure(jid, "roundabout");
             js.currentGreenKey = controller.getCurrentGreen?.() ?? null;
             js.state = controller.getState?.();
-            const c = this.junctionCounters.get(jid) ?? { entered: 0, exited: 0, blockedDownstream: 0 };
+            const c = this.junctionCounters.get(jid) ?? { entered: 0, exited: 0, blockedDownstream: 0, totalWaitTime: 0, waitCount: 0 };
             js.entered = c.entered;
             js.exited = c.exited;
-            js.blockedDownstream = c.blockedDownstream;
         }
 
         // ---------
@@ -1144,8 +1362,11 @@ export class VehicleManager {
             exiting: 0,
             entered: 0,
             exited: 0,
-            blockedDownstream: 0,
+            avgWaitTime: 0,
         };
+
+        let totalWaitTime = 0;
+        let totalWaitCount = 0;
 
         for (const j of Object.values(byId)) {
             global.approaching += j.approaching;
@@ -1154,8 +1375,18 @@ export class VehicleManager {
             global.exiting += j.exiting;
             global.entered += j.entered;
             global.exited += j.exited;
-            global.blockedDownstream += j.blockedDownstream;
+
+            // Accumulate wait times for global average
+            if (j.id) {
+                const c = this.junctionCounters.get(j.id);
+                if (c) {
+                    totalWaitTime += c.totalWaitTime;
+                    totalWaitCount += c.waitCount;
+                }
+            }
         }
+
+        global.avgWaitTime = totalWaitCount > 0 ? totalWaitTime / totalWaitCount : 0;
 
         // ---------
         // 4) Build final SimulationStats snapshot
@@ -1166,6 +1397,7 @@ export class VehicleManager {
             completed: this.completed,
             spawnQueue: this.spawnQueue,
             routes: this.routes.length,
+            elapsedTime: this.elapsedTime,
 
             // keep this as a convenience; for now equal to junction waiting aggregate
             waiting: global.waiting,

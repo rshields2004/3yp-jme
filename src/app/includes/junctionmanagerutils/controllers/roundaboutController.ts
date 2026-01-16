@@ -8,16 +8,13 @@ export class RoundaboutController {
 
   private circulatingByEntry = new Map<string, Set<number>>();
 
-  // --- NEW: time + gap acceptance-ish ---
   private now = 0;
   private lastEnteredAtByEntry = new Map<string, number>();
+  private lastGrantedEntry: string | null = null; // Track which entry was last granted
 
-  // --- NEW: grant reservation to avoid jitter/creep ---
-  private grantedVehicleByEntry = new Map<string, { vehicleId: number; until: number }>();
-
-  // Tuneables (good starting points)
-  private entryClearanceSec = 1.2; // yield if right-entry fed in very recently
-  private grantHoldSec = 0.8;      // once granted, hold permission briefly
+  // Tuneables
+  private entryClearanceSec = 0.5; // Time to wait after a vehicle enters before allowing another
+  private minCirculationTime = 0.3; // Minimum time a vehicle should spend circulating before yielding
 
   constructor(id: string, entryKeys: string[]) {
     this.id = id;
@@ -29,11 +26,6 @@ export class RoundaboutController {
 
   update(dt: number) {
     this.now += dt;
-
-    // expire old grants
-    for (const [k, g] of this.grantedVehicleByEntry.entries()) {
-      if (g.until <= this.now) this.grantedVehicleByEntry.delete(k);
-    }
   }
 
   registerVehicleEntering(vehicleId: number, entryKey: string) {
@@ -42,10 +34,6 @@ export class RoundaboutController {
 
     // record recent feed-in (for clearance window)
     this.lastEnteredAtByEntry.set(entryKey, this.now);
-
-    // once it entered, release grant for that entry
-    const granted = this.grantedVehicleByEntry.get(entryKey);
-    if (granted?.vehicleId === vehicleId) this.grantedVehicleByEntry.delete(entryKey);
   }
 
   registerVehicleExiting(vehicleId: number, entryKey: string) {
@@ -55,11 +43,6 @@ export class RoundaboutController {
 
   clearVehicle(vehicleId: number) {
     for (const set of this.circulatingByEntry.values()) set.delete(vehicleId);
-
-    // clear any grants held by this vehicle
-    for (const [k, g] of this.grantedVehicleByEntry.entries()) {
-      if (g.vehicleId === vehicleId) this.grantedVehicleByEntry.delete(k);
-    }
   }
 
   getTotalCirculating(): number {
@@ -69,37 +52,37 @@ export class RoundaboutController {
   }
 
   /**
-   * Key change: vehicleId is used for "grant hold"
+   * Simplified entry check: basic right-of-way with entry throttling
    */
   canEnter(entryKey: string, vehicleId?: number): boolean {
-    if (this.entryKeys.length <= 1) return true;
-
-    // if granted recently for this entry, keep it granted for same vehicle
-    if (vehicleId !== undefined) {
-      const g = this.grantedVehicleByEntry.get(entryKey);
-      if (g && g.vehicleId === vehicleId && g.until > this.now) return true;
-    }
-
-    // If nobody circulating, allow
-    if (this.getTotalCirculating() === 0) {
-      this.maybeGrant(entryKey, vehicleId);
+    // Single entry or no other traffic - always allow
+    if (this.entryKeys.length <= 1 || this.getTotalCirculating() === 0) {
       return true;
     }
 
-    const rightKey = this.getImmediateRightEntry(entryKey);
-    if (rightKey) {
-      // 1) classic yield: if right entry has circulating vehicles
-      const rightCirculating = this.circulatingByEntry.get(rightKey)?.size ?? 0;
-      if (rightCirculating > 0) return false;
-
-      // 2) clearance window: if right entry fed a vehicle recently, still yield
-      const t = this.lastEnteredAtByEntry.get(rightKey);
-      if (typeof t === "number" && (this.now - t) < this.entryClearanceSec) return false;
+    // Throttle entries: don't allow if someone just entered recently
+    const timeSinceLastEntry = this.now - Math.max(...Array.from(this.lastEnteredAtByEntry.values() ?? []));
+    if (timeSinceLastEntry < this.entryClearanceSec) {
+      return false;
     }
 
-    // allowed
-    this.maybeGrant(entryKey, vehicleId);
-    return true;
+    // Multiple entries with traffic: basic right-of-way check
+    const rightKey = this.getImmediateRightEntry(entryKey);
+    if (rightKey) {
+      const rightCirculating = this.circulatingByEntry.get(rightKey)?.size ?? 0;
+      if (rightCirculating > 0) {
+        return false; // Yield to right
+      }
+    }
+
+    return true; // Allow
+  }
+
+  /**
+   * For vehicle manager: calls canEnter with vehicleId
+   */
+  canEnterWithVehicle(entryKey: string, vehicleId: number): boolean {
+    return this.canEnter(entryKey, vehicleId);
   }
 
   isGreen(entryKey: string): boolean {
@@ -129,11 +112,7 @@ export class RoundaboutController {
   }
 
   private maybeGrant(entryKey: string, vehicleId?: number) {
-    if (vehicleId === undefined) return;
-    // Only set if none exists (avoid ping-pong granting)
-    if (!this.grantedVehicleByEntry.has(entryKey)) {
-      this.grantedVehicleByEntry.set(entryKey, { vehicleId, until: this.now + this.grantHoldSec });
-    }
+    // No longer used
   }
 
   private buildEntryOrder() {

@@ -2,6 +2,118 @@ import * as THREE from "three";
 import { RingLaneStructure } from "../types/roundabout";
 import { ExitConfig, JunctionConfig, JunctionObject } from "../types/types";
 
+
+
+export type Tuple3 = [number, number, number];
+export type SegmentPhase = "approach" | "inside" | "exit" | "link";
+export type Direction = "in" | "out";
+
+export type Node = {
+    structureID: string;
+    exitIndex: number;
+    direction: Direction;
+    laneIndex: number;
+};
+
+export type RouteSegment = {
+    from: Node;
+    to: Node;
+    phase: SegmentPhase;
+    points: Tuple3[];
+};
+
+export type Route = {
+    segments: RouteSegment[];
+};
+
+/* =========================================================
+   Helper utilities for working with the simplified Route
+   ========================================================= */
+
+/**
+ * Get all points from a route (concatenates all segment points without duplication)
+ */
+export function getRoutePoints(route: Route): Tuple3[] {
+    if (!route.segments || route.segments.length === 0) return [];
+    
+    const allPoints: Tuple3[] = [];
+    let prevLast: Tuple3 | null = null;
+    
+    for (const seg of route.segments) {
+        for (let i = 0; i < seg.points.length; i++) {
+            const pt = seg.points[i];
+            // Skip first point if it's duplicate of previous segment's last
+            if (i === 0 && prevLast && pointsEqual(prevLast, pt)) continue;
+            allPoints.push(pt);
+        }
+        if (seg.points.length > 0) {
+            prevLast = seg.points[seg.points.length - 1];
+        }
+    }
+    
+    return allPoints;
+}
+
+/**
+ * Compute polyline length for an array of points
+ */
+function polylineLength(pts: Tuple3[]): number {
+    if (!pts || pts.length < 2) return 0;
+    let len = 0;
+    for (let i = 1; i < pts.length; i++) {
+        const dx = pts[i][0] - pts[i-1][0];
+        const dy = pts[i][1] - pts[i-1][1];
+        const dz = pts[i][2] - pts[i-1][2];
+        len += Math.sqrt(dx*dx + dy*dy + dz*dz);
+    }
+    return len;
+}
+
+/**
+ * Estimate average spacing between consecutive points in a route
+ */
+export function estimateRouteSpacing(route: Route): number {
+    const points = getRoutePoints(route);
+    if (points.length < 2) return 1.0;
+    
+    const totalLen = polylineLength(points);
+    return totalLen / (points.length - 1);
+}
+
+/**
+ * Get total route length
+ */
+export function getRouteLength(route: Route): number {
+    return polylineLength(getRoutePoints(route));
+}
+
+/**
+ * Compute cumulative distance info for each segment in a route
+ * Returns array with s0 (start distance) and s1 (end distance) for each segment
+ */
+export function computeSegmentDistances(route: Route): Array<{ s0: number; s1: number }> {
+    const result: Array<{ s0: number; s1: number }> = [];
+    
+    if (!route.segments || route.segments.length === 0) return result;
+    
+    let cumulative = 0;
+    
+    for (const seg of route.segments) {
+        const s0 = cumulative;
+        const segLen = polylineLength(seg.points);
+        const s1 = s0 + segLen;
+        
+        result.push({ s0, s1 });
+        cumulative = s1;
+    }
+    
+    return result;
+}
+
+/* =========================================================
+   Lane point helper (unchanged semantics)
+   ========================================================= */
+
 /**
  * Returns the midpoint of a lane strip boundary pair, in WORLD space.
  * For single-lane exits, returns the lane line start/end directly.
@@ -44,24 +156,25 @@ export function getLaneWorldPoint(
     return group.localToWorld(leftPoint.clone().add(rightPoint.clone()).multiplyScalar(0.5));
 }
 
-type SegmentPhase = "approach" | "inside" | "exit" | "link";
+/* =========================================================
+   Internal path generation -> parts (approach/inside/exit)
+   ========================================================= */
 
 type InternalParts = {
-    approach: [number, number, number][];
-    inside: [number, number, number][];
-    exit: [number, number, number][];
-    full: [number, number, number][];
+    approach: Tuple3[];
+    inside: Tuple3[];
+    exit: Tuple3[];
 };
 
-function v3ToTuple(v: THREE.Vector3): [number, number, number] {
+function v3ToTuple(v: THREE.Vector3): Tuple3 {
     return [v.x, v.y, v.z];
 }
 
 /**
- * Generate intersection path split into 3 logical phases:
- * - approach: inbound lane travel up to the stop/give-way line
- * - inside: traversal within the junction area
- * - exit: outbound lane travel away from the junction
+ * Intersection path split into 3 phases:
+ * - approach: inbound lane up to stop/give-way
+ * - inside: traversal within junction area
+ * - exit: outbound lane away from junction
  */
 function generateIntersectionPathParts(
     intersection: THREE.Group,
@@ -77,10 +190,19 @@ function generateIntersectionPathParts(
     const dirEntry = midStart.clone().sub(startPoint).normalize();
     const dirExit = midEnd.clone().sub(endPoint).normalize();
 
-    function intersect2D(p1: THREE.Vector3, d1: THREE.Vector3, p2: THREE.Vector3, d2: THREE.Vector3): THREE.Vector3 | null {
+    function intersect2D(
+        p1: THREE.Vector3,
+        d1: THREE.Vector3,
+        p2: THREE.Vector3,
+        d2: THREE.Vector3
+    ): THREE.Vector3 | null {
         // Solve p1 + t*d1 = p2 + s*d2 in XZ plane
-        const a = d1.x, b = -d2.x, c = p2.x - p1.x;
-        const d = d1.z, e = -d2.z, f = p2.z - p1.z;
+        const a = d1.x,
+            b = -d2.x,
+            c = p2.x - p1.x;
+        const d = d1.z,
+            e = -d2.z,
+            f = p2.z - p1.z;
         const denom = a * e - b * d;
         if (Math.abs(denom) < 1e-6) return null;
         const t = (c * e - b * f) / denom;
@@ -108,34 +230,18 @@ function generateIntersectionPathParts(
 
     const exitV: THREE.Vector3[] = [midEnd, endPoint];
 
-    // Build full without duplicating joints
-    const fullV: THREE.Vector3[] = [
-        ...approachV,
-        ...insideV.slice(1),
-        ...exitV.slice(1),
-    ];
-
     return {
         approach: approachV.map(v3ToTuple),
         inside: insideV.map(v3ToTuple),
         exit: exitV.map(v3ToTuple),
-        full: fullV.map(v3ToTuple),
     };
 }
 
-export function generateIntersectionPath(
-    intersection: THREE.Group,
-    entry: { exitIndex: number; laneIndex: number },
-    exit: { exitIndex: number; laneIndex: number }
-): [number, number, number][] {
-    return generateIntersectionPathParts(intersection, entry, exit).full;
-}
-
 /**
- * Generate roundabout path split into 3 logical phases:
- * - approach: inbound lane travel up to the give-way line
- * - inside: traversal on the ring + entry/exit connectors
- * - exit: outbound lane travel away from the roundabout
+ * Roundabout path split into 3 phases:
+ * - approach: inbound lane up to give-way
+ * - inside: ring traversal + connectors
+ * - exit: outbound lane away from roundabout
  */
 function generateRoundaboutPathParts(
     roundabout: THREE.Group,
@@ -206,39 +312,25 @@ function generateRoundaboutPathParts(
     const insideW = toWorld(insideL);
     const exitW = toWorld(exitL);
 
-    const fullW: THREE.Vector3[] = [
-        ...approachW,
-        ...insideW.slice(1),
-        ...exitW.slice(1),
-    ];
-
     return {
         approach: approachW.map(v3ToTuple),
         inside: insideW.map(v3ToTuple),
         exit: exitW.map(v3ToTuple),
-        full: fullW.map(v3ToTuple),
     };
 }
 
-export function generateRoundaboutPath(
-    roundabout: THREE.Group,
-    entry: { exitIndex: number; laneIndex: number },
-    exit: { exitIndex: number; laneIndex: number }
-): [number, number, number][] {
-    return generateRoundaboutPathParts(roundabout, entry, exit).full;
-}
+/* =========================================================
+   Link lane centreline helper
+   ========================================================= */
 
-export function getMidCurve(
-    curveA: [number, number, number][],
-    curveB: [number, number, number][]
-): [number, number, number][] {
+export function getMidCurve(curveA: Tuple3[], curveB: Tuple3[]): Tuple3[] {
     if (!curveA || !curveB) return [];
     if (curveA.length !== curveB.length) {
         console.warn("Curves have different lengths, using min length");
     }
 
     const length = Math.min(curveA.length, curveB.length);
-    const midCurve: [number, number, number][] = [];
+    const midCurve: Tuple3[] = [];
 
     for (let i = 0; i < length; i++) {
         const [ax, ay, az] = curveA[i];
@@ -249,315 +341,152 @@ export function getMidCurve(
     return midCurve;
 }
 
-type Direction = "in" | "out";
-
-export type LaneEndPoint = {
-    structureID: string;
-    exitIndex: number;
-    direction: Direction;
-    laneIndex: number;
-};
+/* =========================================================
+   Graph internals (NOT exported)
+   ========================================================= */
 
 type NodeKey = string;
 
-const keyOf = (n: LaneEndPoint): NodeKey => `${n.structureID}-${n.exitIndex}-${n.direction}-${n.laneIndex}`;
+const nodeKeyOf = (n: Node): NodeKey =>
+    `${n.structureID}-${n.exitIndex}-${n.direction}-${n.laneIndex}`;
 
 type EdgePart = {
-    phase: SegmentPhase;
-    points: [number, number, number][];
+    phase: Exclude<SegmentPhase, "link">; // "approach" | "inside" | "exit"
+    points: Tuple3[];
 };
 
-type Edge = {
-    to: NodeKey;
-    points: [number, number, number][];
-    kind: "internal" | "link";
-    parts?: EdgePart[]; // internal edges will have approach/inside/exit
-};
+type Edge =
+    | { kind: "internal"; to: Node; parts: EdgePart[] }
+    | { kind: "link"; to: Node; points: Tuple3[] };
 
 type Graph = Map<NodeKey, Edge[]>;
 
-const addEdge = (graph: Graph, from: NodeKey, e: Edge) => {
-    const arr = graph.get(from);
+const addEdge = (graph: Graph, from: Node, e: Edge) => {
+    const k = nodeKeyOf(from);
+    const arr = graph.get(k);
     if (arr) arr.push(e);
-    else graph.set(from, [e]);
+    else graph.set(k, [e]);
 };
 
 const outCount = (config: ExitConfig) => config.laneCount - config.numLanesIn;
 const inCount = (config: ExitConfig) => config.numLanesIn;
 
-/** Segment-level route data for simulation */
-export type RouteSegment = {
-    from: NodeKey;
-    to: NodeKey;
-    kind: "internal" | "link";
-    phase: SegmentPhase; // NEW: approach/inside/exit/link
+/* =========================================================
+   Per-segment smoothing + fixed-spacing resample
+   (simple + fast, avoids whole-route partitioning)
+   ========================================================= */
 
-    /** Resampled points for ONLY this segment, fixed spacing */
-    points: [number, number, number][];
-
-    /** Distance range along the whole route */
-    s0: number;
-    s1: number;
-};
-
-/** Rich Route structure */
-export type Route = {
-    /** Node keys in visit order */
-    nodes: NodeKey[];
-
-    /** Ordered segments: approach/inside/exit/link/... */
-    segments: RouteSegment[];
-
-    /** Whole route resampled points (fixed spacing) */
-    points: [number, number, number][];
-
-    /** Smoothed path */
-    curve: THREE.CatmullRomCurve3;
-
-    /** Sampling spacing in metres */
-    spacing: number;
-
-    /** Total route length in metres */
-    length: number;
-};
-
-// --------------------------
-// Helpers for route building
-// --------------------------
-
-function toV3(p: [number, number, number]) {
+function toV3(p: Tuple3) {
     return new THREE.Vector3(p[0], p[1], p[2]);
 }
 
-function polylineLength(pts: [number, number, number][]): number {
-    if (!pts || pts.length < 2) return 0;
-    let len = 0;
-    let prev = toV3(pts[0]);
+function resamplePolylineFixedSpacing(pts: THREE.Vector3[], spacing: number) {
+    if (!pts || pts.length < 2) return pts?.map((p) => p.clone()) ?? [];
+
+    const out: THREE.Vector3[] = [];
+    out.push(pts[0].clone());
+
+    let acc = 0;
+
     for (let i = 1; i < pts.length; i++) {
-        const cur = toV3(pts[i]);
-        len += cur.distanceTo(prev);
-        prev = cur;
+        let a = pts[i - 1].clone();
+        const b = pts[i].clone();
+
+        let segLen = a.distanceTo(b);
+        if (segLen < 1e-9) continue;
+
+        while (acc + segLen >= spacing) {
+            const remain = spacing - acc;
+            const t = remain / Math.max(1e-9, segLen);
+
+            const p = a.clone().lerp(b, t);
+            out.push(p);
+
+            a = p;
+            segLen = a.distanceTo(b);
+            acc = 0;
+        }
+
+        acc += segLen;
     }
-    return len;
+
+    const last = pts[pts.length - 1];
+    if (out[out.length - 1].distanceToSquared(last) > 1e-10) out.push(last.clone());
+    return out;
 }
 
-function pointsEqual(a: [number, number, number], b: [number, number, number]) {
+function smoothAndResampleSegment(
+    points: Tuple3[],
+    spacing: number,
+    tension: number
+): Tuple3[] {
+    const control = points.map(toV3);
+    if (control.length < 2) return control.map(v3ToTuple);
+
+    // Calculate approximate length
+    let approxLen = 0;
+    for (let i = 1; i < control.length; i++) approxLen += control[i].distanceTo(control[i - 1]);
+
+    // Calculate the number of points needed based on spacing
+    // Use 3x oversampling for smooth curve interpolation before resampling
+    const targetPoints = Math.ceil(approxLen / Math.max(1e-6, spacing));
+    const denseN = Math.max(50, Math.min(1500, targetPoints * 3));
+
+    const curve = new THREE.CatmullRomCurve3(control, false, "centripetal", tension);
+    const dense = curve.getPoints(denseN);
+    const sampled = resamplePolylineFixedSpacing(dense, spacing);
+
+    return sampled.map(v3ToTuple);
+}
+
+function pointsEqual(a: Tuple3, b: Tuple3) {
     const dx = a[0] - b[0];
     const dy = a[1] - b[1];
     const dz = a[2] - b[2];
     return dx * dx + dy * dy + dz * dz < 1e-10;
 }
 
-function concatWithoutDuplicateJoints(chunks: [number, number, number][][]): THREE.Vector3[] {
-    const out: THREE.Vector3[] = [];
-    for (const pts of chunks) {
-        if (!pts || pts.length === 0) continue;
-        for (let i = 0; i < pts.length; i++) {
-            const v = toV3(pts[i]);
-            if (out.length && i === 0) {
-                const last = out[out.length - 1];
-                if (last.distanceToSquared(v) < 1e-10) continue;
-            }
-            out.push(v);
-        }
-    }
-    return out;
-}
-
-/**
- * Resample a curve into points spaced ~`spacing` metres apart.
- * Uses dense polyline + arc-length interpolation.
- */
-function resampleCurveFixedSpacing(
-    curve: THREE.CatmullRomCurve3,
-    spacing: number,
-    denseSegments = 10000
-): { points: THREE.Vector3[]; distances: number[]; length: number } {
-    const dense = curve.getPoints(denseSegments);
-    if (dense.length < 2) return { points: dense, distances: [0], length: 0 };
-
-    const cum: number[] = new Array(dense.length);
-    cum[0] = 0;
-    for (let i = 1; i < dense.length; i++) {
-        cum[i] = cum[i - 1] + dense[i].distanceTo(dense[i - 1]);
-    }
-
-    const total = cum[cum.length - 1];
-    if (total <= 1e-9) return { points: [dense[0].clone()], distances: [0], length: 0 };
-
-    const targets: number[] = [0];
-    for (let s = spacing; s < total; s += spacing) targets.push(s);
-    if (targets[targets.length - 1] !== total) targets.push(total);
-
-    const sampled: THREE.Vector3[] = [];
-    const sampledS: number[] = [];
-
-    let j = 1;
-    for (const s of targets) {
-        while (j < cum.length && cum[j] < s) j++;
-
-        if (j >= cum.length) {
-            sampled.push(dense[dense.length - 1].clone());
-            sampledS.push(total);
-            continue;
-        }
-
-        const s1 = cum[j];
-        const s0 = cum[j - 1];
-        const t = (s - s0) / Math.max(1e-9, s1 - s0);
-
-        const p0 = dense[j - 1];
-        const p1 = dense[j];
-        sampled.push(p0.clone().lerp(p1, t));
-        sampledS.push(s);
-    }
-
-    return { points: sampled, distances: sampledS, length: total };
-}
-
-function lowerBound(arr: number[], x: number) {
-    let lo = 0,
-        hi = arr.length;
-    while (lo < hi) {
-        const mid = (lo + hi) >> 1;
-        if (arr[mid] < x) lo = mid + 1;
-        else hi = mid;
-    }
-    return lo;
-}
-
-function upperBound(arr: number[], x: number) {
-    let lo = 0,
-        hi = arr.length;
-    while (lo < hi) {
-        const mid = (lo + hi) >> 1;
-        if (arr[mid] <= x) lo = mid + 1;
-        else hi = mid;
-    }
-    return lo;
-}
-
-type RouteEdgeForBuild = {
-    from: NodeKey;
-    to: NodeKey;
-    kind: "internal" | "link";
-    phase: SegmentPhase;
-    points: [number, number, number][];
-};
-
-/**
- * Build a Route from ordered edges:
- * - smooth with CatmullRomCurve3 (centripetal to avoid loops)
- * - resample fixed spacing for consistent resolution
- * - partition resampled points back into per-edge segments (ordered)
- */
-function buildRouteFromEdges(
-    nodes: NodeKey[],
-    edges: RouteEdgeForBuild[],
-    opts?: { spacing?: number; tension?: number; denseSegments?: number }
+function buildRouteFromSegments(
+    buildSegments: RouteSegment[],
+    opts?: { spacing?: number; tension?: number; smoothPerSegment?: boolean }
 ): Route {
     const spacing = opts?.spacing ?? 1.0;
     const tension = opts?.tension ?? 0.5;
-    const denseSegments = opts?.denseSegments ?? 2000;
+    const smoothPerSegment = opts?.smoothPerSegment ?? true;
 
-    const control = concatWithoutDuplicateJoints(edges.map((e) => e.points));
+    const outSegments: RouteSegment[] = [];
+    let prevLast: Tuple3 | null = null;
 
-    const curve = new THREE.CatmullRomCurve3(control, false, "centripetal", tension);
+    for (const seg of buildSegments) {
+        let pts = seg.points;
 
-    if (control.length < 2) {
-        return {
-            nodes,
-            segments: [],
-            points: control.map(v3ToTuple),
-            curve,
-            spacing,
-            length: 0,
-        };
-    }
+        // smooth+resample each segment independently
+        const resampled = smoothPerSegment ? smoothAndResampleSegment(pts, spacing, tension) : pts;
 
-    const { points: sampledV, distances: sampledS, length: totalLen } = resampleCurveFixedSpacing(
-        curve,
-        spacing,
-        denseSegments
-    );
+        let finalPts = resampled;
 
-    const sampled = sampledV.map(v3ToTuple);
-
-    // Partition per edge using the original polyline-length proportions as stable boundaries.
-    const edgePolyLens = edges.map((e) => polylineLength(e.points));
-    const polyTotal = edgePolyLens.reduce((a, b) => a + b, 0);
-
-    if (polyTotal <= 1e-9 || edges.length === 0) {
-        return {
-            nodes,
-            segments: edges.map((e) => ({
-                from: e.from,
-                to: e.to,
-                kind: e.kind,
-                phase: e.phase,
-                points: sampled,
-                s0: 0,
-                s1: totalLen,
-            })),
-            points: sampled,
-            curve,
-            spacing,
-            length: totalLen,
-        };
-    }
-
-    const polyCum: number[] = [0];
-    for (let i = 0; i < edgePolyLens.length; i++) {
-        polyCum.push(polyCum[polyCum.length - 1] + edgePolyLens[i]);
-    }
-
-    const segBoundsS = polyCum.map((d) => (d / polyTotal) * totalLen);
-
-    const segments: RouteSegment[] = [];
-    for (let i = 0; i < edges.length; i++) {
-        const e = edges[i];
-
-        const s0 = segBoundsS[i];
-        const s1 = segBoundsS[i + 1];
-
-        const i0 = lowerBound(sampledS, s0 - 1e-6);
-        const i1 = Math.max(i0, upperBound(sampledS, s1 + 1e-6) - 1);
-
-        let segPts = sampled.slice(i0, i1 + 1);
-
-        // avoid duplicating the join point between consecutive segments
-        if (segments.length && segPts.length) {
-            const prevLast = segments[segments.length - 1].points.at(-1);
-            const curFirst = segPts[0];
-            if (prevLast && pointsEqual(prevLast, curFirst)) {
-                segPts = segPts.slice(1);
-            }
+        // de-dupe joint vs previous segment
+        if (prevLast && finalPts.length && pointsEqual(prevLast, finalPts[0])) {
+            finalPts = finalPts.slice(1);
         }
+        if (!finalPts.length) continue;
 
-        segments.push({
-            from: e.from,
-            to: e.to,
-            kind: e.kind,
-            phase: e.phase,
-            points: segPts,
-            s0,
-            s1,
+        outSegments.push({
+            from: seg.from,
+            to: seg.to,
+            phase: seg.phase,
+            points: finalPts,
         });
+
+        prevLast = finalPts[finalPts.length - 1];
     }
 
-    return {
-        nodes,
-        segments,
-        points: sampled,
-        curve,
-        spacing,
-        length: totalLen,
-    };
+    return { segments: outSegments };
 }
 
-// --------------------------
-// Route generation (graph+DFS)
-// --------------------------
+/* =========================================================
+   Route generation (graph + DFS)
+   ========================================================= */
 
 export function generateAllRoutes(
     junction: JunctionConfig,
@@ -566,14 +495,14 @@ export function generateAllRoutes(
         maxSteps?: number;
         disallowUTurn?: boolean;
 
-        /** resampling spacing in metres */
+        /** fixed spacing in metres for per-segment resample */
         spacing?: number;
 
-        /** Catmull-Rom tension */
+        /** Catmull-Rom tension for per-segment smoothing */
         tension?: number;
 
-        /** density used for resampling */
-        denseSegments?: number;
+        /** if false, uses raw polylines (no smoothing/resample) */
+        smoothPerSegment?: boolean;
     }
 ) {
     const maxSteps = opts?.maxSteps ?? 30;
@@ -581,7 +510,7 @@ export function generateAllRoutes(
 
     const spacing = opts?.spacing ?? 1.0;
     const tension = opts?.tension ?? 0.5;
-    const denseSegments = opts?.denseSegments ?? 2000;
+    const smoothPerSegment = opts?.smoothPerSegment ?? true;
 
     // Map structure IDs -> object configs
     const objByID = new Map<string, JunctionObject>();
@@ -594,40 +523,37 @@ export function generateAllRoutes(
     const hasIncomingLink = new Set<NodeKey>();
     const hasOutgoingLink = new Set<NodeKey>();
 
-    const buildInternalEdge = (
+    const buildInternalParts = (
         objType: "intersection" | "roundabout",
         group: THREE.Group,
         eIN: number,
         lIN: number,
         eOUT: number,
         lOUT: number
-    ): { full: [number, number, number][]; parts: EdgePart[] } => {
+    ): EdgePart[] => {
         const parts =
             objType === "intersection"
                 ? generateIntersectionPathParts(group, { exitIndex: eIN, laneIndex: lIN }, { exitIndex: eOUT, laneIndex: lOUT })
                 : generateRoundaboutPathParts(group, { exitIndex: eIN, laneIndex: lIN }, { exitIndex: eOUT, laneIndex: lOUT });
 
-        return {
-            full: parts.full,
-            parts: [
-                { phase: "approach", points: parts.approach },
-                { phase: "inside", points: parts.inside },
-                { phase: "exit", points: parts.exit },
-            ],
-        };
+        return [
+            { phase: "approach", points: parts.approach },
+            { phase: "inside", points: parts.inside },
+            { phase: "exit", points: parts.exit },
+        ];
     };
 
-    // 1) Internal routing for structures
+    /* --------------------------
+       1) Internal routing
+       -------------------------- */
     for (const obj of junction.junctionObjects) {
         const group = junctionObjectRefs.find((g) => g.userData?.id === obj.id);
         if (!group) continue;
 
-        // Defensive: only junction structures (not links) have internal routing
         if (obj.type !== "intersection" && obj.type !== "roundabout") continue;
 
         const exitConfigs = obj.config.exitConfig;
 
-        // For each incoming exit index
         for (let eIN = 0; eIN < exitConfigs.length; eIN++) {
             const numIncomingLanes = inCount(exitConfigs[eIN]);
 
@@ -642,6 +568,14 @@ export function generateAllRoutes(
 
             const totalOutgoingLanes = availableExitIndices.reduce((sum, e) => sum + outCount(exitConfigs[e]), 0);
 
+            const addInternal = (lIN: number, eOUT: number, lOUT: number) => {
+                const from: Node = { structureID: obj.id, exitIndex: eIN, direction: "in", laneIndex: lIN };
+                const to: Node = { structureID: obj.id, exitIndex: eOUT, direction: "out", laneIndex: lOUT };
+
+                const parts = buildInternalParts(obj.type as "intersection" | "roundabout", group, eIN, lIN, eOUT, lOUT);
+                addEdge(mainG, from, { kind: "internal", to, parts });
+            };
+
             if (numIncomingLanes === totalOutgoingLanes) {
                 // Case 1: strict 1-to-1 mapping
                 let globalOutLane = 0;
@@ -649,14 +583,7 @@ export function generateAllRoutes(
                     const numOutLanes = outCount(exitConfigs[eOUT]);
                     for (let lOUT = 0; lOUT < numOutLanes; lOUT++) {
                         const lIN = globalOutLane;
-
-                        const from: LaneEndPoint = { structureID: obj.id, exitIndex: eIN, direction: "in", laneIndex: lIN };
-                        const to: LaneEndPoint = { structureID: obj.id, exitIndex: eOUT, direction: "out", laneIndex: lOUT };
-
-                        const built = buildInternalEdge(obj.type as "intersection" | "roundabout", group, eIN, lIN, eOUT, lOUT);
-
-                        addEdge(mainG, keyOf(from), { to: keyOf(to), points: built.full, kind: "internal", parts: built.parts });
-
+                        addInternal(lIN, eOUT, lOUT);
                         globalOutLane++;
                     }
                 }
@@ -667,14 +594,7 @@ export function generateAllRoutes(
                     const numOutLanes = outCount(exitConfigs[eOUT]);
                     for (let lOUT = 0; lOUT < numOutLanes; lOUT++) {
                         const lIN = Math.min(globalOutLane, numIncomingLanes - 1);
-
-                        const from: LaneEndPoint = { structureID: obj.id, exitIndex: eIN, direction: "in", laneIndex: lIN };
-                        const to: LaneEndPoint = { structureID: obj.id, exitIndex: eOUT, direction: "out", laneIndex: lOUT };
-
-                        const built = buildInternalEdge(obj.type as "intersection" | "roundabout", group, eIN, lIN, eOUT, lOUT);
-
-                        addEdge(mainG, keyOf(from), { to: keyOf(to), points: built.full, kind: "internal", parts: built.parts });
-
+                        addInternal(lIN, eOUT, lOUT);
                         globalOutLane++;
                     }
                 }
@@ -687,40 +607,16 @@ export function generateAllRoutes(
                     const numOutLanes = outCount(exitConfigs[eOUT]);
                     if (remainingIncomingLanes === 0) break;
 
-                    if (remainingIncomingLanes === numOutLanes) {
-                        for (let i = 0; i < numOutLanes; i++) {
-                            const lIN = currentIncomingLaneStart + i;
-
-                            const from: LaneEndPoint = { structureID: obj.id, exitIndex: eIN, direction: "in", laneIndex: lIN };
-                            const to: LaneEndPoint = { structureID: obj.id, exitIndex: eOUT, direction: "out", laneIndex: i };
-
-                            const built = buildInternalEdge(obj.type as "intersection" | "roundabout", group, eIN, lIN, eOUT, i);
-
-                            addEdge(mainG, keyOf(from), { to: keyOf(to), points: built.full, kind: "internal", parts: built.parts });
-                        }
-                        remainingIncomingLanes = 0;
-                    } else if (remainingIncomingLanes < numOutLanes) {
+                    if (remainingIncomingLanes <= numOutLanes) {
                         for (let i = 0; i < numOutLanes; i++) {
                             const lIN = currentIncomingLaneStart + Math.min(i, remainingIncomingLanes - 1);
-
-                            const from: LaneEndPoint = { structureID: obj.id, exitIndex: eIN, direction: "in", laneIndex: lIN };
-                            const to: LaneEndPoint = { structureID: obj.id, exitIndex: eOUT, direction: "out", laneIndex: i };
-
-                            const built = buildInternalEdge(obj.type as "intersection" | "roundabout", group, eIN, lIN, eOUT, i);
-
-                            addEdge(mainG, keyOf(from), { to: keyOf(to), points: built.full, kind: "internal", parts: built.parts });
+                            addInternal(lIN, eOUT, i);
                         }
                         remainingIncomingLanes = 0;
                     } else {
                         for (let i = 0; i < numOutLanes; i++) {
                             const lIN = currentIncomingLaneStart + i;
-
-                            const from: LaneEndPoint = { structureID: obj.id, exitIndex: eIN, direction: "in", laneIndex: lIN };
-                            const to: LaneEndPoint = { structureID: obj.id, exitIndex: eOUT, direction: "out", laneIndex: i };
-
-                            const built = buildInternalEdge(obj.type as "intersection" | "roundabout", group, eIN, lIN, eOUT, i);
-
-                            addEdge(mainG, keyOf(from), { to: keyOf(to), points: built.full, kind: "internal", parts: built.parts });
+                            addInternal(lIN, eOUT, i);
                         }
                         currentIncomingLaneStart += numOutLanes;
                         remainingIncomingLanes -= numOutLanes;
@@ -730,12 +626,14 @@ export function generateAllRoutes(
         }
     }
 
-    // 2) Links between components
+    /* --------------------------
+       2) Links between components
+       -------------------------- */
     for (const link of junction.junctionLinks) {
         const linkGroup = junctionObjectRefs.find((g) => g.userData?.type === "link" && g.userData?.id === link.id);
         if (!linkGroup) continue;
 
-        const laneCurves = linkGroup.userData?.laneCurves as [number, number, number][][] | undefined;
+        const laneCurves = linkGroup.userData?.laneCurves as Tuple3[][] | undefined;
         if (!laneCurves || laneCurves.length < 2) continue;
 
         const [a, b] = link.objectPair;
@@ -768,12 +666,12 @@ export function generateAllRoutes(
 
             const points = getMidCurve(laneCurves[leftBoundary], laneCurves[rightBoundary]);
 
-            const from: LaneEndPoint = { structureID: a.structureID, exitIndex: a.exitIndex, direction: "out", laneIndex: i };
-            const to: LaneEndPoint = { structureID: b.structureID, exitIndex: b.exitIndex, direction: "in", laneIndex: i };
+            const from: Node = { structureID: a.structureID, exitIndex: a.exitIndex, direction: "out", laneIndex: i };
+            const to: Node = { structureID: b.structureID, exitIndex: b.exitIndex, direction: "in", laneIndex: i };
 
-            addEdge(mainG, keyOf(from), { to: keyOf(to), points, kind: "link" });
-            hasOutgoingLink.add(keyOf(from));
-            hasIncomingLink.add(keyOf(to));
+            addEdge(mainG, from, { kind: "link", to, points });
+            hasOutgoingLink.add(nodeKeyOf(from));
+            hasIncomingLink.add(nodeKeyOf(to));
         }
 
         // BA (B out -> A in)
@@ -788,17 +686,19 @@ export function generateAllRoutes(
 
             const points = getMidCurve(laneCurves[rightBoundary], laneCurves[leftBoundary]).slice().reverse();
 
-            const from: LaneEndPoint = { structureID: b.structureID, exitIndex: b.exitIndex, direction: "out", laneIndex: i };
-            const to: LaneEndPoint = { structureID: a.structureID, exitIndex: a.exitIndex, direction: "in", laneIndex: i };
+            const from: Node = { structureID: b.structureID, exitIndex: b.exitIndex, direction: "out", laneIndex: i };
+            const to: Node = { structureID: a.structureID, exitIndex: a.exitIndex, direction: "in", laneIndex: i };
 
-            addEdge(mainG, keyOf(from), { to: keyOf(to), points, kind: "link" });
-            hasOutgoingLink.add(keyOf(from));
-            hasIncomingLink.add(keyOf(to));
+            addEdge(mainG, from, { kind: "link", to, points });
+            hasOutgoingLink.add(nodeKeyOf(from));
+            hasIncomingLink.add(nodeKeyOf(to));
         }
     }
 
-    // 3) World start/end identification (unlinked endpoints)
-    const starts: NodeKey[] = [];
+    /* --------------------------
+       3) World start/end identification (unlinked endpoints)
+       -------------------------- */
+    const starts: Node[] = [];
     const ends = new Set<NodeKey>();
 
     for (const obj of junction.junctionObjects) {
@@ -807,100 +707,93 @@ export function generateAllRoutes(
         for (let e = 0; e < exitConfigs.length; e++) {
             // inbound lanes with nothing linking into them
             for (let l = 0; l < inCount(exitConfigs[e]); l++) {
-                const n: LaneEndPoint = { structureID: obj.id, exitIndex: e, direction: "in", laneIndex: l };
-                const kk = keyOf(n);
-                if (!hasIncomingLink.has(kk)) starts.push(kk);
+                const n: Node = { structureID: obj.id, exitIndex: e, direction: "in", laneIndex: l };
+                const kk = nodeKeyOf(n);
+                if (!hasIncomingLink.has(kk)) starts.push(n);
             }
 
             // outbound lanes with nothing linking out of them
             for (let l = 0; l < outCount(exitConfigs[e]); l++) {
-                const n: LaneEndPoint = { structureID: obj.id, exitIndex: e, direction: "out", laneIndex: l };
-                const kk = keyOf(n);
+                const n: Node = { structureID: obj.id, exitIndex: e, direction: "out", laneIndex: l };
+                const kk = nodeKeyOf(n);
                 if (!hasOutgoingLink.has(kk)) ends.add(kk);
             }
         }
     }
 
-    // 4) DFS enumerate routes (store ordered edges, expand internal edges into approach/inside/exit, then build smooth+resampled route)
+    /* --------------------------
+       4) DFS enumerate routes
+       -------------------------- */
     const routes: Route[] = [];
 
-    const structureIdOf = (k: NodeKey): string => {
-        const parts = k.split("-");
-        // keyOf = `${structureID}-${exitIndex}-${direction}-${laneIndex}`
-        // structureID may contain '-' so it's everything except the last 3 parts
-        return parts.slice(0, -3).join("-");
-    };
-
-    for (const s of starts) {
-        const startStructureID = structureIdOf(s);
+    for (const sNode of starts) {
+        const startStructureID = sNode.structureID;
 
         const stack: {
-            node: NodeKey;
-            nodes: NodeKey[];
-            edges: RouteEdgeForBuild[];
+            node: Node;
+            segments: RouteSegment[];
             visited: Set<NodeKey>;
             leftStart: boolean;
         }[] = [
-            {
-                node: s,
-                nodes: [s],
-                edges: [],
-                visited: new Set([s]),
-                leftStart: false,
-            },
-        ];
+                {
+                    node: sNode,
+                    segments: [],
+                    visited: new Set([nodeKeyOf(sNode)]),
+                    leftStart: false,
+                },
+            ];
 
         while (stack.length) {
             const current = stack.pop()!;
+            const currentKey = nodeKeyOf(current.node);
 
-            if (ends.has(current.node)) {
+            if (ends.has(currentKey)) {
                 routes.push(
-                    buildRouteFromEdges(current.nodes, current.edges, {
+                    buildRouteFromSegments(current.segments, {
                         spacing,
                         tension,
-                        denseSegments,
+                        smoothPerSegment,
                     })
                 );
                 continue;
             }
 
-            if (current.nodes.length >= maxSteps) continue;
+            if (current.segments.length >= maxSteps) continue;
 
-            for (const e of mainG.get(current.node) ?? []) {
-                if (current.visited.has(e.to)) continue;
+            for (const e of mainG.get(currentKey) ?? []) {
+                const toNode = e.to;
+                const toKey = nodeKeyOf(toNode);
 
-                const toStructureID = structureIdOf(e.to);
-                const nextLeftStart = current.leftStart || toStructureID !== startStructureID;
+                if (current.visited.has(toKey)) continue;
 
-                // This is your existing "no loop back to start object once left" behaviour
-                if (disallowUTurn && current.leftStart && toStructureID === startStructureID) {
+                const nextLeftStart = current.leftStart || toNode.structureID !== startStructureID;
+
+                // Your existing “no loop back to start object once left” behaviour
+                if (disallowUTurn && current.leftStart && toNode.structureID === startStructureID) {
                     continue;
                 }
 
-                const expandedEdges: RouteEdgeForBuild[] =
-                    e.kind === "internal" && e.parts?.length
+                const expanded: RouteSegment[] =
+                    e.kind === "internal"
                         ? e.parts.map((p) => ({
-                              from: current.node,
-                              to: e.to,
-                              kind: "internal" as const,
-                              phase: p.phase,
-                              points: p.points,
-                          }))
+                            from: current.node,
+                            to: toNode,
+                            phase: p.phase,
+                            points: p.points,
+                        }))
                         : [
-                              {
-                                  from: current.node,
-                                  to: e.to,
-                                  kind: "link" as const,
-                                  phase: "link",
-                                  points: e.points,
-                              },
-                          ];
+                            {
+                                from: current.node,
+                                to: toNode,
+                                phase: "link",
+                                points: e.points,
+                            },
+                        ];
 
                 stack.push({
-                    node: e.to,
-                    nodes: [...current.nodes, e.to],
-                    edges: [...current.edges, ...expandedEdges],
-                    visited: new Set([...current.visited, e.to]),
+                    node: toNode,
+                    segments: [...current.segments, ...expanded],
+                    visited: new Set([...current.visited, toKey]),
                     leftStart: nextLeftStart,
                 });
             }

@@ -79,7 +79,7 @@ export const JunctionComponents = () => {
         <>
             {junction.junctionObjects.filter(obj => obj.type === "intersection").map((junctionObject, i) => (
                 <IntersectionComponent
-                    key={`i-${i}`}
+                    key={junctionObject.id.slice(0, 6)}
                     id={junctionObject.id}
                     intersectionConfig={junctionObject.config}
                     index={i}
@@ -88,7 +88,7 @@ export const JunctionComponents = () => {
 
             {junction.junctionObjects.filter(obj => obj.type === "roundabout").map((junctionObject, i) => (
                 <RoundaboutComponent
-                    key={`r-${i}`}
+                    key={junctionObject.id.slice(0, 6)}
                     id={junctionObject.id}
                     roundaboutConfig={junctionObject.config}
                     index={i}

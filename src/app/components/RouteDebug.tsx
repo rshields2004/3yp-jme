@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import { useThree, useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { useJModellerContext } from "../context/JModellerContext";
-import { generateAllRoutes, Route } from "../includes/junctionmanagerutils/carRouting";
+import { generateAllRoutes, Route, getRoutePoints } from "../includes/junctionmanagerutils/carRouting";
 
 function colorForIndex(i: number): THREE.Color {
     const c = new THREE.Color();
@@ -118,10 +118,13 @@ export function RouteDebug({
             disallowUTurn,
             spacing: 0.1,
             tension: 0.5,
-            denseSegments: 2000,
+            smoothPerSegment: true,
         });
 
-        const filtered = routes.filter((r) => r.points && r.points.length >= 2);
+        const filtered = routes.filter((r) => {
+            const pts = getRoutePoints(r);
+            return pts && pts.length >= 2;
+        });
         routesRef.current = filtered;
 
         if (!opts?.keepIndex) {
@@ -185,13 +188,14 @@ export function RouteDebug({
         idxRef.current = idx;
 
         const r = routes[idx];
+        const routePoints = getRoutePoints(r);
 
         // Build line geometry (WORLD points)
-        const positions = new Float32Array(r.points.length * 3);
-        for (let p = 0; p < r.points.length; p++) {
-            positions[p * 3 + 0] = r.points[p][0];
-            positions[p * 3 + 1] = r.points[p][1] + yLift;
-            positions[p * 3 + 2] = r.points[p][2];
+        const positions = new Float32Array(routePoints.length * 3);
+        for (let p = 0; p < routePoints.length; p++) {
+            positions[p * 3 + 0] = routePoints[p][0];
+            positions[p * 3 + 1] = routePoints[p][1] + yLift;
+            positions[p * 3 + 2] = routePoints[p][2];
         }
         const geom = new THREE.BufferGeometry();
         geom.setAttribute("position", new THREE.BufferAttribute(positions, 3));

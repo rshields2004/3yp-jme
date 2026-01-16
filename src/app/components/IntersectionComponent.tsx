@@ -188,7 +188,7 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
                 anchorX="center"
                 anchorY="middle"
             >
-                Intersection {index}
+                Intersection {id.slice(0, 6)}
             </Text>
 
             {/* Selection ring */}
