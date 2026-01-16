@@ -368,7 +368,7 @@ export const TrafficSimulation = () => {
 
             vehicleManagerRef.current = new VehicleManager(scene, carModelsRef.current, routesRef.current, {
                 // Spawning
-                demandRatePerSec: 2,
+                demandRatePerSec: 10,
                 maxVehicles: 100,
                 maxSpawnAttemptsPerFrame: 20,
                 maxSpawnQueue: 25,
@@ -595,7 +595,13 @@ export const TrafficSimulation = () => {
                 const carRotation = vehicle.model.rotation.y;
                 
                 // Camera height above car (roof level)
-                const cameraHeight = 2.0;
+                const cameraHeight = 1.1;
+                
+                // Forward offset on the car (positive = toward front, negative = toward back)
+                const forwardOffset = -0.4;
+                
+                // Horizontal offset (positive = right, negative = left)
+                const horizontalOffset = 0;
                 
                 // Look ahead distance
                 const lookAheadDistance = 15;
@@ -607,11 +613,18 @@ export const TrafficSimulation = () => {
                     Math.cos(carRotation)
                 );
                 
-                // Set camera position on top of car
+                // Calculate right direction (perpendicular to forward)
+                const right = new THREE.Vector3(
+                    Math.cos(carRotation),
+                    0,
+                    -Math.sin(carRotation)
+                );
+                
+                // Set camera position on top of car, offset forward and horizontally
                 camera.position.set(
-                    carPos.x,
+                    carPos.x + forward.x * forwardOffset + right.x * horizontalOffset,
                     carPos.y + cameraHeight,
-                    carPos.z
+                    carPos.z + forward.z * forwardOffset + right.z * horizontalOffset
                 );
                 
                 // Look ahead in the direction the car is facing
