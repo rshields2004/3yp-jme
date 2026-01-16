@@ -198,6 +198,7 @@ const JunctionStatsLabels = memo(
                                                 fontSize: 12,
                                                 lineHeight: 1.2,
                                                 whiteSpace: "nowrap",
+                                                fontFamily: "system-ui, sans-serif"
                                             }}
                                         >
                                             <div style={{ fontWeight: 700 }}>

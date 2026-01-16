@@ -348,7 +348,6 @@ export default function DebugPanel() {
                         <div>
                             <b>Entered:</b> {stats.junctions.global.entered}{" "}
                             <b>Exited:</b> {stats.junctions.global.exited}{" "}
-                            <b>Blocked (blk):</b> {stats.junctions.global.blockedDownstream}
                         </div>
                         
                         <div>
