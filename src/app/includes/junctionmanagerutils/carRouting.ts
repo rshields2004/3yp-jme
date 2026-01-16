@@ -187,44 +187,35 @@ function generateIntersectionPathParts(
     const midEnd = getLaneWorldPoint(intersection, exit.exitIndex, exit.laneIndex, "start", "out");
     const endPoint = getLaneWorldPoint(intersection, exit.exitIndex, exit.laneIndex, "end", "out");
 
+    // Entry tangent: direction car is traveling when entering junction
     const dirEntry = midStart.clone().sub(startPoint).normalize();
-    const dirExit = midEnd.clone().sub(endPoint).normalize();
-
-    function intersect2D(
-        p1: THREE.Vector3,
-        d1: THREE.Vector3,
-        p2: THREE.Vector3,
-        d2: THREE.Vector3
-    ): THREE.Vector3 | null {
-        // Solve p1 + t*d1 = p2 + s*d2 in XZ plane
-        const a = d1.x,
-            b = -d2.x,
-            c = p2.x - p1.x;
-        const d = d1.z,
-            e = -d2.z,
-            f = p2.z - p1.z;
-        const denom = a * e - b * d;
-        if (Math.abs(denom) < 1e-6) return null;
-        const t = (c * e - b * f) / denom;
-        const ip = p1.clone().add(d1.clone().multiplyScalar(t));
-        ip.y = (p1.y + p2.y) / 2;
-        return ip;
-    }
-
-    const centrePoint =
-        intersect2D(startPoint, dirEntry, endPoint, dirExit) ||
-        intersection.position.clone().applyMatrix4(intersection.matrixWorld);
+    // Exit tangent: direction car will be traveling when leaving junction
+    const dirExit = endPoint.clone().sub(midEnd).normalize();
 
     const approachV: THREE.Vector3[] = [startPoint, midStart];
 
     const angle = dirEntry.angleTo(dirExit);
-    const MIN_CURVE_ANGLE = 0.01;
+    const dist = midStart.distanceTo(midEnd);
+    const MIN_CURVE_ANGLE = 0.05; // ~3 degrees
 
     let insideV: THREE.Vector3[];
     if (angle < MIN_CURVE_ANGLE) {
+        // Nearly straight path - just connect the endpoints
         insideV = [midStart, midEnd];
     } else {
-        const curve = new THREE.CubicBezierCurve3(midStart, centrePoint, centrePoint, midEnd);
+        // For smooth curves, place control points along the tangent directions
+        // Scale control distance based on turn sharpness and distance
+        // Sharper turns need control points closer to endpoints for tighter arcs
+        // Gentler turns can have control points further out for smoother arcs
+        const turnFactor = Math.min(1.0, angle / Math.PI); // 0 for straight, 1 for U-turn
+        const controlDist = dist * (0.3 + 0.4 * (1 - turnFactor)); // 0.3-0.7 of distance
+        
+        // P1: continue along entry direction from midStart
+        const p1 = midStart.clone().add(dirEntry.clone().multiplyScalar(controlDist));
+        // P2: come from exit direction toward midEnd (back along exit tangent)
+        const p2 = midEnd.clone().sub(dirExit.clone().multiplyScalar(controlDist));
+        
+        const curve = new THREE.CubicBezierCurve3(midStart, p1, p2, midEnd);
         insideV = [midStart, ...curve.getPoints(20).slice(1, -1), midEnd];
     }
 

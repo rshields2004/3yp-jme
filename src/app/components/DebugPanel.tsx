@@ -238,17 +238,20 @@ export default function DebugPanel() {
 
             // ----- Per-exit clamp -----
             const laneCountHere = exits[exitIndex].laneCount;
-            let clamped = Math.max(0, Math.min(value, laneCountHere));
+            let clamped = Math.max(0, Math.min(value, laneCountHere - 1)); // Must have at least 1 lane out
 
-            // ----- Global clamp: totalIn <= totalOut across all exits of THIS object -----
-            const totalLaneCount = exits.reduce((s, ex) => s + ex.laneCount, 0);
-            const maxTotalIn = Math.floor(totalLaneCount / 2);
+            // ----- Constraint: numLanesIn for this exit <= total lanes OUT from all OTHER exits -----
+            // Calculate total lanes out from other exits (not including current exit)
+            const totalLanesOutFromOtherExits = exits.reduce((sum, ex, idx) => {
+                if (idx === exitIndex) return sum;
+                return sum + (ex.laneCount - ex.numLanesIn);
+            }, 0);
 
-            const currentTotalIn = exits.reduce((s, ex) => s + ex.numLanesIn, 0);
-            const currentInOtherExits = currentTotalIn - exits[exitIndex].numLanesIn;
+            // Clamp to not exceed the lanes available from other exits
+            clamped = Math.min(clamped, totalLanesOutFromOtherExits);
 
-            const maxForThisExitByGlobal = Math.max(0, maxTotalIn - currentInOtherExits);
-            clamped = Math.min(clamped, maxForThisExitByGlobal);
+            // Ensure at least 0
+            clamped = Math.max(0, clamped);
 
             return {
                 ...prev,

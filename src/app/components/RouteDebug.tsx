@@ -68,6 +68,9 @@ export function RouteDebug({
 
     // matrix snapshots to detect transform changes
     const lastMatricesRef = useRef<Map<string, Float32Array>>(new Map());
+    // Throttle transform checking to avoid performance issues
+    const transformCheckAccumRef = useRef(0);
+    const TRANSFORM_CHECK_INTERVAL = 0.5; // Check only twice per second
 
     const setBoxesFromRoute = (route: Route, color: THREE.Color) => {
         const inst = boxesRef.current;
@@ -251,9 +254,15 @@ export function RouteDebug({
     }, [enabled, junction, junctionObjectRefs, scene, maxSteps, disallowUTurn, yLift, boxSize, maxBoxes]);
 
     // Detect transform changes while debug is visible, and rebuild routes so WORLD points stay correct
-    useFrame(() => {
+    // Throttled to avoid performance issues
+    useFrame((state, delta) => {
         if (!enabled) return;
         if (!visibleRef.current) return;
+
+        // Throttle the check to avoid running every frame
+        transformCheckAccumRef.current += delta;
+        if (transformCheckAccumRef.current < TRANSFORM_CHECK_INTERVAL) return;
+        transformCheckAccumRef.current = 0;
 
         const refs = junctionObjectRefs?.current;
         if (!refs || refs.length === 0) return;
