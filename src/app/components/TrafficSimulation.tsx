@@ -260,15 +260,15 @@ const JunctionStatsLabels = memo(
  * Drop this into your Scene component to enable traffic simulation
  */
 export const TrafficSimulation = () => {
-    const { junction, junctionObjectRefs, simIsRunning, stats, setStats } = useJModellerContext();
-    const { scene } = useThree();
+    const { junction, junctionObjectRefs, simIsRunning, stats, setStats, carsReady, setCarsReady, followedVehicleId, setFollowedVehicleId } = useJModellerContext();
+    const { scene, camera, gl } = useThree();
 
-    const [carsReady, setCarsReady] = useState(false);
     const [isInitialised, setisInitialised] = useState(false);
     const [showDebugRoutes, setShowDebugRoutes] = useState(false);
 
     const statsAccumRef = useRef(0);
     const lastStatsRef = useRef<SimulationStats | null>(null);
+    const raycasterRef = useRef(new THREE.Raycaster());
 
     
 
@@ -367,21 +367,29 @@ export const TrafficSimulation = () => {
             vehicleManagerRef.current?.reset();
 
             vehicleManagerRef.current = new VehicleManager(scene, carModelsRef.current, routesRef.current, {
-                demandRatePerSec: 10,
+                // Spawning
+                demandRatePerSec: 2,
                 maxVehicles: 100,
-                maxSpawnQueue: 200,
-
-                // Kinematics
-                maxSpeed: 10,      // target cruising speed
-                maxAccel: 4,      // m/s^2-ish
-                maxDecel: 8,      // m/s^2-ish (positive number, applied as braking)
-
-                yOffset: 0,
-
-                minBumperGap: 1.5,
                 maxSpawnAttemptsPerFrame: 20,
-                stopLineOffset: 0.6,
+                maxSpawnQueue: 25,
 
+                // Motion
+                initialSpeed: 0,
+                maxSpeed: 10,
+                maxAccel: 4,
+                maxDecel: 8,
+                comfortDecel: 4,
+                maxJerk: 10,
+
+                // Spacing
+                minBumperGap: 1,
+                timeHeadway: 1,
+                stopLineOffset: 1,
+
+                // Rendering
+                yOffset: 0.01,
+
+                // Stage 2
                 enableLaneQueuing: true,
                 debugLaneQueues: true,
             });
@@ -493,6 +501,77 @@ export const TrafficSimulation = () => {
         }
     }, [showDebugRoutes, isInitialised, createDebugRoutes]);
 
+    // Double-click handler for selecting a vehicle to follow
+    useEffect(() => {
+        if (!simIsRunning) return;
+
+        const handleDoubleClick = (event: MouseEvent) => {
+            const vm = vehicleManagerRef.current;
+            if (!vm) return;
+
+            // Get mouse position in normalized device coordinates
+            const rect = gl.domElement.getBoundingClientRect();
+            const mouse = new THREE.Vector2(
+                ((event.clientX - rect.left) / rect.width) * 2 - 1,
+                -((event.clientY - rect.top) / rect.height) * 2 + 1
+            );
+
+            // Raycast to find clicked vehicle
+            raycasterRef.current.setFromCamera(mouse, camera);
+            
+            const vehicles = vm.getVehicles();
+            const vehicleModels = vehicles.map(v => v.model);
+            const intersects = raycasterRef.current.intersectObjects(vehicleModels, true);
+
+            if (intersects.length > 0) {
+                // Find which vehicle was clicked
+                const clickedObject = intersects[0].object;
+                let vehicleModel: THREE.Object3D | null = clickedObject;
+                
+                // Traverse up to find the root vehicle model
+                while (vehicleModel && !vehicles.some(v => v.model === vehicleModel)) {
+                    vehicleModel = vehicleModel.parent;
+                }
+
+                if (vehicleModel) {
+                    const vehicle = vehicles.find(v => v.model === vehicleModel);
+                    if (vehicle) {
+                        setFollowedVehicleId(vehicle.id);
+                        console.log(`Following vehicle ${vehicle.id}`);
+                    }
+                }
+            }
+        };
+
+        gl.domElement.addEventListener("dblclick", handleDoubleClick);
+        return () => {
+            gl.domElement.removeEventListener("dblclick", handleDoubleClick);
+        };
+    }, [simIsRunning, camera, gl, setFollowedVehicleId]);
+
+    // Keyboard handler for exiting first-person view (Backspace)
+    useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Backspace" && followedVehicleId !== null) {
+                event.preventDefault();
+                setFollowedVehicleId(null);
+                console.log("Exited first-person view");
+            }
+        };
+
+        window.addEventListener("keydown", handleKeyDown);
+        return () => {
+            window.removeEventListener("keydown", handleKeyDown);
+        };
+    }, [followedVehicleId, setFollowedVehicleId]);
+
+    // Clear followed vehicle when simulation stops
+    useEffect(() => {
+        if (!simIsRunning) {
+            setFollowedVehicleId(null);
+        }
+    }, [simIsRunning, setFollowedVehicleId]);
+
     /**
      * Main update loop - runs every frame
      */
@@ -507,8 +586,45 @@ export const TrafficSimulation = () => {
         // 2) push controller colours into stop lines (visual sync)
         applyIntersectionStopLineColours(junctionObjectRefs.current, vm);
 
-        // 3) stats (unchanged)
-        // 3) stats (throttled)
+        // 3) First-person camera following
+        if (followedVehicleId !== null) {
+            const vehicle = vm.getVehicleById(followedVehicleId);
+            if (vehicle) {
+                // Position camera on roof of car, slightly forward
+                const carPos = vehicle.model.position.clone();
+                const carRotation = vehicle.model.rotation.y;
+                
+                // Camera height above car (roof level)
+                const cameraHeight = 2.0;
+                
+                // Look ahead distance
+                const lookAheadDistance = 15;
+                
+                // Calculate forward direction based on car's rotation
+                const forward = new THREE.Vector3(
+                    Math.sin(carRotation),
+                    0,
+                    Math.cos(carRotation)
+                );
+                
+                // Set camera position on top of car
+                camera.position.set(
+                    carPos.x,
+                    carPos.y + cameraHeight,
+                    carPos.z
+                );
+                
+                // Look ahead in the direction the car is facing
+                const lookAt = carPos.clone().add(forward.multiplyScalar(lookAheadDistance));
+                lookAt.y = carPos.y + 1; // Look slightly ahead and level
+                camera.lookAt(lookAt);
+            } else {
+                // Vehicle no longer exists, exit follow mode
+                setFollowedVehicleId(null);
+            }
+        }
+
+        // 4) stats (throttled)
         statsAccumRef.current += delta;
 
         const s = vm.getStats(); // your full SimulationStats snapshot

@@ -15,7 +15,8 @@ export default function DebugPanel() {
         simIsRunning,
         startSim,
         haltSim,
-        stats
+        stats,
+        carsReady
     } = useJModellerContext();
 
 
@@ -309,8 +310,41 @@ export default function DebugPanel() {
             >
                 <h1 style={{ margin: "0 0 8px 0", fontSize: 18 }}>Simulation Control</h1>
 
-                <button disabled={simIsRunning} onClick={() => startSim()}>
-                    Start Simulation
+                {/* Loading indicator */}
+                <div style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 12, marginBottom: 4, opacity: 0.8 }}>
+                        {carsReady ? "Car models loaded ✓" : "Loading car models..."}
+                    </div>
+                    <div style={{
+                        width: "100%",
+                        height: 6,
+                        background: "rgba(255,255,255,0.2)",
+                        borderRadius: 3,
+                        overflow: "hidden"
+                    }}>
+                        <div style={{
+                            width: carsReady ? "100%" : "30%",
+                            height: "100%",
+                            background: carsReady 
+                                ? "#4CAF50" 
+                                : "linear-gradient(90deg, #4CAF50, #8BC34A)",
+                            borderRadius: 3,
+                            transition: carsReady ? "width 0.3s ease-out" : "none",
+                            animation: carsReady ? "none" : "loadingPulse 1.5s ease-in-out infinite"
+                        }} />
+                    </div>
+                    {!carsReady && (
+                        <style>{`
+                            @keyframes loadingPulse {
+                                0%, 100% { width: 20%; margin-left: 0%; }
+                                50% { width: 40%; margin-left: 60%; }
+                            }
+                        `}</style>
+                    )}
+                </div>
+
+                <button disabled={simIsRunning || !carsReady} onClick={() => startSim()}>
+                    {carsReady ? "Start Simulation" : "Loading..."}
                 </button>
                 <br />
                 <button disabled={!simIsRunning} onClick={() => haltSim()}>

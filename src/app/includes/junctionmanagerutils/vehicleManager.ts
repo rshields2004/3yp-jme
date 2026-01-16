@@ -128,6 +128,16 @@ export class VehicleManager {
         return this.roundaboutControllers.has(junctionId);
     }
 
+    /** Get a vehicle by ID for camera following */
+    public getVehicleById(id: number): Vehicle | undefined {
+        return this.vehicles.find(v => v.id === id);
+    }
+
+    /** Get all active vehicles (for raycasting/selection) */
+    public getVehicles(): Vehicle[] {
+        return this.vehicles;
+    }
+
 
     public reset() {
         for (const v of this.vehicles) {

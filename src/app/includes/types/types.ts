@@ -62,6 +62,12 @@ export type JModellerState = {
 
     stats: SimulationStats;
     setStats: React.Dispatch<React.SetStateAction<SimulationStats>>;
+
+    carsReady: boolean;
+    setCarsReady: React.Dispatch<React.SetStateAction<boolean>>;
+
+    followedVehicleId: number | null;
+    setFollowedVehicleId: React.Dispatch<React.SetStateAction<number | null>>;
     
 };
 

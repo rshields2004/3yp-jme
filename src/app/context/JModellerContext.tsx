@@ -16,6 +16,8 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
     const [selectedObjects, setSelectedObjects] = useState<string[]>([]);
     const [selectedExits, setSelectedExits] = useState<ExitRef[]>([]);
     const [simIsRunning, setSimIsRunning] = useState<boolean>(false);
+    const [carsReady, setCarsReady] = useState<boolean>(false);
+    const [followedVehicleId, setFollowedVehicleId] = useState<number | null>(null);
 
 
 
@@ -238,7 +240,11 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
             startSim,
             haltSim,
             stats,
-            setStats
+            setStats,
+            carsReady,
+            setCarsReady,
+            followedVehicleId,
+            setFollowedVehicleId
         }}>
             {children}
         </JModellerContext.Provider>

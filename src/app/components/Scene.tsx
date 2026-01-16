@@ -11,7 +11,7 @@ import { TrafficSimulation } from "./TrafficSimulation";
 import { RouteDebug } from "./RouteDebug";
 
 export default function Scene() {
-    const { selectedObjects } = useJModellerContext();
+    const { selectedObjects, followedVehicleId } = useJModellerContext();
     const controlsRef = useRef<OrbitControlsImpl>(null);
 
 
@@ -35,7 +35,7 @@ export default function Scene() {
             </EffectComposer>
 
             <OrbitControls
-                enabled={selectedObjects.length === 0}
+                enabled={selectedObjects.length === 0 && followedVehicleId === null}
                 ref={controlsRef}
                 minPolarAngle={Math.PI / 6}
                 maxPolarAngle={Math.PI / 2.1}
