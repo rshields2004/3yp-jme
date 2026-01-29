@@ -422,10 +422,9 @@ export class VehicleManager {
         }
 
         // Sort within lanes by lane coordinate (front-to-back)
-        for (const laneOccs of lanes.values()) {
-            laneOccs.sort((a, b) => this.occCoord(b, b.v.laneKey, desiredS) - this.occCoord(a, a.v.laneKey, desiredS));
+        for (const [laneKey, laneOccs] of lanes.entries()) {
+            laneOccs.sort((a, b) => this.occCoord(b, laneKey, desiredS) - this.occCoord(a, laneKey, desiredS));
         }
-
         // STEP 3: Process each route front-to-back
         for (const [, routeVehicles] of vehiclesByRoute.entries()) {
             for (let i = 0; i < routeVehicles.length; i++) {
@@ -713,7 +712,7 @@ export class VehicleManager {
             for (const a of segs) {
                 for (const b of segs) {
                     if (a === b) continue;
-                    if (a.to === b.from) {
+                    if (this.nodeToKey(a.to) === this.nodeToKey(b.from)) {
                         const aid = this.segmentId(a);
                         const bid = this.segmentId(b);
                         next.get(aid)!.push(bid);
