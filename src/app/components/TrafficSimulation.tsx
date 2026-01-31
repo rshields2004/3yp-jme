@@ -269,6 +269,7 @@ export const TrafficSimulation = () => {
     const statsAccumRef = useRef(0);
     const lastStatsRef = useRef<SimulationStats | null>(null);
     const raycasterRef = useRef(new THREE.Raycaster());
+    const simAccumulatorRef = useRef(0);
 
     
 
@@ -375,16 +376,16 @@ export const TrafficSimulation = () => {
 
                 // Motion
                 initialSpeed: 0,
-                maxSpeed: 100,
+                maxSpeed: 10,
                 maxAccel: 4,
                 maxDecel: 8,
                 comfortDecel: 4,
                 maxJerk: 10,
 
                 // Spacing
-                minBumperGap: 1,
+                minBumperGap: 0.5,
                 timeHeadway: 1,
-                stopLineOffset: 1,
+                stopLineOffset: 0.01,
 
                 // Rendering
                 yOffset: 0.01,
@@ -580,8 +581,16 @@ export const TrafficSimulation = () => {
         const vm = vehicleManagerRef.current;
         if (!vm) return;
 
-        // 1) advance sim + controller state
-        vm.update(delta, junctionObjectRefs);
+        // 1) advance sim + controller state (fixed timestep for stability)
+        const maxDelta = 0.05;
+        const fixedDt = 1 / 60;
+        const clamped = Math.min(delta, maxDelta);
+        simAccumulatorRef.current += clamped;
+
+        while (simAccumulatorRef.current >= fixedDt) {
+            vm.update(fixedDt, junctionObjectRefs);
+            simAccumulatorRef.current -= fixedDt;
+        }
 
         // 2) push controller colours into stop lines (visual sync)
         applyIntersectionStopLineColours(junctionObjectRefs.current, vm);
