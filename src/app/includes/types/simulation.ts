@@ -74,6 +74,9 @@ export type SimConfig = {
     // Stage 2
     enableLaneQueuing: boolean;
     debugLaneQueues: boolean;
+
+    // Roundabout-specific
+    roundaboutDecelZone: number;  // Distance before stopline to start decelerating
 };
 
 

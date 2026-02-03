@@ -1,150 +1,269 @@
+import * as THREE from "three";
 import { LightColour } from "../../types/simulation";
 
+/**
+ * RoundaboutController with position-based collision detection.
+ *
+ * Uses actual world positions for gap checking and tracks vehicles
+ * entering from different entry points to prevent simultaneous entry
+ * from adjacent entries while allowing opposite entries to proceed.
+ */
 export class RoundaboutController {
-  id: string;
+    id: string;
 
-  private entryKeys: string[];
-  private entryIndexByKey = new Map<string, number>();
+    private circulating = new Map<
+        number,
+        {
+            position: THREE.Vector3;
+            speed: number;
+            laneIndex: number;
+            heading: THREE.Vector3;
+        }
+    >();
 
-  private circulatingByEntry = new Map<string, Set<number>>();
+    private committed = new Set<number>();
 
-  private now = 0;
-  private lastEnteredAtByEntry = new Map<string, number>();
-  private lastGrantedEntry: string | null = null; // Track which entry was last granted
+    private entering = new Map<
+        number,
+        {
+            position: THREE.Vector3;
+            time: number;
+            entryKey: string;
+        }
+    >();
 
-  // Tuneables
-  private entryClearanceSec = 0.5; // Time to wait after a vehicle enters before allowing another
-  private minCirculationTime = 0.3; // Minimum time a vehicle should spend circulating before yielding
+    private entryKeys: string[];
+    private center = new THREE.Vector3();
+    private now = 0;
 
-  constructor(id: string, entryKeys: string[]) {
-    this.id = id;
-    this.entryKeys = [...new Set(entryKeys)];
+    private readonly MIN_GAP_DISTANCE = 2;       // Minimum distance to any circulating vehicle
+    private readonly MIN_TIME_GAP = 2.0;         // Seconds buffer for approaching vehicles
+    private readonly SAFE_ENTRY_DISTANCE = 10;   // Check approaching vehicles within this distance
+    private readonly DEBUG = false;              // Disable debug logging
+    private readonly COLLISION_THRESHOLD = 3.0;  // Distance below which we consider it a collision
 
-    for (const k of this.entryKeys) this.circulatingByEntry.set(k, new Set());
-    this.buildEntryOrder();
-  }
-
-  update(dt: number) {
-    this.now += dt;
-  }
-
-  registerVehicleEntering(vehicleId: number, entryKey: string) {
-    const set = this.circulatingByEntry.get(entryKey);
-    if (set) set.add(vehicleId);
-
-    // record recent feed-in (for clearance window)
-    this.lastEnteredAtByEntry.set(entryKey, this.now);
-  }
-
-  registerVehicleExiting(vehicleId: number, entryKey: string) {
-    const set = this.circulatingByEntry.get(entryKey);
-    if (set) set.delete(vehicleId);
-  }
-
-  clearVehicle(vehicleId: number) {
-    for (const set of this.circulatingByEntry.values()) set.delete(vehicleId);
-  }
-
-  getTotalCirculating(): number {
-    let total = 0;
-    for (const s of this.circulatingByEntry.values()) total += s.size;
-    return total;
-  }
-
-  /**
-   * Simplified entry check: basic right-of-way with entry throttling
-   */
-  canEnter(entryKey: string, vehicleId?: number): boolean {
-    // Single entry or no other traffic - always allow
-    if (this.entryKeys.length <= 1 || this.getTotalCirculating() === 0) {
-      return true;
+    constructor(id: string, entryKeys: string[]) {
+        this.id = id;
+        this.entryKeys = [...new Set(entryKeys)];
     }
 
-    // Throttle entries: don't allow if someone just entered recently
-    const timeSinceLastEntry = this.now - Math.max(...Array.from(this.lastEnteredAtByEntry.values() ?? []));
-    if (timeSinceLastEntry < this.entryClearanceSec) {
-      return false;
+    setGeometry(center: THREE.Vector3, _radius: number): void {
+        this.center.copy(center);
     }
 
-    // Multiple entries with traffic: basic right-of-way check
-    const rightKey = this.getImmediateRightEntry(entryKey);
-    if (rightKey) {
-      const rightCirculating = this.circulatingByEntry.get(rightKey)?.size ?? 0;
-      if (rightCirculating > 0) {
-        return false; // Yield to right
-      }
+    update(dt: number): void {
+        this.now += dt;
     }
 
-    return true; // Allow
-  }
+    updateCirculatingVehicle(
+        vehicleId: number,
+        position: THREE.Vector3,
+        speed: number,
+        laneIndex: number,
+        heading: THREE.Vector3
+    ): void {
+        const isNew = !this.circulating.has(vehicleId);
+        
+        this.circulating.set(vehicleId, {
+            position: position.clone(),
+            speed,
+            laneIndex,
+            heading: heading.clone().normalize(),
+        });
 
-  /**
-   * For vehicle manager: calls canEnter with vehicleId
-   */
-  canEnterWithVehicle(entryKey: string, vehicleId: number): boolean {
-    return this.canEnter(entryKey, vehicleId);
-  }
+        if (this.DEBUG && isNew) {
+            console.log(`🚗 Vehicle ${vehicleId} ENTERED roundabout ${this.id}`, {
+                laneIndex,
+                position: { x: position.x.toFixed(2), z: position.z.toFixed(2) },
+                speed: speed.toFixed(2),
+                totalCirculating: this.circulating.size,
+            });
+        }
+    }
 
-  isGreen(entryKey: string): boolean {
-    // for compatibility; for correct behaviour use canEnter(entryKey, vehicleId) from VehicleManager
-    return this.canEnter(entryKey);
-  }
+    removeCirculatingVehicle(vehicleId: number): void {
+        if (this.DEBUG && this.circulating.has(vehicleId)) {
+            const info = this.circulating.get(vehicleId);
+            console.log(`🚗 Vehicle ${vehicleId} EXITED roundabout ${this.id}`, {
+                laneIndex: info?.laneIndex,
+                totalCirculating: this.circulating.size - 1,
+            });
+        }
+        this.circulating.delete(vehicleId);
+        this.entering.delete(vehicleId);
+    }
 
-  canNewVehicleEnter(entryKey: string): boolean {
-    return this.canEnter(entryKey);
-  }
+    commitVehicle(vehicleId: number, entryPosition?: THREE.Vector3, entryKey?: string): void {
+        this.committed.add(vehicleId);
+        if (entryPosition && entryKey) {
+            this.entering.set(vehicleId, {
+                position: entryPosition.clone(),
+                time: this.now,
+                entryKey,
+            });
+        }
+    }
 
-  getLightColour(entryKey: string): LightColour {
-    return this.canEnter(entryKey) ? "GREEN" : "AMBER";
-  }
+    isCommitted(vehicleId: number): boolean {
+        return this.committed.has(vehicleId);
+    }
 
-  getState(): string {
-    return `ROUNDABOUT (${this.getTotalCirculating()} circulating)`;
-  }
+    clearCommitment(vehicleId: number): void {
+        this.committed.delete(vehicleId);
+        this.entering.delete(vehicleId);
+    }
 
-  getCurrentGreen(): string | null {
-    for (const k of this.entryKeys) if (this.canEnter(k)) return k;
-    return null;
-  }
+    clearVehicle(vehicleId: number): void {
+        this.circulating.delete(vehicleId);
+        this.committed.delete(vehicleId);
+        this.entering.delete(vehicleId);
+    }
 
-  getEntryLanes(): string[] {
-    return [...this.entryKeys];
-  }
+    private hasConflictingEntry(entryKey: string, entryPosition: THREE.Vector3): boolean {
+        const ENTRY_TIMEOUT = 2.0;
+        const MIN_ANGULAR_SEPARATION = Math.PI / 2;
 
-  private maybeGrant(entryKey: string, vehicleId?: number) {
-    // No longer used
-  }
+        for (const [, info] of this.entering) {
+            if (info.entryKey === entryKey) continue;
+            if (this.now - info.time > ENTRY_TIMEOUT) continue;
 
-  private buildEntryOrder() {
-    const withExit = this.entryKeys
-      .map((k) => ({ k, exit: this.parseExitIndex(k) }))
-      .sort((a, b) => {
-        const ae = a.exit, be = b.exit;
-        if (ae === null && be === null) return 0;
-        if (ae === null) return 1;
-        if (be === null) return -1;
-        return ae - be;
-      });
+            const angle1 = Math.atan2(
+                entryPosition.z - this.center.z,
+                entryPosition.x - this.center.x
+            );
+            const angle2 = Math.atan2(
+                info.position.z - this.center.z,
+                info.position.x - this.center.x
+            );
 
-    this.entryKeys = withExit.map((x) => x.k);
-    this.entryIndexByKey.clear();
-    this.entryKeys.forEach((k, i) => this.entryIndexByKey.set(k, i));
-  }
+            let angularDist = Math.abs(angle1 - angle2);
+            if (angularDist > Math.PI) angularDist = 2 * Math.PI - angularDist;
 
-  private getImmediateRightEntry(entryKey: string): string | null {
-    const i = this.entryIndexByKey.get(entryKey);
-    if (i === undefined) return null;
-    const n = this.entryKeys.length;
-    const rightIndex = (i - 1 + n) % n;
-    return this.entryKeys[rightIndex] ?? null;
-  }
+            if (angularDist < MIN_ANGULAR_SEPARATION) {
+                return true;
+            }
+        }
+        return false;
+    }
 
-  private parseExitIndex(entryKey: string): number | null {
-    const raw = entryKey.startsWith("entry:") ? entryKey.slice(6) : entryKey;
-    const parts = raw.split("-");
-    if (parts.length < 7) return null;
-    const exitStr = parts[5];
-    const exitNum = Number(exitStr);
-    return Number.isFinite(exitNum) ? exitNum : null;
-  }
+    canEnterSafelyAtPosition(
+        entryPosition: THREE.Vector3,
+        entryLaneIndex: number,
+        _entrySpeed: number,
+        entryKey?: string,
+        totalCirculatingLanes: number = 2
+    ): boolean {
+        if (entryKey && this.hasConflictingEntry(entryKey, entryPosition)) {
+            if (this.DEBUG) {
+                console.log(`⛔ Entry blocked: conflicting entry from ${entryKey}`);
+            }
+            return false;
+        }
+
+        if (this.circulating.size === 0) {
+            if (this.DEBUG) {
+                console.log(`✅ Entry allowed: no circulating vehicles`);
+            }
+            return true;
+        }
+
+        // When entering a roundabout, the vehicle physically crosses ALL lanes
+        // at the entry point, regardless of which lane it will ultimately use.
+        // Therefore, we must check ALL circulating vehicles for safety.
+        if (this.DEBUG) {
+            console.log(`🔍 Entry check: entryLane=${entryLaneIndex}, totalCircLanes=${totalCirculatingLanes}, checking ALL lanes`);
+            console.log(`   Circulating vehicles:`, Array.from(this.circulating.entries()).map(([id, info]) => ({
+                id,
+                laneIndex: info.laneIndex,
+                pos: { x: info.position.x.toFixed(1), z: info.position.z.toFixed(1) }
+            })));
+        }
+
+        // Check ALL circulating vehicles - entry point crosses all lanes
+        for (const [vehicleId, info] of this.circulating) {
+            const distance = info.position.distanceTo(entryPosition);
+
+            if (this.DEBUG) {
+                console.log(`   🚗 Checking vehicle ${vehicleId}: lane=${info.laneIndex}, distance=${distance.toFixed(2)}`);
+            }
+
+            if (distance < this.MIN_GAP_DISTANCE) {
+                if (this.DEBUG) {
+                    console.log(`   ⛔ Entry blocked: vehicle ${vehicleId} too close (${distance.toFixed(2)} < ${this.MIN_GAP_DISTANCE})`);
+                }
+                return false;
+            }
+
+            if (distance < this.SAFE_ENTRY_DISTANCE) {
+                const toEntry = new THREE.Vector3().subVectors(entryPosition, info.position);
+                const dotProduct = toEntry.dot(info.heading);
+
+                if (dotProduct > 0) {
+                    const timeToReach = distance / Math.max(0.5, info.speed);
+                    if (timeToReach < this.MIN_TIME_GAP) {
+                        if (this.DEBUG) {
+                            console.log(`   ⛔ Entry blocked: vehicle ${vehicleId} approaching (timeToReach=${timeToReach.toFixed(2)} < ${this.MIN_TIME_GAP})`);
+                        }
+                        return false;
+                    }
+                }
+            }
+        }
+
+        if (this.DEBUG) {
+            console.log(`   ✅ Entry allowed`);
+        }
+        return true;
+    }
+
+    canEnterSafely(
+        entryAngle: number,
+        entryLaneIndex: number,
+        entrySpeed: number,
+        radius: number,
+        entryKey?: string,
+        totalCirculatingLanes: number = 2
+    ): boolean {
+        const entryPosition = new THREE.Vector3(
+            this.center.x + Math.cos(entryAngle) * radius,
+            this.center.y,
+            this.center.z + Math.sin(entryAngle) * radius
+        );
+        return this.canEnterSafelyAtPosition(entryPosition, entryLaneIndex, entrySpeed, entryKey, totalCirculatingLanes);
+    }
+
+    getEntryPosition(entryAngle: number, radius: number): THREE.Vector3 {
+        return new THREE.Vector3(
+            this.center.x + Math.cos(entryAngle) * radius,
+            this.center.y,
+            this.center.z + Math.sin(entryAngle) * radius
+        );
+    }
+
+    registerVehicleEntering(vehicleId: number, _entryKey: string): void {
+        this.commitVehicle(vehicleId);
+    }
+
+    registerVehicleExiting(vehicleId: number, _entryKey: string): void {
+        this.clearVehicle(vehicleId);
+    }
+
+    isGreen(_entryKey: string): boolean {
+        return this.circulating.size === 0;
+    }
+
+    getLightColour(_entryKey: string): LightColour {
+        return this.circulating.size === 0 ? "GREEN" : "AMBER";
+    }
+
+    getState(): string {
+        return `ROUNDABOUT (${this.circulating.size} circulating, ${this.committed.size} committed)`;
+    }
+
+    getCurrentGreen(): string | null {
+        for (const k of this.entryKeys) {
+            if (this.isGreen(k)) return k;
+        }
+        return null;
+    }
 }
