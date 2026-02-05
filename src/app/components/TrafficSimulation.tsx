@@ -577,7 +577,7 @@ export const TrafficSimulation = () => {
     /**
      * Main update loop - runs every frame
      */
-    useFrame((state, delta) => {
+    useFrame((_, delta) => {
         if (!simIsRunning || !isInitialised) return;
         const vm = vehicleManagerRef.current;
         if (!vm) return;

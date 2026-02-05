@@ -14,11 +14,8 @@ export default function Scene() {
     const { selectedObjects, followedVehicleId } = useJModellerContext();
     const controlsRef = useRef<OrbitControlsImpl>(null);
 
-
-
     return (
         <>
-            <axesHelper args={[50]} />
             <fog attach="fog" args={["#0a0a0a", 100, 250]} />
 
             <ambientLight intensity={1} />
@@ -42,7 +39,6 @@ export default function Scene() {
                 minDistance={5}
                 maxDistance={200}
             />
-
 
 
             <JunctionComponents />
