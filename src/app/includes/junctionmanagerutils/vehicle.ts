@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { Route, RouteSegment } from "./carRouting";
+import { Route, RouteSegment } from "../types/simulation";
 
 
 export class Vehicle {

@@ -1,11 +1,15 @@
 import * as THREE from "three";
-import { Route, RouteSegment, getRoutePoints, estimateRouteSpacing, computeSegmentDistances } from "./carRouting";
+import { getRoutePoints, estimateRouteSpacing, computeSegmentDistances } from "./carRouting";
 import { IntersectionController } from "./controllers/intersectionController";
 import { Vehicle } from "./vehicle";
 import { JunctionObjectTypes } from "../types/types";
-import { SimConfig, SimulationStats, JunctionStats, JunctionStatsGlobal, LaneOcc } from "../types/simulation";
+import { SimConfig, SimulationStats, JunctionStats, JunctionStatsGlobal, LaneOcc, Route, RouteSegment, Tuple3 } from "../types/simulation";
 import { RoundaboutController } from "./controllers/roundaboutController";
-import { RingLaneStructure } from "../types/roundabout";
+import { disposeObjectTree } from "./helpers/dispose";
+import { isRoundaboutType, buildRoundaboutMeta } from "./helpers/roundaboutMeta";
+import { segmentId, segmentLen } from "./helpers/segmentHelpers";
+
+
 
 
 export class VehicleManager {
@@ -31,7 +35,7 @@ export class VehicleManager {
     private routeSegmentDistances = new Map<Route, Array<{ s0: number; s1: number }>>();
     
     // Cache for route points and spacing
-    private routePointsCache = new Map<Route, [number, number, number][]>();
+    private routePointsCache = new Map<Route, Tuple3[]>();
     private routeSpacingCache = new Map<Route, number>();
 
     private cfg: SimConfig;
@@ -106,7 +110,7 @@ export class VehicleManager {
     }
 
     /** Helper: get cached route points */
-    private getRoutePointsCached(route: Route): [number, number, number][] {
+    private getRoutePointsCached(route: Route): Tuple3[] {
         let cached = this.routePointsCache.get(route);
         if (!cached) {
             cached = getRoutePoints(route);
@@ -151,13 +155,7 @@ export class VehicleManager {
     public reset() {
         for (const v of this.vehicles) {
             this.scene.remove(v.model);
-            v.model.traverse((child) => {
-                if (child instanceof THREE.Mesh) {
-                    child.geometry?.dispose();
-                    if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose());
-                    else child.material?.dispose();
-                }
-            });
+            disposeObjectTree(v.model);
         }
 
         this.vehicles = [];
@@ -300,7 +298,6 @@ export class VehicleManager {
                 }
             }
         }
-        
         // Clean up wait tracking for despawned vehicles
         for (const [vid] of this.vehicleWaitStart) {
             if (!this.vehicles.some(v => v.id === vid)) {
@@ -346,48 +343,13 @@ export class VehicleManager {
     // Stage 2: lane queuing + accel/decel
     // -----------------------
 
-    private calculateSafeFollowingSpeed(follower: Vehicle, leaderSpeed: number, currentGap: number): number {
-        const { maxSpeed, minBumperGap } = this.cfg;
-        const maxDecel = follower.maxDecel;
-        const timeHeadway = follower.timeHeadway;
-
-        if (currentGap <= minBumperGap * 0.5) return 0;
-
-        const availableGap = Math.max(0, currentGap - minBumperGap * 0.5);
-        const kinematicSafeSpeed = Math.sqrt(2 * maxDecel * availableGap);
-
-        const desiredGap = minBumperGap + Math.max(0, follower.speed * timeHeadway);
-
-        if (currentGap > desiredGap * 2) {
-            return Math.min(follower.preferredSpeed, kinematicSafeSpeed);
-        }
-
-        if (currentGap >= desiredGap) {
-            const blendFactor = (currentGap - desiredGap) / desiredGap;
-            const blendedSpeed = leaderSpeed + blendFactor * (follower.preferredSpeed - leaderSpeed);
-            return Math.min(blendedSpeed, kinematicSafeSpeed);
-        }
-
-        const gapRatio = currentGap / desiredGap;
-        const targetSpeed = follower.preferredSpeed * gapRatio;
-
-        if (gapRatio < 0.7) {
-            return Math.max(0, Math.min(targetSpeed, leaderSpeed, kinematicSafeSpeed));
-        }
-
-        return Math.max(0, Math.min(targetSpeed, kinematicSafeSpeed));
-    }
+    
 
     private stoppingDistance(speed: number, vehicle?: Vehicle): number {
         const decel = vehicle ? vehicle.maxDecel : this.cfg.maxDecel;
         return (speed * speed) / (2 * decel);
     }
 
-    private maxSpeedForDistance(distance: number, vehicle?: Vehicle): number {
-        if (distance <= 0) return 0;
-        const decel = vehicle ? vehicle.maxDecel : this.cfg.maxDecel;
-        return Math.sqrt(2 * decel * distance);
-    }
 
     /**
      * IMPORTANT FIX:
@@ -542,9 +504,9 @@ export class VehicleManager {
                 let stoplineS: number | null = null;
 
                 if (v.currentSegment?.phase === "approach" && stoplineSpeed < v.preferredSpeed) {
-                    stoplineS = this.getStoplineS(v, v.currentSegment);
+                    stoplineS = this.getStoplineS(v);
                 } else if (v.currentSegment?.phase === "link") {
-                    const upcoming = this.getUpcomingStoplineForLink(v, lanes, desiredS);
+                    const upcoming = this.getUpcomingStoplineForLink(v, lanes);
                     if (upcoming?.shouldStop) {
                         stoplineS = upcoming.stoplineS;
                     }
@@ -731,7 +693,7 @@ export class VehicleManager {
 
             // Treat the start of next lane as coord 0 (relative). We need relative distance into lane.
             // We can approximate "distance into segment" via coord - base.
-            const base = this.laneBases.get(nextLaneKey)?.get(this.segmentId(nextSeg)) ?? 0;
+            const base = this.laneBases.get(nextLaneKey)?.get(segmentId(nextSeg)) ?? 0;
             const otherDistInSeg = Math.max(0, otherCoord - base);
 
             const gap = distToSegEnd + otherDistInSeg - other.length;
@@ -812,7 +774,7 @@ export class VehicleManager {
 
             // Get the vehicle's position on the exit lane
             const otherCoord = this.occCoord(occ, exitLaneKey, desiredS);
-            const exitBase = this.laneBases.get(exitLaneKey)?.get(this.segmentId(exitSeg)) ?? 0;
+            const exitBase = this.laneBases.get(exitLaneKey)?.get(segmentId(exitSeg)) ?? 0;
             const otherDistInLane = Math.max(0, otherCoord - exitBase);
 
             // Gap = distance to exit + distance into exit lane to vehicle back
@@ -1088,7 +1050,7 @@ export class VehicleManager {
             return this.roundaboutCoordFromS(v, sValue);
         }
 
-        const segId = this.segmentId(seg);
+        const segId = segmentId(seg);
         const base = this.laneBases.get(v.laneKey)?.get(segId) ?? 0;
         const segDists = this.getSegmentDistances(v.route);
         const segInfo = segDists[v.segmentIndex];
@@ -1104,7 +1066,7 @@ export class VehicleManager {
             for (const seg of r.segments ?? []) {
                 const laneKey = this.laneKeyForSegment(seg);
                 if (!laneKey) continue;
-                const id = this.segmentId(seg);
+                const id = segmentId(seg);
 
                 const laneMap = perLane.get(laneKey) ?? new Map<string, RouteSegment>();
                 if (!laneMap.has(id)) laneMap.set(id, seg);
@@ -1114,7 +1076,7 @@ export class VehicleManager {
 
         for (const [laneKey, segMap] of perLane.entries()) {
             const segs = Array.from(segMap.values());
-            const ids = segs.map((s) => this.segmentId(s));
+            const ids = segs.map((s) => segmentId(s));
 
             const next = new Map<string, string[]>();
             const indeg = new Map<string, number>();
@@ -1127,8 +1089,8 @@ export class VehicleManager {
                 for (const b of segs) {
                     if (a === b) continue;
                     if (this.nodeToKey(a.to) === this.nodeToKey(b.from)) {
-                        const aid = this.segmentId(a);
-                        const bid = this.segmentId(b);
+                        const aid = segmentId(a);
+                        const bid = segmentId(b);
                         next.get(aid)!.push(bid);
                         indeg.set(bid, (indeg.get(bid) ?? 0) + 1);
                     }
@@ -1149,7 +1111,7 @@ export class VehicleManager {
                 const id = q.shift()!;
                 const seg = segMap.get(id)!;
                 const base = bases.get(id) ?? 0;
-                const len = this.segmentLen(seg);
+                const len = segmentLen(seg);
 
                 for (const nid of next.get(id) ?? []) {
                     if (!bases.has(nid)) {
@@ -1165,24 +1127,6 @@ export class VehicleManager {
         }
 
         this.laneBasesBuilt = true;
-    }
-
-    private segmentId(seg: RouteSegment): string {
-        const fromKey = `${seg.from.structureID}-${seg.from.exitIndex}-${seg.from.direction}-${seg.from.laneIndex}`;
-        const toKey = `${seg.to.structureID}-${seg.to.exitIndex}-${seg.to.direction}-${seg.to.laneIndex}`;
-        return `${seg.phase}|${fromKey}|${toKey}`;
-    }
-
-    private segmentLen(seg: RouteSegment): number {
-        if (!seg.points || seg.points.length < 2) return 0;
-        let len = 0;
-        for (let i = 1; i < seg.points.length; i++) {
-            const dx = seg.points[i][0] - seg.points[i-1][0];
-            const dy = seg.points[i][1] - seg.points[i-1][1];
-            const dz = seg.points[i][2] - seg.points[i-1][2];
-            len += Math.sqrt(dx*dx + dy*dy + dz*dz);
-        }
-        return len;
     }
 
     // -----------------------
@@ -1355,7 +1299,6 @@ export class VehicleManager {
         if (seg.phase === "inside" && this.isRoundaboutLaneKey(v.laneKey)) {
             const pos = v.model.position.clone();
             const laneIndex = this.roundaboutLaneIndexFromLaneKey(v.laneKey);
-            const laneRadius = meta.laneMidRadii[laneIndex] ?? meta.laneMidRadii[0] ?? 10;
             
             // Get the vehicle's heading from its model rotation
             const heading = new THREE.Vector3(0, 0, 1);
@@ -1366,7 +1309,7 @@ export class VehicleManager {
             controller.updateCirculatingVehicle(v.id, pos, v.speed, laneIndex, heading);
             
             // Also set the geometry if not already set
-            controller.setGeometry(meta.center, laneRadius);
+            controller.setGeometry(meta.center);
         }
         // If vehicle has exited the roundabout (no longer inside), remove from tracking
         else if (seg.phase === "exit" || seg.phase === "link") {
@@ -1454,48 +1397,18 @@ export class VehicleManager {
                 (g) => g?.userData?.id === junctionKey
             );
             const junctionType = junctionGroup?.userData?.type;
-            const isRoundabout = junctionType === "roundabout" ||
-                junctionKey.toLowerCase().includes("roundabout") ||
-                junctionKey.toLowerCase().includes("rndbt");
+            const isRoundabout = isRoundaboutType(junctionKey, junctionType);
 
             if (isRoundabout) {
                 const controller = new RoundaboutController(junctionKey, Array.from(laneSet));
                 this.roundaboutControllers.set(junctionKey, controller);
 
-                // Cache roundabout geometry metadata for gap checks and circular lane coords
-                if (junctionGroup?.userData?.roundaboutRingStructure) {
-                    const ringLines = junctionGroup.userData.roundaboutRingStructure as RingLaneStructure[];
-                    const maxStrip = Math.max(0, ringLines.length - 2);
-                    const laneMidRadii: number[] = [];
-
-                    for (let i = 0; i <= maxStrip; i++) {
-                        const inner = ringLines[i]?.radius ?? 0;
-                        const outer = ringLines[i + 1]?.radius ?? inner;
-                        laneMidRadii[i] = (inner + outer) * 0.5;
-                    }
-
-                    const center = new THREE.Vector3();
-                    junctionGroup.getWorldPosition(center);
-
-                    const entryAngles = new Map<string, number>();
-                    const exits = junctionGroup.userData.roundaboutExitStructure as { angle: number }[] | undefined;
-                    if (exits) {
-                        for (let i = 0; i < exits.length; i++) {
-                            const entryKey = `entry:${junctionKey}-${i}-in`;
-                            entryAngles.set(entryKey, exits[i]?.angle ?? 0);
-                        }
-                    }
-
-                    this.roundaboutMeta.set(junctionKey, { center, laneMidRadii, maxStrip, entryAngles });
-                    
-                    // Set geometry on the controller for position-based collision detection
-                    const avgRadius = laneMidRadii.length > 0 
-                        ? laneMidRadii.reduce((a, b) => a + b, 0) / laneMidRadii.length 
-                        : 10;
-                    controller.setGeometry(center, avgRadius);
+                const meta = buildRoundaboutMeta(junctionKey, junctionGroup as THREE.Group | undefined);
+                if (meta) {
+                    this.roundaboutMeta.set(junctionKey, meta);
+                    controller.setGeometry(meta.center);
                 }
-            }
-            else {
+            } else {
                 this.intersectionControllers.set(
                     junctionKey,
                     new IntersectionController(junctionKey, Array.from(laneSet), 8, 1)
@@ -1630,7 +1543,7 @@ export class VehicleManager {
         
         // Handle roundabouts with new gap-based logic
         if (isRoundabout) {
-            return this.applyRoundaboutEntryLogic(v, targetSpeed, seg, junctionKey, entryKey, lanes, desiredS);
+            return this.applyRoundaboutEntryLogic(v, targetSpeed, seg, junctionKey, entryKey, lanes);
         }
 
         // Regular intersection logic below
@@ -1639,13 +1552,13 @@ export class VehicleManager {
 
         // AMBER logic (intersections only): proceed if too close to safely stop
         if (lightColour === "AMBER") {
-            const stopS = this.getStoplineS(v, seg);
+            const stopS = this.getStoplineS(v);
             if (stopS !== null) {
                 const dist = stopS - v.s;
                 const stoppingDist = this.stoppingDistance(v.speed, v);
                 if (dist > stoppingDist) {
                     // Safe to stop -> treat as red
-                    return this.capToStopline(v, targetSpeed, seg);
+                    return this.capToStopline(v, targetSpeed);
                 }
                 // Too close to stop safely -> proceed
                 return targetSpeed;
@@ -1654,7 +1567,7 @@ export class VehicleManager {
 
         // RED_AMBER behaves like RED (intersections)
         if (lightColour === "RED_AMBER") {
-            return this.capToStopline(v, targetSpeed, seg);
+            return this.capToStopline(v, targetSpeed);
         }
 
         // If green, check downstream space
@@ -1670,14 +1583,14 @@ export class VehicleManager {
 
                 if (nearest !== null && nearest.dist < requiredGap) {
                     // blocked by downstream congestion
-                    return this.capToStopline(v, targetSpeed, seg);
+                    return this.capToStopline(v, targetSpeed);
                 }
             }
             return targetSpeed;
         }
 
         // red -> stop at line
-        return this.capToStopline(v, targetSpeed, seg);
+        return this.capToStopline(v, targetSpeed);
     }
 
     /**
@@ -1689,8 +1602,7 @@ export class VehicleManager {
         seg: RouteSegment,
         junctionKey: string,
         entryKey: string,
-        lanes: Map<string, LaneOcc[]>,
-        desiredS: Map<Vehicle, number>
+        lanes: Map<string, LaneOcc[]>
     ): number {
         const controller = this.roundaboutControllers.get(junctionKey);
         if (!controller) return targetSpeed;
@@ -1698,7 +1610,7 @@ export class VehicleManager {
         const meta = this.roundaboutMeta.get(junctionKey);
         if (!meta) return targetSpeed;
 
-        const stopS = this.getStoplineS(v, seg);
+        const stopS = this.getStoplineS(v);
         if (stopS === null) return targetSpeed;
 
         const distToStopline = stopS - v.s;
@@ -1722,7 +1634,7 @@ export class VehicleManager {
         const canEnter = controller.canEnterSafely(entryAngle, ringLaneIndex, v.preferredSpeed, radius, entryKey);
 
         // Also check for vehicles physically present on the ring
-        const physicalClear = this.isRoundaboutEntryClear(v, junctionKey, entryKey, entryLaneIndex, lanes, desiredS);
+        const physicalClear = this.isRoundaboutEntryClear(v, junctionKey, entryKey, entryLaneIndex, lanes);
 
         if (canEnter && physicalClear) {
             // Gap is available!
@@ -1762,8 +1674,7 @@ export class VehicleManager {
         junctionKey: string,
         entryKey: string,
         entryLaneIndex: number,
-        lanes: Map<string, LaneOcc[]>,
-        desiredS: Map<Vehicle, number>
+        lanes: Map<string, LaneOcc[]>
     ): boolean {
         const meta = this.roundaboutMeta.get(junctionKey);
         if (!meta) return true;
@@ -1805,7 +1716,7 @@ export class VehicleManager {
         return true;
     }
 
-    private capToStopline(v: Vehicle, targetSpeed: number, _seg: RouteSegment): number {
+    private capToStopline(v: Vehicle, targetSpeed: number): number {
         const frontOffset = 0.5 * v.length;
 
         // additional buffer so cars stop *before* the stop line
@@ -1822,7 +1733,7 @@ export class VehicleManager {
         return Math.min(targetSpeed, vmax);
     }
 
-    private getStoplineS(v: Vehicle, _seg: RouteSegment): number | null {
+    private getStoplineS(v: Vehicle): number | null {
         const frontOffset = 0.5 * v.length;
         const stopBuffer = this.cfg.stopLineOffset;
 
@@ -1835,8 +1746,7 @@ export class VehicleManager {
 
     private getUpcomingStoplineForLink(
         v: Vehicle,
-        lanes: Map<string, LaneOcc[]>,
-        desiredS: Map<Vehicle, number>
+        lanes: Map<string, LaneOcc[]>
     ): { stoplineS: number; shouldStop: boolean } | null {
         const seg = v.currentSegment;
         if (!seg || seg.phase !== "link") return null;
@@ -1876,7 +1786,7 @@ export class VehicleManager {
                     const radius = meta.laneMidRadii[ringLaneIndex] ?? meta.laneMidRadii[0] ?? 1;
                     
                     const canEnter = controller.canEnterSafely(entryAngle, ringLaneIndex, v.preferredSpeed, radius, entryKey);
-                    const physicalClear = this.isRoundaboutEntryClear(v, junctionKey, entryKey, entryLaneIndex, lanes, desiredS);
+                    const physicalClear = this.isRoundaboutEntryClear(v, junctionKey, entryKey, entryLaneIndex, lanes);
                     
                     return { stoplineS, shouldStop: !(canEnter && physicalClear) };
                 }
@@ -1906,7 +1816,7 @@ export class VehicleManager {
             const s = segs[i];
             if (s.phase === "inside") continue;
 
-            const segId = this.segmentId(s);
+            const segId = segmentId(s);
             return this.laneBases.get(exitLaneKey)?.get(segId) ?? 0;
         }
         return 0;
@@ -1970,7 +1880,7 @@ export class VehicleManager {
         for (let i = v.segmentIndex + 1; i < segs.length; i++) {
             const s = segs[i];
             if (s.phase === "inside") continue;
-            const segId = this.segmentId(s);
+            const segId = segmentId(s);
             const base = this.laneBases.get(exitLaneKey)?.get(segId) ?? 0;
             return base; // "start of lane"
         }
@@ -2238,8 +2148,7 @@ export class VehicleManager {
                     // Notify roundabout controller
                     const roundabout = this.roundaboutControllers.get(jid);
                     if (roundabout && prev.phase === "approach") {
-                        const entryKey = this.entryGroupKeyFromNodeKey(this.nodeToKey(seg.from));
-                        roundabout.registerVehicleEntering(v.id, entryKey);
+                        roundabout.registerVehicleEntering(v.id);
                     }
                 }
 
@@ -2253,8 +2162,7 @@ export class VehicleManager {
                     // Notify roundabout controller
                     const roundabout = this.roundaboutControllers.get(jid);
                     if (roundabout && prev.phase === "inside") {
-                        const entryKey = this.entryGroupKeyFromNodeKey(this.nodeToKey(seg.from));
-                        roundabout.registerVehicleExiting(v.id, entryKey);
+                        roundabout.registerVehicleExiting(v.id);
                     }
                 }
 

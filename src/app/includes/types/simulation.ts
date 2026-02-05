@@ -1,6 +1,49 @@
-import { Segment } from "next/dist/server/app-render/types";
 import { Vehicle } from "../junctionmanagerutils/vehicle";
 import { JunctionObjectTypes } from "./types";
+
+
+export type Tuple3 = [number, number, number];
+export type SegmentPhase = "approach" | "inside" | "exit" | "link";
+export type Direction = "in" | "out";
+
+export type Node = {
+    structureID: string;
+    exitIndex: number;
+    direction: Direction;
+    laneIndex: number;
+};
+
+export type RouteSegment = {
+    from: Node;
+    to: Node;
+    phase: SegmentPhase;
+    points: Tuple3[];
+};
+
+export type Route = {
+    segments: RouteSegment[];
+};
+
+
+export type InternalParts = {
+    approach: Tuple3[];
+    inside: Tuple3[];
+    exit: Tuple3[];
+};
+
+
+export type NodeKey = string;
+
+
+export type EdgePart = {
+    phase: Exclude<SegmentPhase, "link">; // "approach" | "inside" | "exit"
+    points: Tuple3[];
+};
+
+export type Edge = { kind: "internal"; to: Node; parts: EdgePart[] } | { kind: "link"; to: Node; points: Tuple3[] };
+
+export type Graph = Map<NodeKey, Edge[]>;
+
 
 export type LightColour = "RED" | "RED_AMBER" | "GREEN" | "AMBER";
 

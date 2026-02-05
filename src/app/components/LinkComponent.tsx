@@ -10,6 +10,7 @@ import type { ExitConfig, JunctionLink } from "../includes/types/types";
 import type { ExitStructure } from "../includes/types/intersection";
 import React from "react"
 import { RoundaboutExitStructure } from "../includes/types/roundabout";
+import { Tuple3 } from "../includes/types/simulation";
 
 type LinkComponentProps = {
     link: JunctionLink;
@@ -66,7 +67,7 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
 
         // Return slice without modifying the pool
         return laneRefsPool.current.slice(0, count);
-    }, [linkInfo?.laneCount]);
+    }, [linkInfo]);
 
     // Precompute lane offsets once
     const laneOffsets = useMemo(() => {
@@ -164,14 +165,14 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
 
         // compute lane line points
         const centerPoints = curve.getPoints(500);
-        const laneCurves: [number, number, number][][] = [];
+        const laneCurves: Tuple3[][] = [];
 
         laneOffsets.forEach((offset, idx) => {
-            const pts: [number, number, number][] = centerPoints.map((p, i) => {
+            const pts: Tuple3[] = centerPoints.map((p, i) => {
                 const perp = i < centerPoints.length - 1
                     ? safePerp(centerPoints[i], centerPoints[i + 1])
                     : safePerp(centerPoints[i - 1], centerPoints[i]);
-                return p.clone().add(perp.multiplyScalar(offset)).toArray() as [number, number, number];
+                return p.clone().add(perp.multiplyScalar(offset)).toArray() as Tuple3;
             });
 
             // Store the points in the array

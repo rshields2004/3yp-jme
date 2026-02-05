@@ -1,7 +1,6 @@
-import { LinkComponent } from "../components/LinkComponent";
 import { IntersectionConfig } from "./types/intersection";
 import { RoundaboutConfig } from "./types/roundabout";
-import { JunctionConfig, JunctionLink, JunctionObject, LaneLineProperties } from "./types/types";
+import { JunctionConfig, LaneLineProperties } from "./types/types";
 
 export const defaultLaneProperties: LaneLineProperties = {
     pattern: "solid",

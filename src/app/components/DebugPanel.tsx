@@ -423,7 +423,7 @@ export default function DebugPanel() {
                 {/* Intersection Config Panel */}
                 <div style={{ position: "absolute", top: 10, left: 10, padding: 10, background: "rgba(0,0,0,0.7)", color: "white", borderRadius: 8, minWidth: 300, maxHeight: "40vh", overflowY: "auto" }}>
                     <h2>Intersection</h2>
-                    {junction.junctionObjects.filter(obj => obj.type === "intersection").map((obj, i) => {
+                    {junction.junctionObjects.filter(obj => obj.type === "intersection").map((obj) => {
                         const config = obj.config as IntersectionConfig;
                         return (
                             <div key={obj.id} style={{ marginBottom: "1rem" }}>
@@ -478,7 +478,7 @@ export default function DebugPanel() {
                 {/* Roundabout Config Panel */}
                 <div style={{ position: "absolute", bottom: 10, left: 10, padding: 10, background: "rgba(0,0,0,0.7)", color: "white", borderRadius: 8, minWidth: 300, maxHeight: "40vh", overflowY: "auto" }}>
                     <h2>Roundabout</h2>
-                    {junction.junctionObjects.filter(obj => obj.type === "roundabout").map((obj, i) => {
+                    {junction.junctionObjects.filter(obj => obj.type === "roundabout").map((obj) => {
                         const config = obj.config as IntersectionConfig;
                         return (
                             <div key={obj.id} style={{ marginBottom: "1rem" }}>

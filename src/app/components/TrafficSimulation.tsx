@@ -5,12 +5,12 @@ import { useRef, useState, useEffect, useCallback, memo } from "react";
 import { MTLLoader, OBJLoader } from "three/examples/jsm/Addons.js";
 import { useJModellerContext } from "../context/JModellerContext";
 import * as THREE from "three";
-import { generateAllRoutes, Route, getRoutePoints } from "../includes/junctionmanagerutils/carRouting";
+import { generateAllRoutes, getRoutePoints } from "../includes/junctionmanagerutils/carRouting";
 import { carFiles } from "../includes/types/carTypes";
 import { VehicleManager } from "../includes/junctionmanagerutils/vehicleManager";
 import { ThickLineHandle } from "./ThickLine";
 import { Billboard, Html } from "@react-three/drei";
-import { SimulationStats } from "../includes/types/simulation";
+import { Route, SimulationStats, Tuple3 } from "../includes/types/simulation";
 
 // Global cache for car models (persists across simulation restarts)
 let cachedCarModels: THREE.Group[] | null = null;
@@ -264,7 +264,7 @@ export const TrafficSimulation = () => {
     const { scene, camera, gl } = useThree();
 
     const [isInitialised, setisInitialised] = useState(false);
-    const [showDebugRoutes, setShowDebugRoutes] = useState(false);
+    const [showDebugRoutes] = useState(false);
 
     const statsAccumRef = useRef(0);
     const lastStatsRef = useRef<SimulationStats | null>(null);
@@ -298,7 +298,7 @@ export const TrafficSimulation = () => {
         return () => {
             cancelled = true;
         };
-    }, []);
+    }, [setCarsReady, setStats]);
 
     /**
      * Create debug route visualizations
@@ -314,7 +314,7 @@ export const TrafficSimulation = () => {
         routesRef.current.forEach((route, i) => {
             const color = colors[i % colors.length];
             const routePoints = getRoutePoints(route);
-            const points = routePoints.map((p: [number, number, number]) => new THREE.Vector3(p[0], p[1] + 0.1, p[2]));
+            const points = routePoints.map((p: Tuple3) => new THREE.Vector3(p[0], p[1] + 0.1, p[2]));
             if (points.length < 2) return;
 
             const geometry = new THREE.BufferGeometry().setFromPoints(points);
@@ -428,7 +428,7 @@ export const TrafficSimulation = () => {
         } catch (error) {
             console.error("Failed to initialize simulation:", error);
         }
-    }, [carsReady, junction, junctionObjectRefs, scene, showDebugRoutes, createDebugRoutes]);
+    }, [carsReady, junction, junctionObjectRefs, scene, showDebugRoutes, createDebugRoutes, setStats]);
 
     /**
      * Clean up the simulation when it stops
@@ -441,10 +441,11 @@ export const TrafficSimulation = () => {
             debugRoutesGroupRef.current.traverse((child) => {
                 if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
                     child.geometry?.dispose();
-                    if (Array.isArray((child as any).material)) {
-                        (child as any).material.forEach((m: THREE.Material) => m.dispose());
-                    } else if ((child as any).material) {
-                        ((child as any).material as THREE.Material).dispose();
+                    const material = (child as THREE.Mesh | THREE.Line).material;
+                    if (Array.isArray(material)) {
+                        material.forEach((m) => m.dispose());
+                    } else {
+                        material?.dispose();
                     }
                 }
             });
@@ -480,7 +481,7 @@ export const TrafficSimulation = () => {
         });
 
         console.log("Traffic simulation cleaned up");
-    }, [scene]);
+    }, [scene, setStats]);
 
     // Handle simulation start/stop
     useEffect(() => {

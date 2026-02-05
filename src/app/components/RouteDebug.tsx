@@ -4,7 +4,8 @@ import { useEffect, useRef } from "react";
 import { useThree, useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { useJModellerContext } from "../context/JModellerContext";
-import { generateAllRoutes, Route, getRoutePoints } from "../includes/junctionmanagerutils/carRouting";
+import { generateAllRoutes, getRoutePoints } from "../includes/junctionmanagerutils/carRouting";
+import { Route, Tuple3 } from "../includes/types/simulation";
 
 function colorForIndex(i: number): THREE.Color {
     const c = new THREE.Color();
@@ -27,7 +28,7 @@ function disposeInstanced(mesh: THREE.InstancedMesh) {
 }
 
 function keyForGroup(g: THREE.Object3D, fallbackIdx: number) {
-    return (g as any).userData?.id ?? `${fallbackIdx}`;
+    return (g as THREE.Object3D<THREE.Object3DEventMap>).userData?.id ?? `${fallbackIdx}`;
 }
 
 function matrixDifferent(a: Float32Array, b: ArrayLike<number>, eps = 1e-6) {
@@ -82,7 +83,7 @@ export function RouteDebug({
         const dummy = tempObjRef.current;
 
         const segs = route.segments ?? [];
-        const ends: [number, number, number][] = [];
+        const ends: Tuple3[] = [];
         ends.push(segs[0].points[0]);
         // box at end of each segment
         for (const s of segs) {
@@ -232,6 +233,8 @@ export function RouteDebug({
             showRouteAtIndex(idxRef.current);
         }
 
+        const lastMatrices = lastMatricesRef.current;
+
         return () => {
             if (lineRef.current) {
                 disposeLine(lineRef.current);
@@ -248,7 +251,8 @@ export function RouteDebug({
             routesRef.current = [];
             idxRef.current = 0;
             visibleRef.current = false;
-            lastMatricesRef.current.clear();
+
+            lastMatrices.clear();
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [enabled, junction, junctionObjectRefs, scene, maxSteps, disallowUTurn, yLift, boxSize, maxBoxes]);
@@ -284,7 +288,7 @@ export function RouteDebug({
             }
 
             if (matrixDifferent(prev, elements)) {
-                prev.set(elements as any);
+                prev.set(elements as THREE.Matrix4Tuple);
                 changed = true;
             }
         }
@@ -302,7 +306,7 @@ export function RouteDebug({
         const onKeyDown = (e: KeyboardEvent) => {
             const el = e.target as HTMLElement | null;
             const tag = el?.tagName?.toLowerCase();
-            const isTyping = tag === "input" || tag === "textarea" || (el as any)?.isContentEditable;
+            const isTyping = tag === "input" || tag === "textarea" || (el as HTMLElement | null)?.isContentEditable;
             if (isTyping) return;
 
             if (e.key !== "d" && e.key !== "D") return;

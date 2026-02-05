@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { ExitConfig, LaneLineProperties, LaneStructure } from "./types";
+import { Tuple3 } from "./simulation";
 
 
 export type RoundaboutExitStructure = {
@@ -10,7 +11,7 @@ export type RoundaboutExitStructure = {
 
 export type RingLaneStructure = {
     radius: number;
-    points: [number, number, number][];
+    points: Tuple3[];
     properties: LaneLineProperties;
 };
 

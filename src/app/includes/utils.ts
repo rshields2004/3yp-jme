@@ -3,6 +3,7 @@ import { defaultLaneProperties } from "./defaults";
 import { ExitStructure } from "./types/intersection";
 import { LaneStructure } from "./types/types";
 import { RingLaneStructure, RoundaboutExitStructure } from "./types/roundabout";
+import { Tuple3 } from "./types/simulation";
 
 const getDirection = (
     angle: number
@@ -288,7 +289,7 @@ export function generateStopLineRound(
     const angleLeft = Math.atan2(left.line.start.z, left.line.start.x);
     const angleRight = Math.atan2(right.line.start.z, right.line.start.x);
 
-    const points: [number, number, number][] = [];
+    const points: Tuple3[] = [];
     const segments = 16; // number of points along the curve
 
     const angleDiff = shortestAngleDiff(angleLeft, angleRight);
@@ -389,7 +390,7 @@ export function generateRingLines(
     const ringLines: RingLaneStructure[] = [];
     for (let i = 0; i <= maxLaneCount; i++) {
         const radius = islandRadius + i * maxLaneWidth;
-        const points: [number, number, number][] = [];
+        const points: Tuple3[] = [];
         for (let j = 0; j <= 256; j++) {
             const theta = (j / 256) * Math.PI * 2;
             points.push([Math.cos(theta) * radius, 0, Math.sin(theta) * radius]);

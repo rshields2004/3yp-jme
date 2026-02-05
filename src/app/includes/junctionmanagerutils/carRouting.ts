@@ -1,30 +1,10 @@
 import * as THREE from "three";
-import { RingLaneStructure } from "../types/roundabout";
+import { RingLaneStructure, RoundaboutExitStructure } from "../types/roundabout";
+import { ExitStructure } from "../types/intersection";
 import { ExitConfig, JunctionConfig, JunctionObject } from "../types/types";
+import { Tuple3, InternalParts, NodeKey, Graph, Edge, RouteSegment, EdgePart, Route, Node } from "../types/simulation";
+import { polylineLength } from "./helpers/routeHelpers";
 
-
-
-export type Tuple3 = [number, number, number];
-export type SegmentPhase = "approach" | "inside" | "exit" | "link";
-export type Direction = "in" | "out";
-
-export type Node = {
-    structureID: string;
-    exitIndex: number;
-    direction: Direction;
-    laneIndex: number;
-};
-
-export type RouteSegment = {
-    from: Node;
-    to: Node;
-    phase: SegmentPhase;
-    points: Tuple3[];
-};
-
-export type Route = {
-    segments: RouteSegment[];
-};
 
 /* =========================================================
    Helper utilities for working with the simplified Route
@@ -52,21 +32,6 @@ export function getRoutePoints(route: Route): Tuple3[] {
     }
     
     return allPoints;
-}
-
-/**
- * Compute polyline length for an array of points
- */
-function polylineLength(pts: Tuple3[]): number {
-    if (!pts || pts.length < 2) return 0;
-    let len = 0;
-    for (let i = 1; i < pts.length; i++) {
-        const dx = pts[i][0] - pts[i-1][0];
-        const dy = pts[i][1] - pts[i-1][1];
-        const dz = pts[i][2] - pts[i-1][2];
-        len += Math.sqrt(dx*dx + dy*dy + dz*dz);
-    }
-    return len;
 }
 
 /**
@@ -125,10 +90,11 @@ export function getLaneWorldPoint(
     which: "start" | "end",
     dir: "in" | "out"
 ) {
-    let exitInfo: any;
+    let exitInfo: RoundaboutExitStructure | ExitStructure;
     if (group.userData.type === "roundabout") {
         exitInfo = group.userData.roundaboutExitStructure[exitIndex];
-    } else {
+    } 
+    else {
         exitInfo = group.userData.exitInfo[exitIndex];
     }
 
@@ -160,11 +126,7 @@ export function getLaneWorldPoint(
    Internal path generation -> parts (approach/inside/exit)
    ========================================================= */
 
-type InternalParts = {
-    approach: Tuple3[];
-    inside: Tuple3[];
-    exit: Tuple3[];
-};
+
 
 function v3ToTuple(v: THREE.Vector3): Tuple3 {
     return [v.x, v.y, v.z];
@@ -336,21 +298,11 @@ export function getMidCurve(curveA: Tuple3[], curveB: Tuple3[]): Tuple3[] {
    Graph internals (NOT exported)
    ========================================================= */
 
-type NodeKey = string;
 
-const nodeKeyOf = (n: Node): NodeKey =>
-    `${n.structureID}-${n.exitIndex}-${n.direction}-${n.laneIndex}`;
 
-type EdgePart = {
-    phase: Exclude<SegmentPhase, "link">; // "approach" | "inside" | "exit"
-    points: Tuple3[];
-};
+const nodeKeyOf = (n: Node): NodeKey => `${n.structureID}-${n.exitIndex}-${n.direction}-${n.laneIndex}`;
 
-type Edge =
-    | { kind: "internal"; to: Node; parts: EdgePart[] }
-    | { kind: "link"; to: Node; points: Tuple3[] };
 
-type Graph = Map<NodeKey, Edge[]>;
 
 const addEdge = (graph: Graph, from: Node, e: Edge) => {
     const k = nodeKeyOf(from);
@@ -449,7 +401,7 @@ function buildRouteFromSegments(
     let prevLast: Tuple3 | null = null;
 
     for (const seg of buildSegments) {
-        let pts = seg.points;
+        const pts = seg.points;
 
         // smooth+resample each segment independently
         const resampled = smoothPerSegment ? smoothAndResampleSegment(pts, spacing, tension) : pts;

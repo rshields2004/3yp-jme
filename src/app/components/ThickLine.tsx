@@ -6,9 +6,10 @@ import { useThree } from "@react-three/fiber";
 import { Line2 } from "three/addons/lines/Line2.js";
 import { LineGeometry } from "three/addons/lines/LineGeometry.js";
 import { LineMaterial } from "three/addons/lines/LineMaterial.js";
+import { Tuple3 } from "../includes/types/simulation";
 
 export type ThickLineHandle = {
-    updatePoints: (points: [number, number, number][]) => void;
+    updatePoints: (points: Tuple3[]) => void;
     setDashed(isDashed: boolean): void;
     setRed: () => void;
     setRedAmber: () => void;
@@ -17,7 +18,7 @@ export type ThickLineHandle = {
 };
 
 type ThickLineProps = {
-    points: [number, number, number][];
+    points: Tuple3[];
     colour?: string | number;
     linewidth?: number;
     dashed?: boolean;
@@ -35,7 +36,7 @@ export const ThickLine = forwardRef<ThickLineHandle, ThickLineProps>(
         const materialRef = useRef<LineMaterial>(null);
 
         useImperativeHandle(ref, () => ({
-            updatePoints(newPoints: [number, number, number][]) {
+            updatePoints(newPoints: Tuple3[]) {
                 if (!geometryRef.current || !lineRef.current) return;
                 geometryRef.current.setPositions(newPoints.flat());
                 lineRef.current.computeLineDistances();
@@ -106,7 +107,7 @@ export const ThickLine = forwardRef<ThickLineHandle, ThickLineProps>(
 
             // Only set colour if prop is provided (so imperative setters can take over)
             if (colour !== undefined) {
-                materialRef.current.color.set(colour as any);
+                materialRef.current.color.set(colour);
             }
 
             materialRef.current.linewidth = linewidth ?? 1;

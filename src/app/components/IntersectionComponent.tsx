@@ -17,7 +17,7 @@ type IntersectionProps = {
     index: number;
 };
 
-export const IntersectionComponent = ({ id, intersectionConfig, index }: IntersectionProps) => {
+export const IntersectionComponent = ({ id, intersectionConfig }: IntersectionProps) => {
     const groupRef = useRef<THREE.Group>(null);
     const {
         junction,
@@ -55,7 +55,7 @@ export const IntersectionComponent = ({ id, intersectionConfig, index }: Interse
 
         // Add a random ID each time so the below useEffect knows when it needs to re render
         return { id: id, exitInfo, edgeTubes, intersectionFloor, maxDistanceToStopLine };
-    }, [intersectionConfig]);
+    }, [intersectionConfig, id]);
 
 
     

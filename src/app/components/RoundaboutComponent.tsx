@@ -19,7 +19,7 @@ type RoundaboutProps = {
 };
 
 
-export const RoundaboutComponent = ({ id, roundaboutConfig, index }: RoundaboutProps) => {
+export const RoundaboutComponent = ({ id, roundaboutConfig }: RoundaboutProps) => {
 
     const groupRef = useRef<THREE.Group>(null);
     
@@ -67,7 +67,7 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, index }: RoundaboutP
         const edgeTubes = generateEdgeTubesRound(outerRadius, exitStructures);
         
         return { id: id, islandGeometry, floorCircle, ringLines, exitStructures, roundaboutFloor, edgeTubes, maxDistanceToStopLine }
-    }, [roundaboutConfig]);
+    }, [roundaboutConfig, id]);
 
     useEffect(() => {
         const group = groupRef.current;

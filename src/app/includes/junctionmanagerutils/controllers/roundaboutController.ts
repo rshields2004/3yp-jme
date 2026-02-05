@@ -39,15 +39,13 @@ export class RoundaboutController {
     private readonly MIN_GAP_DISTANCE = 2;       // Minimum distance to any circulating vehicle
     private readonly MIN_TIME_GAP = 2.0;         // Seconds buffer for approaching vehicles
     private readonly SAFE_ENTRY_DISTANCE = 10;   // Check approaching vehicles within this distance
-    private readonly DEBUG = false;              // Disable debug logging
-    private readonly COLLISION_THRESHOLD = 3.0;  // Distance below which we consider it a collision
 
     constructor(id: string, entryKeys: string[]) {
         this.id = id;
         this.entryKeys = [...new Set(entryKeys)];
     }
 
-    setGeometry(center: THREE.Vector3, _radius: number): void {
+    setGeometry(center: THREE.Vector3): void {
         this.center.copy(center);
     }
 
@@ -70,25 +68,9 @@ export class RoundaboutController {
             laneIndex,
             heading: heading.clone().normalize(),
         });
-
-        if (this.DEBUG && isNew) {
-            console.log(`🚗 Vehicle ${vehicleId} ENTERED roundabout ${this.id}`, {
-                laneIndex,
-                position: { x: position.x.toFixed(2), z: position.z.toFixed(2) },
-                speed: speed.toFixed(2),
-                totalCirculating: this.circulating.size,
-            });
-        }
     }
 
     removeCirculatingVehicle(vehicleId: number): void {
-        if (this.DEBUG && this.circulating.has(vehicleId)) {
-            const info = this.circulating.get(vehicleId);
-            console.log(`🚗 Vehicle ${vehicleId} EXITED roundabout ${this.id}`, {
-                laneIndex: info?.laneIndex,
-                totalCirculating: this.circulating.size - 1,
-            });
-        }
         this.circulating.delete(vehicleId);
         this.entering.delete(vehicleId);
     }
@@ -154,43 +136,26 @@ export class RoundaboutController {
         totalCirculatingLanes: number = 2
     ): boolean {
         if (entryKey && this.hasConflictingEntry(entryKey, entryPosition)) {
-            if (this.DEBUG) {
-                console.log(`⛔ Entry blocked: conflicting entry from ${entryKey}`);
-            }
             return false;
         }
 
         if (this.circulating.size === 0) {
-            if (this.DEBUG) {
-                console.log(`✅ Entry allowed: no circulating vehicles`);
-            }
             return true;
         }
 
         // When entering a roundabout, the vehicle physically crosses ALL lanes
         // at the entry point, regardless of which lane it will ultimately use.
         // Therefore, we must check ALL circulating vehicles for safety.
-        if (this.DEBUG) {
-            console.log(`🔍 Entry check: entryLane=${entryLaneIndex}, totalCircLanes=${totalCirculatingLanes}, checking ALL lanes`);
-            console.log(`   Circulating vehicles:`, Array.from(this.circulating.entries()).map(([id, info]) => ({
-                id,
-                laneIndex: info.laneIndex,
-                pos: { x: info.position.x.toFixed(1), z: info.position.z.toFixed(1) }
-            })));
-        }
+        
 
         // Check ALL circulating vehicles - entry point crosses all lanes
         for (const [vehicleId, info] of this.circulating) {
             const distance = info.position.distanceTo(entryPosition);
 
-            if (this.DEBUG) {
-                console.log(`   🚗 Checking vehicle ${vehicleId}: lane=${info.laneIndex}, distance=${distance.toFixed(2)}`);
-            }
+           
 
             if (distance < this.MIN_GAP_DISTANCE) {
-                if (this.DEBUG) {
-                    console.log(`   ⛔ Entry blocked: vehicle ${vehicleId} too close (${distance.toFixed(2)} < ${this.MIN_GAP_DISTANCE})`);
-                }
+               
                 return false;
             }
 
@@ -201,18 +166,13 @@ export class RoundaboutController {
                 if (dotProduct > 0) {
                     const timeToReach = distance / Math.max(0.5, info.speed);
                     if (timeToReach < this.MIN_TIME_GAP) {
-                        if (this.DEBUG) {
-                            console.log(`   ⛔ Entry blocked: vehicle ${vehicleId} approaching (timeToReach=${timeToReach.toFixed(2)} < ${this.MIN_TIME_GAP})`);
-                        }
+                        
                         return false;
                     }
                 }
             }
         }
 
-        if (this.DEBUG) {
-            console.log(`   ✅ Entry allowed`);
-        }
         return true;
     }
 
@@ -240,19 +200,19 @@ export class RoundaboutController {
         );
     }
 
-    registerVehicleEntering(vehicleId: number, _entryKey: string): void {
+    registerVehicleEntering(vehicleId: number): void {
         this.commitVehicle(vehicleId);
     }
 
-    registerVehicleExiting(vehicleId: number, _entryKey: string): void {
+    registerVehicleExiting(vehicleId: number): void {
         this.clearVehicle(vehicleId);
     }
 
-    isGreen(_entryKey: string): boolean {
+    isGreen(): boolean {
         return this.circulating.size === 0;
     }
 
-    getLightColour(_entryKey: string): LightColour {
+    getLightColour(): LightColour {
         return this.circulating.size === 0 ? "GREEN" : "AMBER";
     }
 
@@ -262,7 +222,7 @@ export class RoundaboutController {
 
     getCurrentGreen(): string | null {
         for (const k of this.entryKeys) {
-            if (this.isGreen(k)) return k;
+            if (this.isGreen()) return k;
         }
         return null;
     }
