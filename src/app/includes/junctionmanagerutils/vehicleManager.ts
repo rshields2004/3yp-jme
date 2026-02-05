@@ -1484,7 +1484,7 @@ export class VehicleManager {
                                     const ringLaneIndex = Math.min(meta.maxStrip, Math.max(0, meta.maxStrip - entryLaneIndex));
                                     const radius = meta.laneMidRadii[ringLaneIndex] ?? meta.laneMidRadii[0] ?? 1;
                                     
-                                    const canEnter = roundaboutController.canEnterSafely(entryAngle, ringLaneIndex, v.preferredSpeed, radius, entryKey);
+                                    const canEnter = roundaboutController.canEnterSafely(entryAngle, radius, entryKey);
                                     
                                     if (!canEnter) {
                                         // Need to stop - calculate deceleration
@@ -1631,7 +1631,7 @@ export class VehicleManager {
         const radius = meta.laneMidRadii[ringLaneIndex] ?? meta.laneMidRadii[0] ?? 1;
 
         // Check if safe to enter using the new gap-based logic
-        const canEnter = controller.canEnterSafely(entryAngle, ringLaneIndex, v.preferredSpeed, radius, entryKey);
+        const canEnter = controller.canEnterSafely(entryAngle, radius, entryKey);
 
         // Also check for vehicles physically present on the ring
         const physicalClear = this.isRoundaboutEntryClear(v, junctionKey, entryKey, entryLaneIndex, lanes);
@@ -1785,7 +1785,7 @@ export class VehicleManager {
                     const ringLaneIndex = Math.min(meta.maxStrip, Math.max(0, meta.maxStrip - entryLaneIndex));
                     const radius = meta.laneMidRadii[ringLaneIndex] ?? meta.laneMidRadii[0] ?? 1;
                     
-                    const canEnter = controller.canEnterSafely(entryAngle, ringLaneIndex, v.preferredSpeed, radius, entryKey);
+                    const canEnter = controller.canEnterSafely(entryAngle, radius, entryKey);
                     const physicalClear = this.isRoundaboutEntryClear(v, junctionKey, entryKey, entryLaneIndex, lanes);
                     
                     return { stoplineS, shouldStop: !(canEnter && physicalClear) };

@@ -38,7 +38,9 @@ export class RoundaboutController {
 
     private readonly MIN_GAP_DISTANCE = 2;       // Minimum distance to any circulating vehicle
     private readonly MIN_TIME_GAP = 2.0;         // Seconds buffer for approaching vehicles
-    private readonly SAFE_ENTRY_DISTANCE = 10;   // Check approaching vehicles within this distance
+    private readonly SAFE_ENTRY_DISTANCE = 20;   // Check approaching vehicles within this distance
+    private readonly ENTRY_TIMEOUT = 2.0;
+    private readonly MIN_ANGULAR_SEPARATION = Math.PI / 3;
 
     constructor(id: string, entryKeys: string[]) {
         this.id = id;
@@ -60,7 +62,6 @@ export class RoundaboutController {
         laneIndex: number,
         heading: THREE.Vector3
     ): void {
-        const isNew = !this.circulating.has(vehicleId);
         
         this.circulating.set(vehicleId, {
             position: position.clone(),
@@ -102,12 +103,11 @@ export class RoundaboutController {
     }
 
     private hasConflictingEntry(entryKey: string, entryPosition: THREE.Vector3): boolean {
-        const ENTRY_TIMEOUT = 2.0;
-        const MIN_ANGULAR_SEPARATION = Math.PI / 2;
+
 
         for (const [, info] of this.entering) {
             if (info.entryKey === entryKey) continue;
-            if (this.now - info.time > ENTRY_TIMEOUT) continue;
+            if (this.now - info.time > this.ENTRY_TIMEOUT) continue;
 
             const angle1 = Math.atan2(
                 entryPosition.z - this.center.z,
@@ -121,7 +121,7 @@ export class RoundaboutController {
             let angularDist = Math.abs(angle1 - angle2);
             if (angularDist > Math.PI) angularDist = 2 * Math.PI - angularDist;
 
-            if (angularDist < MIN_ANGULAR_SEPARATION) {
+            if (angularDist < this.MIN_ANGULAR_SEPARATION) {
                 return true;
             }
         }
@@ -130,10 +130,7 @@ export class RoundaboutController {
 
     canEnterSafelyAtPosition(
         entryPosition: THREE.Vector3,
-        entryLaneIndex: number,
-        _entrySpeed: number,
-        entryKey?: string,
-        totalCirculatingLanes: number = 2
+        entryKey?: string
     ): boolean {
         if (entryKey && this.hasConflictingEntry(entryKey, entryPosition)) {
             return false;
@@ -178,18 +175,15 @@ export class RoundaboutController {
 
     canEnterSafely(
         entryAngle: number,
-        entryLaneIndex: number,
-        entrySpeed: number,
         radius: number,
-        entryKey?: string,
-        totalCirculatingLanes: number = 2
+        entryKey?: string
     ): boolean {
         const entryPosition = new THREE.Vector3(
             this.center.x + Math.cos(entryAngle) * radius,
             this.center.y,
             this.center.z + Math.sin(entryAngle) * radius
         );
-        return this.canEnterSafelyAtPosition(entryPosition, entryLaneIndex, entrySpeed, entryKey, totalCirculatingLanes);
+        return this.canEnterSafelyAtPosition(entryPosition, entryKey);
     }
 
     getEntryPosition(entryAngle: number, radius: number): THREE.Vector3 {
