@@ -14,6 +14,7 @@ export const defaultExitConfig = {
     laneCount: 2,
     laneWidth: 1.5,
     exitLength: 20,
+    spawnRate: 0.5, // vehicles per second
 };
 
 export const defaultIntersectionConfig: IntersectionConfig = {

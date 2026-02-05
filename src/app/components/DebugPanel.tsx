@@ -10,16 +10,23 @@ export default function DebugPanel() {
         junction,
         setJunction,
         selectedExits,
+        selectedObjects,
         setSelectedExits,
         removeObject,
         simIsRunning,
         startSim,
         haltSim,
         stats,
-        carsReady
+        carsReady,
+        simIsPaused,
+        pauseSim,
+        resumeSim
     } = useJModellerContext();
 
-
+    
+    // Get up to 2 selected objects for config panels
+    const firstSelectedObject = selectedObjects.length > 0 ? junction.junctionObjects.find(obj => obj.id === selectedObjects[selectedObjects.length - 1]) : undefined;
+    const secondSelectedObject = selectedObjects.length > 1 ? junction.junctionObjects.find(obj => obj.id === selectedObjects[selectedObjects.length - 2]) : undefined;
 
     const handleNumExitsChange = (objID: string, value: number) => {
         setJunction(prev => ({
@@ -293,6 +300,25 @@ export default function DebugPanel() {
         });
     };
 
+    const handleSpawnRateChange = (objID: string, exitIndex: number, value: number) => {
+        setJunction(prev => ({
+            ...prev,
+            junctionObjects: prev.junctionObjects.map(obj =>
+                obj.id === objID
+                    ? {
+                        ...obj,
+                        config: {
+                            ...obj.config,
+                            exitConfig: obj.config.exitConfig.map((ex, idx) =>
+                                idx === exitIndex ? { ...ex, spawnRate: value } : ex
+                            )
+                        }
+                    }
+                    : obj
+            )
+        }));
+    };
+
 
 
 
@@ -350,6 +376,10 @@ export default function DebugPanel() {
                     {carsReady ? "Start Simulation" : "Loading..."}
                 </button>
                 <br />
+                <button disabled={!simIsRunning} onClick={() => simIsPaused ? resumeSim() : pauseSim()}>
+                    {simIsPaused ? "Resume Simulation" : "Pause Simulation"}
+                </button>
+                <br />
                 <button disabled={!simIsRunning} onClick={() => haltSim()}>
                     Stop Simulation
                 </button>
@@ -362,7 +392,18 @@ export default function DebugPanel() {
 
                 <div style={{ fontSize: 13, lineHeight: 1.35 }}>
                     <div><b>Active:</b> {stats.active}</div>
-                    <div><b>Spawn queue:</b> {stats.spawnQueue}</div>
+                    <div><b>Spawn queue (total):</b> {stats.spawnQueue}</div>
+                    {stats.spawnQueueByEntry && Object.keys(stats.spawnQueueByEntry).length > 0 && (
+                        <div style={{ marginLeft: 12, fontSize: 12, opacity: 0.85, marginTop: 2 }}>
+                            {Object.entries(stats.spawnQueueByEntry)
+                                .filter(([_, queue]) => queue > 0)
+                                .map(([entryKey, queue]) => (
+                                    <div key={entryKey}>
+                                        • {entryKey}: {queue}
+                                    </div>
+                                ))}
+                        </div>
+                    )}
                     <div><b>Spawned:</b> {stats.spawned}</div>
                     <div><b>Completed:</b> {stats.completed}</div>
                     <div><b>Routes:</b> {stats.routes}</div>
@@ -406,10 +447,6 @@ export default function DebugPanel() {
                     <button onClick={addNewIntersection}>Add New</button>
                     <h2>Add Roundabout</h2>
                     <button onClick={addNewRoundabout}>Add New</button>
-                </div>
-
-                {/* Links Panel */}
-                <div style={{ position: "absolute", bottom: 10, right: 10, padding: 10, background: "rgba(0,0,0,0.7)", color: "white", borderRadius: 8, minWidth: 300 }}>
                     <h2>Exit Links</h2>
                     <button onClick={addNewLink} disabled={selectedExits.length !== 2}>Add Link</button>
                     {junction.junctionLinks.map(link => (
@@ -420,117 +457,177 @@ export default function DebugPanel() {
                     ))}
                 </div>
 
-                {/* Intersection Config Panel */}
-                <div style={{ position: "absolute", top: 10, left: 10, padding: 10, background: "rgba(0,0,0,0.7)", color: "white", borderRadius: 8, minWidth: 300, maxHeight: "40vh", overflowY: "auto" }}>
-                    <h2>Intersection</h2>
-                    {junction.junctionObjects.filter(obj => obj.type === "intersection").map((obj) => {
-                        const config = obj.config as IntersectionConfig;
-                        return (
-                            <div key={obj.id} style={{ marginBottom: "1rem" }}>
-                                <h3>Intersection {obj.id.slice(0, 6)}</h3>
-                                <label># Exits:
-                                    <input
-                                        type="number"
-                                        min={2}
-                                        max={10}
-                                        value={config.numExits}
-                                        onChange={e => handleNumExitsChange(obj.id, Number(e.target.value))}
-                                    />
-                                </label>
-                                <button onClick={() => removeObject(obj.id)}>Delete</button>
-                                {config.exitConfig.map((exit, j) => (
-                                    <div key={j}>
-                                        <h4>Exit {j}</h4>
-                                        <label># Lanes:
-                                            <input
-                                                type="range"
-                                                min={2}
-                                                max={obj.config.numExits * 2}
-                                                value={exit.laneCount}
-                                                onChange={e => handleLaneCountChange(obj.id, j, Number(e.target.value))}
-                                            />
-                                        </label><span>{exit.laneCount}</span>
-                                        <br />
-                                        <label>Length:
-                                            <input
-                                                type="range"
-                                                min={10}
-                                                max={70}
-                                                value={exit.exitLength}
-                                                onChange={e => handleExitLengthChange(obj.id, j, Number(e.target.value))}
-                                            />
-                                        </label><span>{exit.exitLength}</span>
-                                        <br />
-                                        <label># Lanes in: {exit.numLanesIn}</label>
-                                        <input
-                                            type="range"
-                                            min={1}
-                                            max={exit.laneCount - 1}
-                                            value={exit.numLanesIn}
-                                            onChange={e => handleNumLanesInChange(obj.id, j, Number(e.target.value))}
-                                        />
-                                    </div>
-                                ))}
-                            </div>
-                        );
-                    })}
-                </div>
-                {/* Roundabout Config Panel */}
-                <div style={{ position: "absolute", bottom: 10, left: 10, padding: 10, background: "rgba(0,0,0,0.7)", color: "white", borderRadius: 8, minWidth: 300, maxHeight: "40vh", overflowY: "auto" }}>
-                    <h2>Roundabout</h2>
-                    {junction.junctionObjects.filter(obj => obj.type === "roundabout").map((obj) => {
-                        const config = obj.config as IntersectionConfig;
-                        return (
-                            <div key={obj.id} style={{ marginBottom: "1rem" }}>
-                                <h3>Roundabout {obj.id.slice(0, 6)}</h3>
-                                <label># Exits:
-                                    <input
-                                        type="number"
-                                        min={2}
-                                        max={6}
-                                        value={config.numExits}
-                                        onChange={e => handleNumExitsChange(obj.id, Number(e.target.value))}
-                                    />
-                                </label>
-                                <button onClick={() => removeObject(obj.id)}>Delete</button>
 
-                                {config.exitConfig.map((exit, j) => (
-                                    <div key={j}>
-                                        <h4>Exit {j}</h4>
-                                        <label># Lanes:
-                                            <input
-                                                type="range"
-                                                min={2}
-                                                max={obj.config.numExits * 2}
-                                                value={exit.laneCount}
-                                                onChange={e => handleLaneCountChange(obj.id, j, Number(e.target.value))}
-                                            />
-                                        </label><span>{exit.laneCount}</span>
-                                        <br />
-                                        <label>Length:
-                                            <input
-                                                type="range"
-                                                min={20}
-                                                max={70}
-                                                value={exit.exitLength}
-                                                onChange={e => handleExitLengthChange(obj.id, j, Number(e.target.value))}
-                                            />
-                                        </label><span>{exit.exitLength}</span>
-                                        <br />
-                                        <label># Lanes in: {exit.numLanesIn}</label>
-                                        <input
-                                            type="range"
-                                            min={1}
-                                            max={exit.laneCount - 1}
-                                            value={exit.numLanesIn}
-                                            onChange={e => handleNumLanesInChange(obj.id, j, Number(e.target.value))}
-                                        />
-                                    </div>
-                                ))}
+                {/* First config panel for selected object */}
+                {firstSelectedObject && (
+                    <div style={{
+                        position: "absolute",
+                        top: 10,
+                        left: 10,
+                        padding: 10,
+                        background: "rgba(0,0,0,0.7)",
+                        color: "white",
+                        borderRadius: 8,
+                        width: 300,
+                        height: "40vh",
+                        overflowY: "auto"
+                    }}>
+                        <h2>
+                            {firstSelectedObject.type === "intersection" ? "Intersection" : "Roundabout"}{" "}
+                            {firstSelectedObject.id.slice(0, 6)}
+                        </h2>
+                        <label># Exits:
+                            <input
+                                type="number"
+                                min={2}
+                                max={firstSelectedObject.type === "roundabout" ? 6 : 10}
+                                value={firstSelectedObject.config.numExits}
+                                onChange={e => handleNumExitsChange(firstSelectedObject.id, Number(e.target.value))}
+                            />
+                        </label>
+                        <button onClick={() => removeObject(firstSelectedObject.id)}>Delete</button>
+
+                        {firstSelectedObject.config.exitConfig.map((exit, j) => (
+                            <div key={j}>
+                                <h4>Exit {j}</h4>
+                                <label># Lanes:
+                                    <input
+                                        type="range"
+                                        min={2}
+                                        max={firstSelectedObject.config.numExits * 2}
+                                        value={exit.laneCount}
+                                        onChange={e => handleLaneCountChange(firstSelectedObject.id, j, Number(e.target.value))}
+                                    />
+                                </label><span>{exit.laneCount}</span>
+                                <br />
+                                <label>Length:
+                                    <input
+                                        type="range"
+                                        min={firstSelectedObject.type === "roundabout" ? 20 : 10}
+                                        max={70}
+                                        value={exit.exitLength}
+                                        onChange={e => handleExitLengthChange(firstSelectedObject.id, j, Number(e.target.value))}
+                                    />
+                                </label><span>{exit.exitLength}</span>
+                                <br />
+                                <label># Lanes in: {exit.numLanesIn}</label>
+                                <input
+                                    type="range"
+                                    min={1}
+                                    max={exit.laneCount - 1}
+                                    value={exit.numLanesIn}
+                                    onChange={e => handleNumLanesInChange(firstSelectedObject.id, j, Number(e.target.value))}
+                                />
+                                <br />
+                                <label>Spawn Rate (veh/s):
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        max={10}
+                                        step={0.1}
+                                        value={exit.spawnRate ?? 0}
+                                        onChange={e => handleSpawnRateChange(firstSelectedObject.id, j, Number(e.target.value))}
+                                        style={{ width: '60px', marginLeft: '5px' }}
+                                    />
+                                </label>
                             </div>
-                        );
-                    })}
-                </div>
+                        ))}
+                    </div>
+                )}
+
+                {/* Second config panel for second selected object */}
+                {secondSelectedObject && (
+                    <div style={{
+                        position: "absolute",
+                        top: "calc(40vh + 35px)",
+                        left: 10,
+                        padding: 10,
+                        background: "rgba(0,0,0,0.7)",
+                        color: "white",
+                        borderRadius: 8,
+                        width: 300,
+                        height: "40vh",
+                        overflowY: "auto"
+                    }}>
+                        <h2>
+                            {secondSelectedObject.type === "intersection" ? "Intersection" : "Roundabout"}{" "}
+                            {secondSelectedObject.id.slice(0, 6)}
+                        </h2>
+                        <label># Exits:
+                            <input
+                                type="number"
+                                min={2}
+                                max={secondSelectedObject.type === "roundabout" ? 6 : 10}
+                                value={secondSelectedObject.config.numExits}
+                                onChange={e => handleNumExitsChange(secondSelectedObject.id, Number(e.target.value))}
+                            />
+                        </label>
+                        <button onClick={() => removeObject(secondSelectedObject.id)}>Delete</button>
+
+                        {secondSelectedObject.config.exitConfig.map((exit, j) => (
+                            <div key={j}>
+                                <h4>Exit {j}</h4>
+                                <label># Lanes:
+                                    <input
+                                        type="range"
+                                        min={2}
+                                        max={secondSelectedObject.config.numExits * 2}
+                                        value={exit.laneCount}
+                                        onChange={e => handleLaneCountChange(secondSelectedObject.id, j, Number(e.target.value))}
+                                    />
+                                </label><span>{exit.laneCount}</span>
+                                <br />
+                                <label>Length:
+                                    <input
+                                        type="range"
+                                        min={secondSelectedObject.type === "roundabout" ? 20 : 10}
+                                        max={70}
+                                        value={exit.exitLength}
+                                        onChange={e => handleExitLengthChange(secondSelectedObject.id, j, Number(e.target.value))}
+                                    />
+                                </label><span>{exit.exitLength}</span>
+                                <br />
+                                <label># Lanes in: {exit.numLanesIn}</label>
+                                <input
+                                    type="range"
+                                    min={1}
+                                    max={exit.laneCount - 1}
+                                    value={exit.numLanesIn}
+                                    onChange={e => handleNumLanesInChange(secondSelectedObject.id, j, Number(e.target.value))}
+                                />
+                                <br />
+                                <label>Spawn Rate (veh/s):
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        max={10}
+                                        step={0.1}
+                                        value={exit.spawnRate ?? 0}
+                                        onChange={e => handleSpawnRateChange(secondSelectedObject.id, j, Number(e.target.value))}
+                                        style={{ width: '60px', marginLeft: '5px' }}
+                                    />
+                                </label>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {!firstSelectedObject && selectedObjects.length === 0 && (
+                    <div style={{
+                        position: "absolute",
+                        top: 10,
+                        left: 10,
+                        padding: 10,
+                        background: "rgba(0,0,0,0.7)",
+                        color: "white",
+                        borderRadius: 8,
+                        minWidth: 300
+                    }}>
+                        <p style={{ opacity: 0.5, fontSize: 13 }}>
+                            Right-click a junction to select it and edit its config here.
+                        </p>
+                    </div>
+                )}
             </fieldset>
         </>
     );

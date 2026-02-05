@@ -84,7 +84,9 @@ export type SimulationStats = {
     completed: number;
     waiting: number;  // you can keep this as “global waiting at any junction”
     routes: number;
-    spawnQueue: number;    elapsedTime: number; // time elapsed since simulation start in seconds
+    spawnQueue: number;
+    elapsedTime: number; // time elapsed since simulation start in seconds
+    spawnQueueByEntry: Record<string, number>; // per-entry spawn queue
     junctions: {
         global: JunctionStatsGlobal;
         byId: Record<string, JunctionStats>;

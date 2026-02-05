@@ -69,11 +69,12 @@ export const IntersectionComponent = ({ id, intersectionConfig }: IntersectionPr
         group.userData.type = "intersection";
         group.userData.maxDistanceToStopLine = intersectionMemo.maxDistanceToStopLine;
         group.userData.exitInfo = intersectionMemo.exitInfo;
+        group.userData.exitConfig = intersectionConfig.exitConfig;
 
         // Registration only works if intersection doesnt exist before, contains a check for ID
         registerJunctionObject(group);
         snapToValidPosition(group);
-    }, [id, intersectionMemo.exitInfo, intersectionMemo.maxDistanceToStopLine, registerJunctionObject, snapToValidPosition]);
+    }, [id, intersectionMemo.exitInfo, intersectionMemo.maxDistanceToStopLine, registerJunctionObject, snapToValidPosition, intersectionConfig.exitConfig]);
 
 
 
@@ -130,7 +131,15 @@ export const IntersectionComponent = ({ id, intersectionConfig }: IntersectionPr
         if (!group) {
             return;
         }
-        setSelectedObjects(prev => prev.includes(group.userData.id) ? prev.filter(g => g !== group.userData.id) : [...prev, group.userData.id]);
+        setSelectedObjects(prev => {
+            if (prev.includes(group.userData.id)) {
+                return prev.filter(id => id !== group.userData.id);
+            }
+            if (prev.length >= 2) {
+                return [prev[1], group.userData.id];
+            }
+            return [...prev, group.userData.id];
+        });
     };
 
     const handleExitClick = (event: ThreeEvent<PointerEvent>, exitIndex: number) => {

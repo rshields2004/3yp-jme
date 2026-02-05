@@ -16,6 +16,7 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
     const [selectedObjects, setSelectedObjects] = useState<string[]>([]);
     const [selectedExits, setSelectedExits] = useState<ExitRef[]>([]);
     const [simIsRunning, setSimIsRunning] = useState<boolean>(false);
+    const [simIsPaused, setSimIsPaused] = useState<boolean>(false);
     const [carsReady, setCarsReady] = useState<boolean>(false);
     const [followedVehicleId, setFollowedVehicleId] = useState<number | null>(null);
 
@@ -29,6 +30,7 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
             waiting: 0,
             routes: 0,
             spawnQueue: 0,
+            spawnQueueByEntry: {},
             elapsedTime: 0,
             junctions: {
                 global: {
@@ -219,6 +221,19 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
 
     const haltSim = () => {
         setSimIsRunning(false);
+        setSimIsPaused(false);
+    };
+
+    const pauseSim = () => {
+        if (simIsRunning && !simIsPaused) {
+            setSimIsPaused(true);
+        }
+    };
+
+    const resumeSim = () => {
+        if (simIsRunning && simIsPaused) {
+            setSimIsPaused(false);
+        }
     };
 
 
@@ -237,6 +252,9 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
             snapToValidPosition,
             removeObject,
             simIsRunning,
+            simIsPaused,
+            pauseSim,
+            resumeSim,
             startSim,
             haltSim,
             stats,

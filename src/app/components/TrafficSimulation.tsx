@@ -1,7 +1,7 @@
 "use client";
 
 import { useThree, useFrame } from "@react-three/fiber";
-import { useRef, useState, useEffect, useCallback, memo } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 import { MTLLoader, OBJLoader } from "three/examples/jsm/Addons.js";
 import { useJModellerContext } from "../context/JModellerContext";
 import * as THREE from "three";
@@ -11,162 +11,23 @@ import { VehicleManager } from "../includes/junctionmanagerutils/vehicleManager"
 import { ThickLineHandle } from "./ThickLine";
 import { Billboard, Html } from "@react-three/drei";
 import { Route, SimulationStats, Tuple3 } from "../includes/types/simulation";
+import { applyIntersectionStopLineColours, loadCarModels } from "../includes/junctionmanagerutils/helpers/simulationHelpers";
 
 // Global cache for car models (persists across simulation restarts)
-let cachedCarModels: THREE.Group[] | null = null;
-let carModelsLoading: Promise<THREE.Group[]> | null = null;
 
 
 
-function applyIntersectionStopLineColours(
-    junctionGroups: THREE.Group[],
-    vehicleManager: VehicleManager
-) {
-    
-    for (const group of junctionGroups) {
-        if (!group?.userData) continue;
-        if (group.userData.type !== "intersection") continue;
-
-        
-        const junctionId = group.userData.id as string | undefined;
-        if (!junctionId) continue;
-
-        const controller = vehicleManager.getIntersectionController?.(junctionId);
-        if (!controller) continue;
-
-        const stopLineRefsByEntryKey = group.userData.stopLineRefsByEntryKey as Record<string, React.RefObject<ThickLineHandle>> | undefined;
-
-        if (!stopLineRefsByEntryKey) continue;
 
 
-        
-        // Cache last colours so we only update when a light actually changes
-        const lastColours = (group.userData._stopLineLastColours ??= {}) as Record<string, string>;
-
-        for (const [entryKey, refObj] of Object.entries(stopLineRefsByEntryKey)) {
-            const handle = refObj?.current;
-            if (!handle) continue;
-
-            const colour = controller.getLightColour(entryKey);
-
-            if (lastColours[entryKey] === colour) continue; 
-            lastColours[entryKey] = colour;
-
-            switch (colour) {
-                case "GREEN":
-                    handle.setGreen();
-                    break;
-                case "AMBER":
-                    handle.setAmber();
-                    break;
-                case "RED_AMBER":
-                    handle.setRedAmber();
-                    break;
-                case "RED":
-                default:
-                    handle.setRed();
-                    break;
-            }
-
-            
-        }
-    }
-}
-
-
-
-/**
- * Load car models with caching
- * Only loads once, then reuses cached models
- */
-async function loadCarModels(): Promise<THREE.Group[]> {
-    if (cachedCarModels && cachedCarModels.length > 0) {
-        return cachedCarModels;
-    }
-
-    if (carModelsLoading) {
-        return carModelsLoading;
-    }
-
-    carModelsLoading = (async () => {
-        const mtlLoader = new MTLLoader();
-        const objLoader = new OBJLoader();
-        const loadedModels: THREE.Group[] = [];
-
-        console.log("Loading car models...");
-
-        for (const car of carFiles) {
-            try {
-                const materials = await mtlLoader.loadAsync(car.mtl);
-                materials.preload();
-
-                objLoader.setMaterials(materials);
-                const model = await objLoader.loadAsync(car.obj);
-                model.scale.set(1, 1, 1);
-
-                loadedModels.push(model);
-            } catch (error) {
-                console.warn(`Failed to load car model ${car.obj}:`, error);
-            }
-        }
-
-        if (loadedModels.length === 0) {
-            console.warn("No car models loaded, using fallback boxes");
-            loadedModels.push(...createFallbackCarModels());
-        }
-
-        console.log(`Loaded ${loadedModels.length} car models`);
-        cachedCarModels = loadedModels;
-        return loadedModels;
-    })();
-
-    return carModelsLoading;
-}
-
-/**
- * Create fallback box cars when OBJ models can't be loaded
- */
-function createFallbackCarModels(): THREE.Group[] {
-    const colors = [0xff0000, 0x0000ff, 0x00ff00, 0xffff00, 0xff00ff, 0x00ffff];
-
-    return colors.map((color) => {
-        const group = new THREE.Group();
-
-        const bodyGeometry = new THREE.BoxGeometry(2, 1.5, 4.5);
-        const bodyMaterial = new THREE.MeshStandardMaterial({ color });
-        const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-        body.castShadow = true;
-        body.receiveShadow = true;
-        body.position.y = 0.75;
-        group.add(body);
-
-        const roofGeometry = new THREE.BoxGeometry(1.8, 1, 2.5);
-        const roofMaterial = new THREE.MeshStandardMaterial({
-            color: new THREE.Color(color).multiplyScalar(0.8),
-        });
-        const roof = new THREE.Mesh(roofGeometry, roofMaterial);
-        roof.position.y = 2;
-        roof.castShadow = true;
-        group.add(roof);
-
-        return group;
-    });
-}
-
-/**
- * Junction Stats Labels Component - displays stats above each junction
- * Defined outside TrafficSimulation to ensure stable memoization
- */
-const JunctionStatsLabels = memo(
-    function JunctionStatsLabels({
-        junctionGroups,
-        stats,
-        positionsCache,
-    }: {
-        junctionGroups: THREE.Group[];
-        stats: SimulationStats;
-        positionsCache: Map<string, THREE.Vector3>;
-    }) {
+function JunctionStatsLabels({
+    junctionGroups,
+    stats,
+    positionsCache,
+}: {
+    junctionGroups: THREE.Group[];
+    stats: SimulationStats;
+    positionsCache: Map<string, THREE.Vector3>;
+}) {
         return (
             <>
                 {junctionGroups
@@ -216,51 +77,146 @@ const JunctionStatsLabels = memo(
                     })}
             </>
         );
-    },
-    (prevProps, nextProps) => {
-        // Custom comparison function to prevent unnecessary re-renders
-        // Only re-render if junction stats actually changed meaningfully
-        const prevById = prevProps.stats.junctions.byId;
-        const nextById = nextProps.stats.junctions.byId;
-        
-        // Check if the number of junctions changed
-        const prevKeys = Object.keys(prevById);
-        const nextKeys = Object.keys(nextById);
-        
-        if (prevKeys.length !== nextKeys.length) return false;
-        
-        // Check if any junction stats changed
-        for (const id of nextKeys) {
-            const prev = prevById[id];
-            const next = nextById[id];
-            
-            if (!prev || !next) return false;
-            
-            // Compare all relevant fields (use tolerance for avgWaitTime to avoid flickering)
-            if (
-                prev.approaching !== next.approaching ||
-                prev.waiting !== next.waiting ||
-                prev.inside !== next.inside ||
-                prev.exiting !== next.exiting ||
-                prev.entered !== next.entered ||
-                prev.exited !== next.exited ||
-                prev.state !== next.state ||
-                Math.abs(prev.avgWaitTime - next.avgWaitTime) > 0.05
-            ) {
-                return false; // Stats changed, need to re-render
-            }
+}
+
+/**
+ * Spawn Rate Labels Component - displays spawn rates at each entry point
+ * Only shows labels for exits that are NOT connected to other junctions (actual spawn points)
+ */
+function SpawnRateLabels({
+    junctionGroups,
+    positionsCache,
+    stats,
+    routes,
+}: {
+    junctionGroups: THREE.Group[];
+    stats: SimulationStats;
+    positionsCache: Map<string, THREE.Vector3>;
+    routes: any[]; // Route array from vehicle manager
+}) {
+    // Helper function to check if an exit is a spawn point (has routes starting from it)
+    const isSpawnPoint = (structureID: string, exitIndex: number): boolean => {
+        // If routes aren't available yet, show all labels
+        if (!routes || routes.length === 0) {
+            console.log(`[SpawnRateLabels] No routes available yet, showing all labels`);
+            return true;
         }
         
-        return true; // No changes, skip re-render
-    }
-);
+        // An exit is a spawn point if it has routes that START from it
+        // Check the first segment's 'from' node
+        const hasRoutesStartingHere = routes.some(route => {
+            const firstSeg = route.segments?.[0];
+            const match = firstSeg?.from?.structureID === structureID && 
+                   firstSeg?.from?.exitIndex === exitIndex;
+            return match;
+        });
+        
+        console.log(`[SpawnRateLabels] Checking ${structureID}-${exitIndex}: ${hasRoutesStartingHere ? 'IS' : 'NOT'} spawn point (${routes.length} routes available)`);
+        
+        return hasRoutesStartingHere;
+    };
+    
+    console.log(`[SpawnRateLabels] Rendering with ${junctionGroups.length} junction groups, ${routes.length} routes`);
+    
+    // Debug: log all junction groups and their exit configs
+    junctionGroups.forEach(g => {
+        if (g?.userData?.id && g?.userData?.type && g.userData.type !== "link") {
+            const structureID = g.userData.id as string;
+            const exitConfig = g.userData.exitConfig as Array<{ spawnRate?: number }> | undefined;
+            console.log(`[SpawnRateLabels] Junction ${structureID}: ${exitConfig ? exitConfig.length : 0} exits configured`, 
+                exitConfig?.map((c, i) => `${i}:${c.spawnRate ?? 0}`).join(', '));
+        }
+    });
+    
+    return (
+        <>
+            {junctionGroups
+                .filter((g) => g?.userData?.id && g?.userData?.type && g.userData.type !== "link")
+                .flatMap((g) => {
+                        const structureID = g.userData.id as string;
+                        const exitConfig = g.userData.exitConfig as Array<{ spawnRate?: number }> | undefined;
+                        const exitInfo = g.userData.exitInfo;
+                        
+                        if (!exitConfig || !exitInfo) return [];
+
+                        return exitConfig.map((config, exitIndex) => {
+                            const spawnRate = config.spawnRate ?? 0;
+                            if (spawnRate === 0) return null; // Don't show label for zero spawn rate
+
+                            // Only show label if this exit is an actual spawn point
+                            if (!isSpawnPoint(structureID, exitIndex)) return null;
+
+                            const entryKey = `${structureID}-${exitIndex}`;
+                            
+                            // Always update world matrix and recalculate position
+                            g.updateWorldMatrix(true, true);
+                            const pos = new THREE.Vector3();
+                            
+                            // Get the start position of this exit (where vehicles spawn)
+                            const exit = exitInfo[exitIndex];
+                            let posSource = "unknown";
+                            if (exit?.startPosition) {
+                                // Transform local position to world space
+                                pos.copy(exit.startPosition);
+                                g.localToWorld(pos);
+                                posSource = "startPosition (world)";
+                            } else if (exit?.laneLines?.[0]?.line?.end) {
+                                // Fallback: use the end of the first lane line (exit start)
+                                // Transform local position to world space
+                                pos.copy(exit.laneLines[0].line.end);
+                                g.localToWorld(pos);
+                                posSource = "laneLines[0].line.end (world)";
+                            } else {
+                                // Last fallback: offset from junction center
+                                g.getWorldPosition(pos);
+                                posSource = "junction center (FALLBACK)";
+                            }
+                            
+                            pos.y += 3; // Lower height than junction stats
+                            console.log(`[SpawnRateLabels] Position for ${entryKey}: (${pos.x.toFixed(2)}, ${pos.y.toFixed(2)}, ${pos.z.toFixed(2)}) from ${posSource}`);
+                            positionsCache.set(entryKey, pos);
+
+                            const queuedVehicles = stats.spawnQueueByEntry?.[entryKey] ?? 0;
+
+                            return (
+                                <group key={entryKey} position={pos}>
+                                    <Billboard follow lockX={false} lockY={false} lockZ={false}>
+                                        <Html center sprite distanceFactor={10} transform>
+                                            <div
+                                                style={{
+                                                    background: "rgba(40,120,40,0.75)",
+                                                    color: "white",
+                                                    padding: "4px 6px",
+                                                    borderRadius: 6,
+                                                    fontSize: 11,
+                                                    lineHeight: 1.2,
+                                                    whiteSpace: "nowrap",
+                                                    fontFamily: "system-ui, sans-serif",
+                                                    border: "1px solid rgba(100,200,100,0.5)"
+                                                }}
+                                            >
+                                                <div style={{ fontWeight: 600 }}>
+                                                    {structureID.slice(0, 6)} Ex{exitIndex}
+                                                </div>
+                                                <div>📊 {spawnRate.toFixed(1)} veh/s</div>
+                                                <div style={{ fontSize: 10, opacity: 0.9 }}>Queue: {queuedVehicles}</div>
+                                            </div>
+                                        </Html>
+                                    </Billboard>
+                                </group>
+                            );
+                        }).filter(Boolean);
+                    })}
+            </>
+        );
+}
 
 /**
  * Traffic Simulation Component
  * Drop this into your Scene component to enable traffic simulation
  */
 export const TrafficSimulation = () => {
-    const { junction, junctionObjectRefs, simIsRunning, stats, setStats, carsReady, setCarsReady, followedVehicleId, setFollowedVehicleId } = useJModellerContext();
+    const { junction, junctionObjectRefs, simIsRunning, stats, setStats, carsReady, setCarsReady, followedVehicleId, setFollowedVehicleId, simIsPaused } = useJModellerContext();
     const { scene, camera, gl } = useThree();
 
     const [isInitialised, setisInitialised] = useState(false);
@@ -274,7 +230,7 @@ export const TrafficSimulation = () => {
     
 
     const carModelsRef = useRef<THREE.Group[]>([]);
-    const routesRef = useRef<Route[]>([]);
+    const [routes, setRoutes] = useState<Route[]>([]);
     const debugRoutesGroupRef = useRef<THREE.Group | null>(null);
     const wasRunningRef = useRef(false);
     const vehicleManagerRef = useRef<VehicleManager | null>(null);
@@ -311,7 +267,7 @@ export const TrafficSimulation = () => {
         const group = new THREE.Group();
         const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff, 0x00ffff];
 
-        routesRef.current.forEach((route, i) => {
+        routes.forEach((route, i) => {
             const color = colors[i % colors.length];
             const routePoints = getRoutePoints(route);
             const points = routePoints.map((p: Tuple3) => new THREE.Vector3(p[0], p[1] + 0.1, p[2]));
@@ -329,7 +285,7 @@ export const TrafficSimulation = () => {
 
         debugRoutesGroupRef.current = group;
         scene.add(group);
-    }, [scene]);
+    }, [scene, routes]);
 
     /**
      * Initialize the simulation when it starts
@@ -350,16 +306,27 @@ export const TrafficSimulation = () => {
 
             junctionObjectRefs.current.forEach((g) => g.updateWorldMatrix(true, true));
 
-            const { routes } = generateAllRoutes(junction, junctionObjectRefs.current, {
+            const { routes: generatedRoutes } = generateAllRoutes(junction, junctionObjectRefs.current, {
                 maxSteps: 30,
                 disallowUTurn: true,
                 spacing: 0.01,
             });
 
-            routesRef.current = routes;
-            console.log(`Generated ${routes.length} routes`);
+            setRoutes(generatedRoutes);
+            console.log(`Generated ${generatedRoutes.length} routes`);
+            
+            // Debug: log route entry points
+            const routesByEntry = new Map<string, number>();
+            generatedRoutes.forEach(route => {
+                const firstSeg = route.segments?.[0];
+                if (firstSeg?.from) {
+                    const key = `${firstSeg.from.structureID}-${firstSeg.from.exitIndex}`;
+                    routesByEntry.set(key, (routesByEntry.get(key) || 0) + 1);
+                }
+            });
+            console.log('[Routes] Entry points:', Array.from(routesByEntry.entries()).map(([key, count]) => `${key}: ${count} routes`).join(', '));
 
-            if (routes.length === 0) {
+            if (generatedRoutes.length === 0) {
                 console.warn("No routes generated - check junction connections!");
                 return;
             }
@@ -367,7 +334,7 @@ export const TrafficSimulation = () => {
             // Reset previous sim (if any)
             vehicleManagerRef.current?.reset();
 
-            vehicleManagerRef.current = new VehicleManager(scene, carModelsRef.current, routesRef.current, {
+            vehicleManagerRef.current = new VehicleManager(scene, carModelsRef.current, generatedRoutes, {
                 // Spawning
                 demandRatePerSec: 2,
                 maxVehicles: 100,
@@ -405,6 +372,7 @@ export const TrafficSimulation = () => {
                 ...prev,
                 routes: routes.length,
                 spawnQueue: 0,
+                spawnQueueByEntry: {},
                 active: 0,
                 spawned: 0,
                 completed: 0,
@@ -455,7 +423,7 @@ export const TrafficSimulation = () => {
         vehicleManagerRef.current?.reset();
         vehicleManagerRef.current = null;
 
-        routesRef.current = [];
+        setRoutes([]);
         setisInitialised(false);
         setStats({
             active: 0,
@@ -464,6 +432,8 @@ export const TrafficSimulation = () => {
             waiting: 0,
             routes: 0,
             spawnQueue: 0,
+            spawnQueueByEntry: {},
+            elapsedTime: 0,
             junctions: {
                 global: {
                     count: 0,
@@ -477,7 +447,6 @@ export const TrafficSimulation = () => {
                 },
                 byId: {},
             },
-            elapsedTime: 0,
         });
 
         console.log("Traffic simulation cleaned up");
@@ -581,22 +550,6 @@ export const TrafficSimulation = () => {
         if (!simIsRunning || !isInitialised) return;
         const vm = vehicleManagerRef.current;
         if (!vm) return;
-
-        // 1) advance sim + controller state (fixed timestep for stability)
-        const maxDelta = 0.05;
-        const fixedDt = 1 / 60;
-        const clamped = Math.min(delta, maxDelta);
-        simAccumulatorRef.current += clamped;
-
-        while (simAccumulatorRef.current >= fixedDt) {
-            vm.update(fixedDt, junctionObjectRefs);
-            simAccumulatorRef.current -= fixedDt;
-        }
-
-        // 2) push controller colours into stop lines (visual sync)
-        applyIntersectionStopLineColours(junctionObjectRefs.current, vm);
-
-        // 3) First-person camera following
         if (followedVehicleId !== null) {
             const vehicle = vm.getVehicleById(followedVehicleId);
             if (vehicle) {
@@ -646,6 +599,24 @@ export const TrafficSimulation = () => {
                 setFollowedVehicleId(null);
             }
         }
+        
+        if (simIsPaused) return;
+
+        // 1) advance sim + controller state (fixed timestep for stability)
+        const maxDelta = 0.05;
+        const fixedDt = 1 / 60;
+        const clamped = Math.min(delta, maxDelta);
+        simAccumulatorRef.current += clamped;
+
+        while (simAccumulatorRef.current >= fixedDt) {
+            vm.update(fixedDt, junctionObjectRefs);
+            simAccumulatorRef.current -= fixedDt;
+        }
+
+        // 2) push controller colours into stop lines (visual sync)
+        applyIntersectionStopLineColours(junctionObjectRefs.current, vm);
+
+        
 
         // 4) stats (throttled)
         statsAccumRef.current += delta;
@@ -679,15 +650,24 @@ export const TrafficSimulation = () => {
 
     // Cache junction positions to avoid recalculating every frame
     const junctionPositionsRef = useRef<Map<string, THREE.Vector3>>(new Map());
+    const spawnRatePositionsRef = useRef<Map<string, THREE.Vector3>>(new Map());
 
     return (
         <>
             {simIsRunning && isInitialised && (
-                <JunctionStatsLabels
-                    junctionGroups={junctionObjectRefs.current}
-                    stats={stats}
-                    positionsCache={junctionPositionsRef.current}
-                />
+                <>
+                    <JunctionStatsLabels
+                        junctionGroups={junctionObjectRefs.current}
+                        stats={stats}
+                        positionsCache={junctionPositionsRef.current}
+                    />
+                    <SpawnRateLabels
+                        junctionGroups={junctionObjectRefs.current}
+                        stats={stats}
+                        positionsCache={spawnRatePositionsRef.current}
+                        routes={routes}
+                    />
+                </>
             )}
         </>
     );

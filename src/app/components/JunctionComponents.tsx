@@ -69,7 +69,8 @@ export const JunctionComponents = () => {
         if (!controls)  {
             return;
         }
-        const controlObjects = selectedObjects.map(id => junctionObjectRefs.current.find(g => g.userData.id === id)).filter((g): g is THREE.Group => !!g)
+        // In the selectedObjects useEffect:
+        const controlObjects = selectedObjects.map(id => junctionObjectRefs.current.find(g => g.userData.id === id)).filter((g): g is THREE.Group => !!g);
         controls.objects = controlObjects;
 
     }, [selectedObjects, setSelectedObjects, snapToValidPosition, junctionObjectRefs]);

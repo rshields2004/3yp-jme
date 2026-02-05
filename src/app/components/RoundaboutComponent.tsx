@@ -80,11 +80,12 @@ export const RoundaboutComponent = ({ id, roundaboutConfig }: RoundaboutProps) =
         group.userData.roundaboutExitStructure = roundaboutMemo.exitStructures;
         group.userData.exitInfo = roundaboutMemo.exitStructures;
         group.userData.roundaboutRingStructure = roundaboutMemo.ringLines;
+        group.userData.exitConfig = roundaboutConfig.exitConfig;
         
         // Registration only works if intersection doesnt exist before, contains a check for ID
         registerJunctionObject(group);
         snapToValidPosition(group);
-    }, [roundaboutMemo.id, id, registerJunctionObject, roundaboutMemo.exitStructures, roundaboutMemo.ringLines, roundaboutMemo.maxDistanceToStopLine, snapToValidPosition]);
+    }, [roundaboutMemo.id, id, registerJunctionObject, roundaboutMemo.exitStructures, roundaboutMemo.ringLines, roundaboutMemo.maxDistanceToStopLine, snapToValidPosition, roundaboutConfig.exitConfig]);
 
     const isSelected = groupRef.current ? selectedObjects.includes(groupRef.current.userData.id) : false;
 
@@ -100,7 +101,15 @@ export const RoundaboutComponent = ({ id, roundaboutConfig }: RoundaboutProps) =
         if (!group) {
             return;
         }
-        setSelectedObjects(prev => prev.includes(group.userData.id) ? prev.filter(g => g !== group.userData.id) : [...prev, group.userData.id]);
+        setSelectedObjects(prev => {
+            if (prev.includes(group.userData.id)) {
+                return prev.filter(id => id !== group.userData.id);
+            }
+            if (prev.length >= 2) {
+                return [prev[1], group.userData.id];
+            }
+            return [...prev, group.userData.id];
+        });
     };
 
     const handleExitClick = (event: ThreeEvent<PointerEvent>, exitIndex: number) => {

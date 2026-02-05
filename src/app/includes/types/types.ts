@@ -22,6 +22,7 @@ export type ExitConfig = {
     laneCount: number;
     laneWidth: number;
     exitLength: number;
+    spawnRate: number; // vehicles per second
 };
 
 
@@ -57,6 +58,9 @@ export type JModellerState = {
     removeObject: (objID: string) => void;
 
     simIsRunning: boolean;
+    simIsPaused: boolean;
+    pauseSim: () => void;
+    resumeSim: () => void;
     startSim: () => void;
     haltSim: () => void;
 

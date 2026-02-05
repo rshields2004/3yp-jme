@@ -23,9 +23,14 @@ export class VehicleManager {
     private spawned = 0;
     private completed = 0;
 
-    // Spawn demand/queue
-    private spawnDemand = 0;
-    private spawnQueue = 0;
+    // Spawn rates per entry point (structureID-exitIndex -> vehicles per second)
+    private spawnRatesPerEntry = new Map<string, number>();
+    
+    // Spawn demand per entry point (structureID-exitIndex -> demand accumulator)
+    private spawnDemandPerEntry = new Map<string, number>();
+    
+    // Routes grouped by entry point for efficient spawning
+    private routesByEntry = new Map<string, Route[]>();
 
     // laneKey -> (segmentId -> baseOffset)
     private laneBases = new Map<string, Map<string, number>>();
@@ -45,7 +50,6 @@ export class VehicleManager {
     private roundaboutMeta = new Map<string, { center: THREE.Vector3; laneMidRadii: number[]; maxStrip: number; entryAngles: Map<string, number> }>();
     private controllersBuilt = false;
 
-    private lastSpawnQueueLogged: number | null = null;
     private lastActiveLogged: number | null = null;
 
     private statsSnapshot: SimulationStats | null = null;
@@ -64,6 +68,9 @@ export class VehicleManager {
         this.scene = scene;
         this.carModels = carModels;
         this.routes = routes;
+
+        // Build routes by entry point
+        this.buildRoutesByEntry();
 
         this.cfg = {
             demandRatePerSec: 0.8,
@@ -164,8 +171,9 @@ export class VehicleManager {
         this.spawned = 0;
         this.completed = 0;
 
-        this.spawnDemand = 0;
-        this.spawnQueue = 0;
+        this.spawnRatesPerEntry.clear();
+        this.spawnDemandPerEntry.clear();
+        this.routesByEntry.clear();
 
         this.laneBases.clear();
         this.laneBasesBuilt = false;
@@ -179,7 +187,6 @@ export class VehicleManager {
         this.roundaboutMeta.clear();
         this.controllersBuilt = false;
 
-        this.lastSpawnQueueLogged = null;
         this.lastActiveLogged = null;
 
         this.statsSnapshot = null;
@@ -201,33 +208,44 @@ export class VehicleManager {
         for (const c of this.intersectionControllers.values()) c.update(dt);
         for (const c of this.roundaboutControllers.values()) c.update(dt);
 
-        // 1) demand -> queue
-        this.spawnDemand += this.cfg.demandRatePerSec * dt;
-        const newCars = Math.floor(this.spawnDemand);
+        // 1) Update spawn rates from junction objects
+        this.updateSpawnRatesFromJunctions(junctionObjectRefs);
 
-        if (newCars > 0) {
-            this.spawnDemand -= newCars;
-
-            this.spawnQueue = Math.min(
-                this.spawnQueue + newCars,
-                this.cfg.maxSpawnQueue
-            );
+        // 2) Accumulate demand per entry
+        for (const [entryKey, rate] of this.spawnRatesPerEntry.entries()) {
+            const currentDemand = this.spawnDemandPerEntry.get(entryKey) || 0;
+            this.spawnDemandPerEntry.set(entryKey, currentDemand + rate * dt);
         }
 
-        // 2) serve queue
-        let attempts = 0;
-        while (
-            this.spawnQueue > 0 &&
-            this.vehicles.length < this.cfg.maxVehicles &&
-            attempts < this.cfg.maxSpawnAttemptsPerFrame
-        ) {
-            attempts++;
-            const ok = this.trySpawnOne();
-            if (ok) this.spawnQueue--;
-            else break;
+        // 3) Try to spawn from each entry
+        let totalAttempts = 0;
+        for (const [entryKey, demand] of this.spawnDemandPerEntry.entries()) {
+            const vehiclesToSpawn = Math.floor(demand);
+            
+            if (vehiclesToSpawn > 0 && this.vehicles.length < this.cfg.maxVehicles) {
+                let spawned = 0;
+                let attempts = 0;
+                
+                while (
+                    spawned < vehiclesToSpawn &&
+                    this.vehicles.length < this.cfg.maxVehicles &&
+                    attempts < this.cfg.maxSpawnAttemptsPerFrame &&
+                    totalAttempts < this.cfg.maxSpawnAttemptsPerFrame * 3
+                ) {
+                    attempts++;
+                    totalAttempts++;
+                    const ok = this.trySpawnFromEntry(entryKey);
+                    if (ok) {
+                        spawned++;
+                        // Subtract the spawned vehicle from demand
+                        this.spawnDemandPerEntry.set(entryKey, demand - spawned);
+                    } else {
+                        break; // Can't spawn from this entry right now
+                    }
+                }
+            }
         }
 
-        this.logSpawnQueueIfChanged();
         this.logActiveVehiclesIfChanged();
 
         // 3) refresh segment/laneKey before lane logic
@@ -306,19 +324,6 @@ export class VehicleManager {
         }
         
         this.updateStats();
-    }
-
-    private logSpawnQueueIfChanged() {
-        if (this.lastSpawnQueueLogged === null) {
-            this.lastSpawnQueueLogged = this.spawnQueue;
-            console.log(`[spawn-queue] ${this.spawnQueue}`);
-            return;
-        }
-
-        if (this.spawnQueue !== this.lastSpawnQueueLogged) {
-            console.log(`[spawn-queue] ${this.spawnQueue} (${this.lastSpawnQueueLogged} -> ${this.spawnQueue})`);
-            this.lastSpawnQueueLogged = this.spawnQueue;
-        }
     }
 
     private logActiveVehiclesIfChanged() {
@@ -428,9 +433,14 @@ export class VehicleManager {
                             leader = sameRouteLead;
                         }
                     } else if (isRoundaboutInside && sameRouteLead.currentSegment?.phase === "exit") {
-                        // Same-route leader has exited - DON'T follow them with linear gap
-                        // We'll naturally transition to following them when we also exit
-                        // Skip this leader for now
+                        // Same-route leader is exiting the roundabout - follow them using linear s-coords
+                        // to prevent stacking at the segment boundary when the exit backs up
+                        const leadS = desiredS.get(sameRouteLead) ?? sameRouteLead.s;
+                        const gap = (leadS - v.s) - 0.5 * (sameRouteLead.length + v.length);
+                        if (gap < leaderGap && gap > -v.length) {
+                            leaderGap = gap;
+                            leader = sameRouteLead;
+                        }
                     } else if (!isRoundaboutInside) {
                         // Linear s-value based gap (only for non-roundabout segments)
                         const leadS = desiredS.get(sameRouteLead) ?? sameRouteLead.s;
@@ -708,87 +718,6 @@ export class VehicleManager {
         return null;
     }
 
-    /**
-     * For vehicles on a roundabout ring, look ahead to their exit lane
-     * to anticipate congestion and slow down smoothly before transitioning
-     */
-    private findLeaderOnExitLane(
-        v: Vehicle,
-        lanes: Map<string, LaneOcc[]>,
-        desiredS: Map<Vehicle, number>
-    ): { leader: Vehicle; gap: number } | null {
-        const seg = v.currentSegment;
-        if (!seg || seg.phase !== "inside") return null;
-
-        const segs = v.route.segments;
-        if (!segs) return null;
-
-        // Find the exit segment (comes after inside)
-        let exitSegIdx = -1;
-        for (let i = v.segmentIndex + 1; i < segs.length; i++) {
-            if (segs[i].phase === "exit") {
-                exitSegIdx = i;
-                break;
-            }
-        }
-        if (exitSegIdx < 0) return null;
-
-        const exitSeg = segs[exitSegIdx];
-        const exitLaneKey = this.laneKeyForSegment(exitSeg);
-        if (!exitLaneKey) return null;
-
-        // Calculate distance to the exit point
-        const segDists = this.getSegmentDistances(v.route);
-        let distToExit = 0;
-        for (let i = v.segmentIndex; i < exitSegIdx; i++) {
-            const info = segDists[i];
-            if (i === v.segmentIndex) {
-                distToExit += Math.max(0, (info?.s1 ?? 0) - v.s);
-            } else {
-                distToExit += (info?.s1 ?? 0) - (info?.s0 ?? 0);
-            }
-        }
-
-        // Only look ahead if within reasonable distance
-        const lookaheadDist = Math.max(this.stoppingDistance(v.speed, v) + 10, 15);
-        if (distToExit > lookaheadDist) return null;
-
-        // Find vehicles on the exit lane
-        const exitOccs = lanes.get(exitLaneKey) ?? [];
-        if (exitOccs.length === 0) return null;
-
-        let closestGap = Infinity;
-        let closestLeader: Vehicle | null = null;
-
-        for (const occ of exitOccs) {
-            const other = occ.v;
-            if (other === v) continue;
-
-            // CRITICAL: Only consider vehicles that are actually EXITING (going away from roundabout)
-            // Skip vehicles that are on approach/link segments coming INTO the roundabout
-            const otherPhase = other.currentSegment?.phase;
-            if (otherPhase === "approach" || otherPhase === "inside") continue;
-            
-            // Only consider vehicles on exit or link phases going away
-            if (otherPhase !== "exit" && otherPhase !== "link") continue;
-
-            // Get the vehicle's position on the exit lane
-            const otherCoord = this.occCoord(occ, exitLaneKey, desiredS);
-            const exitBase = this.laneBases.get(exitLaneKey)?.get(segmentId(exitSeg)) ?? 0;
-            const otherDistInLane = Math.max(0, otherCoord - exitBase);
-
-            // Gap = distance to exit + distance into exit lane to vehicle back
-            const gap = distToExit + otherDistInLane - 0.5 * (other.length + v.length);
-
-            if (gap > 0 && gap < closestGap) {
-                closestGap = gap;
-                closestLeader = other;
-            }
-        }
-
-        if (closestLeader) return { leader: closestLeader, gap: closestGap };
-        return null;
-    }
 
     private getSegmentBoundarySpeedCap(v: Vehicle): number {
         const currentSeg = v.currentSegment;
@@ -1130,8 +1059,115 @@ export class VehicleManager {
     }
 
     // -----------------------
+    // Helper methods for per-entry spawning
+    // -----------------------
+
+    /** Build a map of routes grouped by entry point (structureID-exitIndex) */
+    private buildRoutesByEntry(): void {
+        this.routesByEntry.clear();
+        
+        for (const route of this.routes) {
+            const firstSeg = route.segments?.[0];
+            if (!firstSeg) continue;
+            
+            const entryKey = `${firstSeg.from.structureID}-${firstSeg.from.exitIndex}`;
+            
+            if (!this.routesByEntry.has(entryKey)) {
+                this.routesByEntry.set(entryKey, []);
+            }
+            this.routesByEntry.get(entryKey)!.push(route);
+        }
+    }
+
+    /** Update spawn rates per entry from junction object configs */
+    private updateSpawnRatesFromJunctions(junctionObjectRefs: React.RefObject<THREE.Group<THREE.Object3DEventMap>[]>): void {
+        if (!junctionObjectRefs.current) return;
+
+        // Clear existing rates (but NOT demand - demand accumulates)
+        this.spawnRatesPerEntry.clear();
+
+        for (const group of junctionObjectRefs.current) {
+            if (!group?.userData?.id) continue;
+            
+            const structureID = group.userData.id as string;
+            const exitConfig = group.userData.exitConfig;
+            
+            if (!exitConfig || !Array.isArray(exitConfig)) continue;
+            
+            // Set spawn rate for each exit of this junction
+            exitConfig.forEach((config: { spawnRate?: number }, exitIndex: number) => {
+                const entryKey = `${structureID}-${exitIndex}`;
+                const rate = config.spawnRate ?? 0;
+                this.spawnRatesPerEntry.set(entryKey, rate);
+                
+                // Initialize demand to 0 if this is a new entry
+                if (!this.spawnDemandPerEntry.has(entryKey)) {
+                    this.spawnDemandPerEntry.set(entryKey, 0);
+                }
+            });
+        }
+    }
+
+    // -----------------------
     // Spawning
     // -----------------------
+
+    /** Try to spawn a vehicle from a specific entry point */
+    private trySpawnFromEntry(entryKey: string): boolean {
+        const routesForEntry = this.routesByEntry.get(entryKey);
+        if (!routesForEntry || routesForEntry.length === 0 || !this.carModels.length) return false;
+
+        // Pick a random route from this entry
+        const route = routesForEntry[Math.floor(Math.random() * routesForEntry.length)];
+        const points = this.getRoutePointsCached(route);
+        if (!points || points.length < 2) return false;
+
+        const template = this.carModels[Math.floor(Math.random() * this.carModels.length)];
+        const model = template.clone(true);
+
+        const length = this.computeModelLength(model);
+
+        if (!this.hasSpawnSpace(route, length)) return false;
+
+        const p0 = points[0];
+        const p1 = points[1];
+
+        const pos0 = new THREE.Vector3(p0[0], p0[1] + this.cfg.yOffset, p0[2]);
+        const pos1 = new THREE.Vector3(p1[0], p1[1] + this.cfg.yOffset, p1[2]);
+
+        model.position.copy(pos0);
+
+        const dir = pos1.clone().sub(pos0);
+        if (dir.lengthSq() > 1e-6) {
+            dir.normalize();
+            const yaw = Math.atan2(dir.x, dir.z);
+            model.rotation.set(0, yaw, 0);
+        }
+
+        this.scene.add(model);
+
+        const v = new Vehicle(this.nextId++, model, route, length, this.cfg.initialSpeed);
+        
+        // Initialize per-vehicle characteristics based on config with variation
+        const random = () => 0.85 + Math.random() * 0.3;
+        v.maxAccel = this.cfg.maxAccel * random();
+        v.maxDecel = this.cfg.maxDecel * random();
+        v.preferredSpeed = this.cfg.maxSpeed * random();
+        v.reactionTime = 0.15 + Math.random() * 0.25;
+        v.timeHeadway = this.cfg.timeHeadway * (0.8 + Math.random() * 0.4);
+        
+        v.s = 0;
+        v.segmentIndex = 0;
+        v.currentSegment = route.segments?.length ? route.segments[0] : null;
+        this.updateVehicleSegment(v);
+
+        v.spawnKey = this.spawnKeyForRoute(route);
+
+        this.vehicles.push(v);
+        this.spawned += 1;
+
+        return true;
+    }
 
     private trySpawnOne(): boolean {
         if (!this.routes.length || !this.carModels.length) return false;
@@ -1968,100 +2004,7 @@ export class VehicleManager {
         return null;
     }
 
-    private getExitBlockStopS(
-        v: Vehicle,
-        lanes: Map<string, LaneOcc[]>,
-        desiredS: Map<Vehicle, number>
-    ): number | null {
-        // Only check for exit blocking during the INSIDE phase on roundabouts
-        if (v.currentSegment?.phase !== "inside") return null;
-        if (!this.isRoundaboutLaneKey(v.laneKey)) return null;
-
-        const exitLaneKey = this.getExitLaneKeyForVehicle(v);
-        if (!exitLaneKey) return null;
-
-        const segDists = this.getSegmentDistances(v.route);
-        const segInfo = segDists[v.segmentIndex];
-        if (!segInfo) return null;
-
-        const distToSegEnd = Math.max(0, (segInfo.s1 ?? 0) - v.s);
-        
-        // Only trigger when very close to the exit transition (within 1 vehicle length)
-        // This prevents stopping cars that are still circulating far from their exit
-        const checkThreshold = Math.max(v.length * 1.0, 4);
-        if (distToSegEnd > checkThreshold) return null;
-
-        const laneStartBase = this.laneStartBaseForExitLane(exitLaneKey, v);
-        const nearest = this.nearestDistanceFromLaneStart(exitLaneKey, laneStartBase, lanes, desiredS);
-        if (!nearest) return null;
-        if (nearest.vehicleId === v.id) return null;
-
-        const requiredGap = Math.max(v.length + this.cfg.minBumperGap, v.length * 1.2);
-        if (nearest.dist >= requiredGap) return null;
-
-        // Stop just before the segment transition
-        const stopS = (segInfo.s1 ?? 0) - v.length * 0.5 - this.cfg.stopLineOffset;
-        return stopS;
-    }
-
-    private checkRoundaboutExitBlocking(
-        v: Vehicle,
-        lanes: Map<string, LaneOcc[]>,
-        desiredS: Map<Vehicle, number>
-    ): { stopS: number } | null {
-        // Check if we're approaching the end of the inside segment (about to exit)
-        const segs = v.route.segments;
-        if (!segs || v.segmentIndex >= segs.length) return null;
-        
-        const currentSeg = segs[v.segmentIndex];
-        if (currentSeg.phase !== "inside") return null;
-        
-        // Check if next segment is an exit
-        if (v.segmentIndex >= segs.length - 1) return null;
-        const nextSeg = segs[v.segmentIndex + 1];
-        if (nextSeg.phase !== "exit") return null;
-        
-        const segDists = this.getSegmentDistances(v.route);
-        const segInfo = segDists[v.segmentIndex];
-        if (!segInfo) return null;
-        
-        const distToExit = (segInfo.s1 ?? 0) - v.s;
-        
-        // CRITICAL: Only check when VERY close to exit - not while circulating
-        // Use a fixed, conservative distance regardless of speed to avoid premature blocking
-        const checkDist = Math.max(v.length * 1.5, 6);
-        
-        if (distToExit > checkDist) return null;
-        
-        // Check if exit lane has space
-        const exitLaneKey = this.laneKeyForSegment(nextSeg);
-        if (!exitLaneKey) return null;
-        
-        const laneStartBase = this.laneStartBaseForExitLane(exitLaneKey, v);
-        const nearest = this.nearestDistanceFromLaneStart(exitLaneKey, laneStartBase, lanes, desiredS);
-        
-        if (!nearest || nearest.vehicleId === v.id) return null;
-        
-        const requiredGap = v.length + this.cfg.minBumperGap * 2;
-        if (nearest.dist >= requiredGap) return null;
-        
-        // Exit is blocked - set virtual stopline before transition
-        const stopS = (segInfo.s1 ?? 0) - v.length * 0.5;
-        
-        if (this.cfg.debugLaneQueues) {
-            console.log("[RoundaboutExitBlock]", {
-                vid: v.id,
-                s: v.s,
-                distToExit,
-                stopS,
-                exitLane: exitLaneKey,
-                nearestDist: nearest.dist,
-                requiredGap,
-            });
-        }
-        
-        return { stopS };
-    }
+    
 
     private entryGroupKeyFromNodeKey(nodeKey: string): string {
         const parts = nodeKey.split("-");
@@ -2241,11 +2184,22 @@ export class VehicleManager {
         // ---------
         // 4) Build final SimulationStats snapshot
         // ---------
+        
+        // Calculate total spawn queue from all entry demands
+        let totalSpawnQueue = 0;
+        const spawnQueueByEntry: Record<string, number> = {};
+        for (const [entryKey, demand] of this.spawnDemandPerEntry.entries()) {
+            const queue = Math.floor(demand);
+            totalSpawnQueue += queue;
+            spawnQueueByEntry[entryKey] = queue;
+        }
+        
         const snapshot: SimulationStats = {
             active: this.vehicles.length,
             spawned: this.spawned,
             completed: this.completed,
-            spawnQueue: this.spawnQueue,
+            spawnQueue: totalSpawnQueue,
+            spawnQueueByEntry,
             routes: this.routes.length,
             elapsedTime: this.elapsedTime,
 
