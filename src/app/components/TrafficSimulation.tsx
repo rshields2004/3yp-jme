@@ -98,7 +98,6 @@ function SpawnRateLabels({
     const isSpawnPoint = (structureID: string, exitIndex: number): boolean => {
         // If routes aren't available yet, show all labels
         if (!routes || routes.length === 0) {
-            console.log(`[SpawnRateLabels] No routes available yet, showing all labels`);
             return true;
         }
         
@@ -111,22 +110,8 @@ function SpawnRateLabels({
             return match;
         });
         
-        console.log(`[SpawnRateLabels] Checking ${structureID}-${exitIndex}: ${hasRoutesStartingHere ? 'IS' : 'NOT'} spawn point (${routes.length} routes available)`);
-        
         return hasRoutesStartingHere;
     };
-    
-    console.log(`[SpawnRateLabels] Rendering with ${junctionGroups.length} junction groups, ${routes.length} routes`);
-    
-    // Debug: log all junction groups and their exit configs
-    junctionGroups.forEach(g => {
-        if (g?.userData?.id && g?.userData?.type && g.userData.type !== "link") {
-            const structureID = g.userData.id as string;
-            const exitConfig = g.userData.exitConfig as Array<{ spawnRate?: number }> | undefined;
-            console.log(`[SpawnRateLabels] Junction ${structureID}: ${exitConfig ? exitConfig.length : 0} exits configured`, 
-                exitConfig?.map((c, i) => `${i}:${c.spawnRate ?? 0}`).join(', '));
-        }
-    });
     
     return (
         <>
@@ -154,26 +139,21 @@ function SpawnRateLabels({
                             
                             // Get the start position of this exit (where vehicles spawn)
                             const exit = exitInfo[exitIndex];
-                            let posSource = "unknown";
                             if (exit?.startPosition) {
                                 // Transform local position to world space
                                 pos.copy(exit.startPosition);
                                 g.localToWorld(pos);
-                                posSource = "startPosition (world)";
                             } else if (exit?.laneLines?.[0]?.line?.end) {
                                 // Fallback: use the end of the first lane line (exit start)
                                 // Transform local position to world space
                                 pos.copy(exit.laneLines[0].line.end);
                                 g.localToWorld(pos);
-                                posSource = "laneLines[0].line.end (world)";
                             } else {
                                 // Last fallback: offset from junction center
                                 g.getWorldPosition(pos);
-                                posSource = "junction center (FALLBACK)";
                             }
                             
                             pos.y += 3; // Lower height than junction stats
-                            console.log(`[SpawnRateLabels] Position for ${entryKey}: (${pos.x.toFixed(2)}, ${pos.y.toFixed(2)}, ${pos.z.toFixed(2)}) from ${posSource}`);
                             positionsCache.set(entryKey, pos);
 
                             const queuedVehicles = stats.spawnQueueByEntry?.[entryKey] ?? 0;
@@ -216,7 +196,7 @@ function SpawnRateLabels({
  * Drop this into your Scene component to enable traffic simulation
  */
 export const TrafficSimulation = () => {
-    const { junction, junctionObjectRefs, simIsRunning, stats, setStats, carsReady, setCarsReady, followedVehicleId, setFollowedVehicleId, simIsPaused } = useJModellerContext();
+    const { junction, junctionObjectRefs, simIsRunning, stats, setStats, carsReady, setCarsReady, followedVehicleId, setFollowedVehicleId, simIsPaused, simConfig } = useJModellerContext();
     const { scene, camera, gl } = useThree();
 
     const [isInitialised, setisInitialised] = useState(false);
@@ -314,17 +294,6 @@ export const TrafficSimulation = () => {
 
             setRoutes(generatedRoutes);
             console.log(`Generated ${generatedRoutes.length} routes`);
-            
-            // Debug: log route entry points
-            const routesByEntry = new Map<string, number>();
-            generatedRoutes.forEach(route => {
-                const firstSeg = route.segments?.[0];
-                if (firstSeg?.from) {
-                    const key = `${firstSeg.from.structureID}-${firstSeg.from.exitIndex}`;
-                    routesByEntry.set(key, (routesByEntry.get(key) || 0) + 1);
-                }
-            });
-            console.log('[Routes] Entry points:', Array.from(routesByEntry.entries()).map(([key, count]) => `${key}: ${count} routes`).join(', '));
 
             if (generatedRoutes.length === 0) {
                 console.warn("No routes generated - check junction connections!");
@@ -334,33 +303,7 @@ export const TrafficSimulation = () => {
             // Reset previous sim (if any)
             vehicleManagerRef.current?.reset();
 
-            vehicleManagerRef.current = new VehicleManager(scene, carModelsRef.current, generatedRoutes, {
-                // Spawning
-                demandRatePerSec: 2,
-                maxVehicles: 100,
-                maxSpawnAttemptsPerFrame: 20,
-                maxSpawnQueue: 25,
-
-                // Motion
-                initialSpeed: 0,
-                maxSpeed: 10,
-                maxAccel: 4,
-                maxDecel: 8,
-                comfortDecel: 4,
-                maxJerk: 10,
-
-                // Spacing
-                minBumperGap: 0.5,
-                timeHeadway: 1,
-                stopLineOffset: 0.01,
-
-                // Rendering
-                yOffset: 0.01,
-
-                // Stage 2
-                enableLaneQueuing: true,
-                debugLaneQueues: true,
-            });
+            vehicleManagerRef.current = new VehicleManager(scene, carModelsRef.current, generatedRoutes, simConfig);
 
             // Create debug route visualization if enabled
             if (showDebugRoutes) {
@@ -396,7 +339,7 @@ export const TrafficSimulation = () => {
         } catch (error) {
             console.error("Failed to initialize simulation:", error);
         }
-    }, [carsReady, junction, junctionObjectRefs, scene, showDebugRoutes, createDebugRoutes, setStats]);
+    }, [carsReady, junction, junctionObjectRefs, scene, showDebugRoutes, createDebugRoutes, setStats, simConfig]);
 
     /**
      * Clean up the simulation when it stops

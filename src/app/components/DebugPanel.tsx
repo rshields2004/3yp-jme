@@ -20,7 +20,10 @@ export default function DebugPanel() {
         carsReady,
         simIsPaused,
         pauseSim,
-        resumeSim
+        resumeSim,
+        isConfigConfirmed,
+        confirmConfig,
+        resetConfig
     } = useJModellerContext();
 
     
@@ -319,6 +322,14 @@ export default function DebugPanel() {
         }));
     };
 
+    // Helper function to check if an exit is connected via a link (not a spawn point)
+    const isExitConnected = (structureID: string, exitIndex: number): boolean => {
+        return junction.junctionLinks.some(link =>
+            (link.objectPair[0].structureID === structureID && link.objectPair[0].exitIndex === exitIndex) ||
+            (link.objectPair[1].structureID === structureID && link.objectPair[1].exitIndex === exitIndex)
+        );
+    };
+
 
 
 
@@ -328,7 +339,7 @@ export default function DebugPanel() {
                 style={{
                     position: "absolute",
                     top: 10,
-                    right: 500,
+                    right: 10,
                     padding: 10,
                     background: "rgba(0,0,0,0.7)",
                     color: "white",
@@ -372,8 +383,40 @@ export default function DebugPanel() {
                     )}
                 </div>
 
-                <button disabled={simIsRunning || !carsReady} onClick={() => startSim()}>
-                    {carsReady ? "Start Simulation" : "Loading..."}
+                {!isConfigConfirmed && (
+                    <>
+                        <button 
+                            disabled={simIsRunning || junction.junctionObjects.length === 0}
+                            onClick={() => confirmConfig()}
+                            style={{
+                                background: junction.junctionObjects.length > 0 ? "#FFA500" : "#666",
+                                fontWeight: "bold"
+                            }}
+                        >
+                            Confirm Config
+                        </button>
+                        <div style={{ fontSize: 11, opacity: 0.7, marginTop: 4, marginBottom: 8 }}>
+                            Configure junctions, then confirm to set spawn rates
+                        </div>
+                    </>
+                )}
+
+                {isConfigConfirmed && !simIsRunning && (
+                    <>
+                        <button 
+                            onClick={() => resetConfig()}
+                            style={{ background: "#666", marginBottom: 8 }}
+                        >
+                            ← Back to Config
+                        </button>
+                        <div style={{ fontSize: 11, opacity: 0.7, marginBottom: 8 }}>
+                            Select junctions to configure spawn rates
+                        </div>
+                    </>
+                )}
+
+                <button disabled={simIsRunning || !carsReady || !isConfigConfirmed} onClick={() => startSim()}>
+                    {!isConfigConfirmed ? "Confirm Config First" : carsReady ? "Start Simulation" : "Loading..."}
                 </button>
                 <br />
                 <button disabled={!simIsRunning} onClick={() => simIsPaused ? resumeSim() : pauseSim()}>
@@ -397,11 +440,20 @@ export default function DebugPanel() {
                         <div style={{ marginLeft: 12, fontSize: 12, opacity: 0.85, marginTop: 2 }}>
                             {Object.entries(stats.spawnQueueByEntry)
                                 .filter(([_, queue]) => queue > 0)
-                                .map(([entryKey, queue]) => (
-                                    <div key={entryKey}>
-                                        • {entryKey}: {queue}
-                                    </div>
-                                ))}
+                                .map(([entryKey, queue]) => {
+                                    // Parse the entry key to show junction + exit
+                                    const parts = entryKey.split('-');
+                                    const exitIndex = parts[parts.length - 1];
+                                    const structureID = parts.slice(0, -1).join('-');
+                                    const junctionObj = junction.junctionObjects.find(obj => obj.id === structureID);
+                                    const junctionType = junctionObj?.type || 'junction';
+                                    const shortId = structureID.slice(0, 6);
+                                    return (
+                                        <div key={entryKey}>
+                                            • {junctionType} {shortId} Exit {exitIndex}: {queue}
+                                        </div>
+                                    );
+                                })}
                         </div>
                     )}
                     <div><b>Spawned:</b> {stats.spawned}</div>
@@ -441,21 +493,23 @@ export default function DebugPanel() {
                     fontFamily: "system-ui, sans-serif"
                 }}
             >
-                {/* Add new object */}
-                <div style={{ position: "absolute", top: 10, right: 10, padding: 10, background: "rgba(0,0,0,0.7)", color: "white", borderRadius: 8, minWidth: 300 }}>
-                    <h2>Add Intersection</h2>
-                    <button onClick={addNewIntersection}>Add New</button>
-                    <h2>Add Roundabout</h2>
-                    <button onClick={addNewRoundabout}>Add New</button>
-                    <h2>Exit Links</h2>
-                    <button onClick={addNewLink} disabled={selectedExits.length !== 2}>Add Link</button>
-                    {junction.junctionLinks.map(link => (
-                        <div key={link.id} style={{ marginBottom: 5 }}>
-                            <p>Exit {link.objectPair[0].exitIndex} ↔ Exit {link.objectPair[1].exitIndex}</p>
-                            <button onClick={() => removeLink(link.id)}>Remove</button>
-                        </div>
-                    ))}
-                </div>
+                {/* Add new object - hide when config confirmed */}
+                {!isConfigConfirmed && (
+                    <div style={{ position: "absolute", top: 10, right: 500, padding: 10, background: "rgba(0,0,0,0.7)", color: "white", borderRadius: 8, minWidth: 300 }}>
+                        <h2>Add Intersection</h2>
+                        <button onClick={addNewIntersection}>Add New</button>
+                        <h2>Add Roundabout</h2>
+                        <button onClick={addNewRoundabout}>Add New</button>
+                        <h2>Exit Links</h2>
+                        <button onClick={addNewLink} disabled={selectedExits.length !== 2}>Add Link</button>
+                        {junction.junctionLinks.map(link => (
+                            <div key={link.id} style={{ marginBottom: 5 }}>
+                                <p>Exit {link.objectPair[0].exitIndex} ↔ Exit {link.objectPair[1].exitIndex}</p>
+                                <button onClick={() => removeLink(link.id)}>Remove</button>
+                            </div>
+                        ))}
+                    </div>
+                )}
 
 
                 {/* First config panel for selected object */}
@@ -476,60 +530,111 @@ export default function DebugPanel() {
                             {firstSelectedObject.type === "intersection" ? "Intersection" : "Roundabout"}{" "}
                             {firstSelectedObject.id.slice(0, 6)}
                         </h2>
-                        <label># Exits:
-                            <input
-                                type="number"
-                                min={2}
-                                max={firstSelectedObject.type === "roundabout" ? 6 : 10}
-                                value={firstSelectedObject.config.numExits}
-                                onChange={e => handleNumExitsChange(firstSelectedObject.id, Number(e.target.value))}
-                            />
-                        </label>
-                        <button onClick={() => removeObject(firstSelectedObject.id)}>Delete</button>
-
-                        {firstSelectedObject.config.exitConfig.map((exit, j) => (
-                            <div key={j}>
-                                <h4>Exit {j}</h4>
-                                <label># Lanes:
-                                    <input
-                                        type="range"
-                                        min={2}
-                                        max={firstSelectedObject.config.numExits * 2}
-                                        value={exit.laneCount}
-                                        onChange={e => handleLaneCountChange(firstSelectedObject.id, j, Number(e.target.value))}
-                                    />
-                                </label><span>{exit.laneCount}</span>
-                                <br />
-                                <label>Length:
-                                    <input
-                                        type="range"
-                                        min={firstSelectedObject.type === "roundabout" ? 20 : 10}
-                                        max={70}
-                                        value={exit.exitLength}
-                                        onChange={e => handleExitLengthChange(firstSelectedObject.id, j, Number(e.target.value))}
-                                    />
-                                </label><span>{exit.exitLength}</span>
-                                <br />
-                                <label># Lanes in: {exit.numLanesIn}</label>
-                                <input
-                                    type="range"
-                                    min={1}
-                                    max={exit.laneCount - 1}
-                                    value={exit.numLanesIn}
-                                    onChange={e => handleNumLanesInChange(firstSelectedObject.id, j, Number(e.target.value))}
-                                />
-                                <br />
-                                <label>Spawn Rate (veh/s):
+                        {isConfigConfirmed && (
+                            <div style={{ 
+                                fontSize: 12, 
+                                opacity: 0.8, 
+                                marginBottom: 10,
+                                padding: 6,
+                                background: "rgba(255,165,0,0.2)",
+                                borderRadius: 4
+                            }}>
+                                Configure spawn rates for unconnected exits
+                            </div>
+                        )}
+                        
+                        {!isConfigConfirmed && (
+                            <>
+                                <label># Exits:
                                     <input
                                         type="number"
-                                        min={0}
-                                        max={10}
-                                        step={0.1}
-                                        value={exit.spawnRate ?? 0}
-                                        onChange={e => handleSpawnRateChange(firstSelectedObject.id, j, Number(e.target.value))}
-                                        style={{ width: '60px', marginLeft: '5px' }}
+                                        min={2}
+                                        max={firstSelectedObject.type === "roundabout" ? 6 : 10}
+                                        value={firstSelectedObject.config.numExits}
+                                        onChange={e => handleNumExitsChange(firstSelectedObject.id, Number(e.target.value))}
                                     />
                                 </label>
+                                <button onClick={() => removeObject(firstSelectedObject.id)}>Delete</button>
+                            </>
+                        )}
+
+                        {isConfigConfirmed && firstSelectedObject.config.exitConfig.every((_, j) => isExitConnected(firstSelectedObject.id, j)) && (
+                            <div style={{
+                                padding: 10,
+                                background: "rgba(255,100,100,0.2)",
+                                borderRadius: 4,
+                                border: "1px solid rgba(255,100,100,0.4)",
+                                fontSize: 12
+                            }}>
+                                ⚠️ All exits are connected - no spawn points available
+                            </div>
+                        )}
+
+                        {firstSelectedObject.config.exitConfig
+                            .map((exit, j) => ({ exit, index: j }))
+                            .filter(({ index: j }) => !isConfigConfirmed || !isExitConnected(firstSelectedObject.id, j))
+                            .map(({ exit, index: j }) => (
+                            <div key={j} style={{
+                                marginBottom: 10,
+                                padding: 8,
+                                background: isConfigConfirmed ? "rgba(255,165,0,0.15)" : "transparent",
+                                borderRadius: 4,
+                                border: isConfigConfirmed ? "1px solid rgba(255,165,0,0.3)" : "none"
+                            }}>
+                                <h4 style={{ margin: "0 0 6px 0" }}>
+                                    Exit {j} 
+                                    {isConfigConfirmed && <span style={{ fontSize: 11, opacity: 0.7, marginLeft: 6 }}>
+                                        ({firstSelectedObject.id.slice(0, 6)}-{j})
+                                    </span>}
+                                </h4>
+                                {!isConfigConfirmed && (
+                                    <>
+                                        <label># Lanes:
+                                            <input
+                                                type="range"
+                                                min={2}
+                                                max={firstSelectedObject.config.numExits * 2}
+                                                value={exit.laneCount}
+                                                onChange={e => handleLaneCountChange(firstSelectedObject.id, j, Number(e.target.value))}
+                                            />
+                                        </label><span>{exit.laneCount}</span>
+                                        <br />
+                                        <label>Length:
+                                            <input
+                                                type="range"
+                                                min={firstSelectedObject.type === "roundabout" ? 20 : 10}
+                                                max={70}
+                                                value={exit.exitLength}
+                                                onChange={e => handleExitLengthChange(firstSelectedObject.id, j, Number(e.target.value))}
+                                            />
+                                        </label><span>{exit.exitLength}</span>
+                                        <br />
+                                        <label># Lanes in: {exit.numLanesIn}</label>
+                                        <input
+                                            type="range"
+                                            min={1}
+                                            max={exit.laneCount - 1}
+                                            value={exit.numLanesIn}
+                                            onChange={e => handleNumLanesInChange(firstSelectedObject.id, j, Number(e.target.value))}
+                                        />
+                                        <br />
+                                    </>
+                                )}
+                                {isConfigConfirmed && (
+                                    <>
+                                        <label>Spawn Rate (veh/s):
+                                            <input
+                                                type="range"
+                                                min={0}
+                                                max={10}
+                                                step={0.1}
+                                                value={exit.spawnRate ?? 0}
+                                                onChange={e => handleSpawnRateChange(firstSelectedObject.id, j, Number(e.target.value))}
+                                            />
+                                        </label>
+                                        <span>{(exit.spawnRate ?? 0).toFixed(1)}</span>
+                                    </>
+                                )}
                             </div>
                         ))}
                     </div>
@@ -553,60 +658,111 @@ export default function DebugPanel() {
                             {secondSelectedObject.type === "intersection" ? "Intersection" : "Roundabout"}{" "}
                             {secondSelectedObject.id.slice(0, 6)}
                         </h2>
-                        <label># Exits:
-                            <input
-                                type="number"
-                                min={2}
-                                max={secondSelectedObject.type === "roundabout" ? 6 : 10}
-                                value={secondSelectedObject.config.numExits}
-                                onChange={e => handleNumExitsChange(secondSelectedObject.id, Number(e.target.value))}
-                            />
-                        </label>
-                        <button onClick={() => removeObject(secondSelectedObject.id)}>Delete</button>
-
-                        {secondSelectedObject.config.exitConfig.map((exit, j) => (
-                            <div key={j}>
-                                <h4>Exit {j}</h4>
-                                <label># Lanes:
-                                    <input
-                                        type="range"
-                                        min={2}
-                                        max={secondSelectedObject.config.numExits * 2}
-                                        value={exit.laneCount}
-                                        onChange={e => handleLaneCountChange(secondSelectedObject.id, j, Number(e.target.value))}
-                                    />
-                                </label><span>{exit.laneCount}</span>
-                                <br />
-                                <label>Length:
-                                    <input
-                                        type="range"
-                                        min={secondSelectedObject.type === "roundabout" ? 20 : 10}
-                                        max={70}
-                                        value={exit.exitLength}
-                                        onChange={e => handleExitLengthChange(secondSelectedObject.id, j, Number(e.target.value))}
-                                    />
-                                </label><span>{exit.exitLength}</span>
-                                <br />
-                                <label># Lanes in: {exit.numLanesIn}</label>
-                                <input
-                                    type="range"
-                                    min={1}
-                                    max={exit.laneCount - 1}
-                                    value={exit.numLanesIn}
-                                    onChange={e => handleNumLanesInChange(secondSelectedObject.id, j, Number(e.target.value))}
-                                />
-                                <br />
-                                <label>Spawn Rate (veh/s):
+                        {isConfigConfirmed && (
+                            <div style={{ 
+                                fontSize: 12, 
+                                opacity: 0.8, 
+                                marginBottom: 10,
+                                padding: 6,
+                                background: "rgba(255,165,0,0.2)",
+                                borderRadius: 4
+                            }}>
+                                Configure spawn rates for unconnected exits
+                            </div>
+                        )}
+                        
+                        {!isConfigConfirmed && (
+                            <>
+                                <label># Exits:
                                     <input
                                         type="number"
-                                        min={0}
-                                        max={10}
-                                        step={0.1}
-                                        value={exit.spawnRate ?? 0}
-                                        onChange={e => handleSpawnRateChange(secondSelectedObject.id, j, Number(e.target.value))}
-                                        style={{ width: '60px', marginLeft: '5px' }}
+                                        min={2}
+                                        max={secondSelectedObject.type === "roundabout" ? 6 : 10}
+                                        value={secondSelectedObject.config.numExits}
+                                        onChange={e => handleNumExitsChange(secondSelectedObject.id, Number(e.target.value))}
                                     />
                                 </label>
+                                <button onClick={() => removeObject(secondSelectedObject.id)}>Delete</button>
+                            </>
+                        )}
+
+                        {isConfigConfirmed && secondSelectedObject.config.exitConfig.every((_, j) => isExitConnected(secondSelectedObject.id, j)) && (
+                            <div style={{
+                                padding: 10,
+                                background: "rgba(255,100,100,0.2)",
+                                borderRadius: 4,
+                                border: "1px solid rgba(255,100,100,0.4)",
+                                fontSize: 12
+                            }}>
+                                ⚠️ All exits are connected - no spawn points available
+                            </div>
+                        )}
+
+                        {secondSelectedObject.config.exitConfig
+                            .map((exit, j) => ({ exit, index: j }))
+                            .filter(({ index: j }) => !isConfigConfirmed || !isExitConnected(secondSelectedObject.id, j))
+                            .map(({ exit, index: j }) => (
+                            <div key={j} style={{
+                                marginBottom: 10,
+                                padding: 8,
+                                background: isConfigConfirmed ? "rgba(255,165,0,0.15)" : "transparent",
+                                borderRadius: 4,
+                                border: isConfigConfirmed ? "1px solid rgba(255,165,0,0.3)" : "none"
+                            }}>
+                                <h4 style={{ margin: "0 0 6px 0" }}>
+                                    Exit {j}
+                                    {isConfigConfirmed && <span style={{ fontSize: 11, opacity: 0.7, marginLeft: 6 }}>
+                                        ({secondSelectedObject.id.slice(0, 6)}-{j})
+                                    </span>}
+                                </h4>
+                                {!isConfigConfirmed && (
+                                    <>
+                                        <label># Lanes:
+                                            <input
+                                                type="range"
+                                                min={2}
+                                                max={secondSelectedObject.config.numExits * 2}
+                                                value={exit.laneCount}
+                                                onChange={e => handleLaneCountChange(secondSelectedObject.id, j, Number(e.target.value))}
+                                            />
+                                        </label><span>{exit.laneCount}</span>
+                                        <br />
+                                        <label>Length:
+                                            <input
+                                                type="range"
+                                                min={secondSelectedObject.type === "roundabout" ? 20 : 10}
+                                                max={70}
+                                                value={exit.exitLength}
+                                                onChange={e => handleExitLengthChange(secondSelectedObject.id, j, Number(e.target.value))}
+                                            />
+                                        </label><span>{exit.exitLength}</span>
+                                        <br />
+                                        <label># Lanes in: {exit.numLanesIn}</label>
+                                        <input
+                                            type="range"
+                                            min={1}
+                                            max={exit.laneCount - 1}
+                                            value={exit.numLanesIn}
+                                            onChange={e => handleNumLanesInChange(secondSelectedObject.id, j, Number(e.target.value))}
+                                        />
+                                        <br />
+                                    </>
+                                )}
+                                {isConfigConfirmed && (
+                                    <>
+                                        <label>Spawn Rate (veh/s):
+                                            <input
+                                                type="range"
+                                                min={0}
+                                                max={10}
+                                                step={0.1}
+                                                value={exit.spawnRate ?? 0}
+                                                onChange={e => handleSpawnRateChange(secondSelectedObject.id, j, Number(e.target.value))}
+                                            />
+                                        </label>
+                                        <span>{(exit.spawnRate ?? 0).toFixed(1)}</span>
+                                    </>
+                                )}
                             </div>
                         ))}
                     </div>

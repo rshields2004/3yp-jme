@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { IntersectionObject } from "./intersection";
 import { RoundaboutObject } from "./roundabout";
 import { ThickLineHandle } from "@/app/components/ThickLine";
-import { SimulationStats } from "./simulation";
+import { SimulationStats, SimConfig } from "./simulation";
 
 
 export type LaneLineProperties = {
@@ -73,6 +73,12 @@ export type JModellerState = {
     followedVehicleId: number | null;
     setFollowedVehicleId: React.Dispatch<React.SetStateAction<number | null>>;
     
+    isConfigConfirmed: boolean;
+    confirmConfig: () => void;
+    resetConfig: () => void;
+
+    simConfig: SimConfig;
+    setSimConfig: React.Dispatch<React.SetStateAction<SimConfig>>;
 };
 
 

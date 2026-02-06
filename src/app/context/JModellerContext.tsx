@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, ReactNode, useRef } from "react";
 import { ExitRef, JModellerState, JunctionConfig } from "../includes/types/types";
-import { defaultJunctionConfig } from "../includes/defaults";
+import { defaultJunctionConfig, defaultSimConfig } from "../includes/defaults";
 import * as THREE from "three";
 import { SimulationStats } from "../includes/types/simulation";
 
@@ -19,6 +19,8 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
     const [simIsPaused, setSimIsPaused] = useState<boolean>(false);
     const [carsReady, setCarsReady] = useState<boolean>(false);
     const [followedVehicleId, setFollowedVehicleId] = useState<number | null>(null);
+    const [isConfigConfirmed, setIsConfigConfirmed] = useState<boolean>(false);
+    const [simConfig, setSimConfig] = useState(defaultSimConfig);
 
 
 
@@ -222,6 +224,15 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
     const haltSim = () => {
         setSimIsRunning(false);
         setSimIsPaused(false);
+        setIsConfigConfirmed(false); // Reset config phase when simulation stops
+    };
+
+    const confirmConfig = () => {
+        setIsConfigConfirmed(true);
+    };
+
+    const resetConfig = () => {
+        setIsConfigConfirmed(false);
     };
 
     const pauseSim = () => {
@@ -262,7 +273,12 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
             carsReady,
             setCarsReady,
             followedVehicleId,
-            setFollowedVehicleId
+            setFollowedVehicleId,
+            isConfigConfirmed,
+            confirmConfig,
+            resetConfig,
+            simConfig,
+            setSimConfig
         }}>
             {children}
         </JModellerContext.Provider>

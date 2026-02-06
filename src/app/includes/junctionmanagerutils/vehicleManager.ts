@@ -101,6 +101,16 @@ export class VehicleManager {
         };
     }
 
+    /** Update simulation configuration */
+    public updateConfig(cfg: Partial<SimConfig>): void {
+        this.cfg = { ...this.cfg, ...cfg };
+    }
+
+    /** Get current simulation configuration */
+    public getConfig(): SimConfig {
+        return { ...this.cfg };
+    }
+
     /** Convert a Node object to a string key */
     private nodeToKey(node: { structureID: string; exitIndex: number; direction: string; laneIndex: number }): string {
         return `${node.structureID}-${node.exitIndex}-${node.direction}-${node.laneIndex}`;
@@ -1086,6 +1096,9 @@ export class VehicleManager {
         // Clear existing rates (but NOT demand - demand accumulates)
         this.spawnRatesPerEntry.clear();
 
+        // Track valid entry points (those with routes)
+        const validEntries = new Set<string>();
+
         for (const group of junctionObjectRefs.current) {
             if (!group?.userData?.id) continue;
             
@@ -1097,6 +1110,15 @@ export class VehicleManager {
             // Set spawn rate for each exit of this junction
             exitConfig.forEach((config: { spawnRate?: number }, exitIndex: number) => {
                 const entryKey = `${structureID}-${exitIndex}`;
+                
+                // Only set spawn rate if this exit has routes starting from it (is a spawn point)
+                // Connected exits won't have routes in routesByEntry
+                if (!this.routesByEntry.has(entryKey)) {
+                    return; // Skip this exit - it's connected to another junction
+                }
+                
+                validEntries.add(entryKey);
+                
                 const rate = config.spawnRate ?? 0;
                 this.spawnRatesPerEntry.set(entryKey, rate);
                 
@@ -1105,6 +1127,13 @@ export class VehicleManager {
                     this.spawnDemandPerEntry.set(entryKey, 0);
                 }
             });
+        }
+        
+        // Clear demand for entries that are no longer valid spawn points (e.g., now connected)
+        for (const entryKey of this.spawnDemandPerEntry.keys()) {
+            if (!validEntries.has(entryKey)) {
+                this.spawnDemandPerEntry.delete(entryKey);
+            }
         }
     }
 

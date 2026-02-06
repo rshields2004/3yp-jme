@@ -13,7 +13,7 @@ import { LinkComponent } from "./LinkComponent";
 
 export const JunctionComponents = () => {
 
-    const { selectedObjects, junction, snapToValidPosition, setSelectedObjects, junctionObjectRefs } = useJModellerContext();
+    const { selectedObjects, junction, snapToValidPosition, setSelectedObjects, junctionObjectRefs, isConfigConfirmed } = useJModellerContext();
 
     // We define our drag controls for all components
     const { camera, gl } = useThree();
@@ -69,11 +69,20 @@ export const JunctionComponents = () => {
         if (!controls)  {
             return;
         }
+        
+        // Disable dragging when config is confirmed (simulation config phase)
+        if (isConfigConfirmed) {
+            controls.objects = [];
+            controls.enabled = false;
+            return;
+        }
+        
+        controls.enabled = true;
         // In the selectedObjects useEffect:
         const controlObjects = selectedObjects.map(id => junctionObjectRefs.current.find(g => g.userData.id === id)).filter((g): g is THREE.Group => !!g);
         controls.objects = controlObjects;
 
-    }, [selectedObjects, setSelectedObjects, snapToValidPosition, junctionObjectRefs]);
+    }, [selectedObjects, setSelectedObjects, snapToValidPosition, junctionObjectRefs, isConfigConfirmed]);
 
 
     return (
