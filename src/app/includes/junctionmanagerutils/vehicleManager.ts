@@ -221,10 +221,18 @@ export class VehicleManager {
         // 1) Update spawn rates from junction objects
         this.updateSpawnRatesFromJunctions(junctionObjectRefs);
 
-        // 2) Accumulate demand per entry
+        // Calculate per-entry max spawn queue (global divided by number of spawn points)
+        const numSpawnPoints = this.routesByEntry.size;
+        const maxQueuePerEntry = numSpawnPoints > 0 
+            ? this.cfg.maxSpawnQueue / numSpawnPoints 
+            : this.cfg.maxSpawnQueue;
+
+        // 2) Accumulate demand per entry (capped at per-entry max)
         for (const [entryKey, rate] of this.spawnRatesPerEntry.entries()) {
             const currentDemand = this.spawnDemandPerEntry.get(entryKey) || 0;
-            this.spawnDemandPerEntry.set(entryKey, currentDemand + rate * dt);
+            const newDemand = currentDemand + rate * dt;
+            // Cap demand at the per-entry maximum
+            this.spawnDemandPerEntry.set(entryKey, Math.min(newDemand, maxQueuePerEntry));
         }
 
         // 3) Try to spawn from each entry
