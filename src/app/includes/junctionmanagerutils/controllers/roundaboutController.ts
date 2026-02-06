@@ -36,9 +36,9 @@ export class RoundaboutController {
     private center = new THREE.Vector3();
     private now = 0;
 
-    private readonly MIN_GAP_DISTANCE = 2;       // Minimum distance to any circulating vehicle
+    private readonly MIN_GAP_DISTANCE = 3;       // Minimum distance to any circulating vehicle
     private readonly MIN_TIME_GAP = 2.0;         // Seconds buffer for approaching vehicles
-    private readonly SAFE_ENTRY_DISTANCE = 20;   // Check approaching vehicles within this distance
+    private readonly SAFE_ENTRY_DISTANCE = 5;   // Check approaching vehicles within this distance
     private readonly ENTRY_TIMEOUT = 2.0;
     private readonly MIN_ANGULAR_SEPARATION = Math.PI / 3;
 
