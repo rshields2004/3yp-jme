@@ -164,7 +164,7 @@ function SpawnRateLabels({
                                         <Html center sprite distanceFactor={10} transform>
                                             <div
                                                 style={{
-                                                    background: "rgba(40,120,40,0.75)",
+                                                    background: "rgba(0, 0, 0, 0.75)",
                                                     color: "white",
                                                     padding: "4px 6px",
                                                     borderRadius: 6,
@@ -172,13 +172,13 @@ function SpawnRateLabels({
                                                     lineHeight: 1.2,
                                                     whiteSpace: "nowrap",
                                                     fontFamily: "system-ui, sans-serif",
-                                                    border: "1px solid rgba(100,200,100,0.5)"
+                                                    border: "1px solid rgba(0, 0, 0, 0.5)"
                                                 }}
                                             >
                                                 <div style={{ fontWeight: 600 }}>
                                                     {structureID.slice(0, 6)} Ex{exitIndex}
                                                 </div>
-                                                <div>📊 {spawnRate.toFixed(1)} veh/s</div>
+                                                <div>{spawnRate.toFixed(1)} veh/s</div>
                                                 <div style={{ fontSize: 10, opacity: 0.9 }}>Queue: {queuedVehicles}</div>
                                             </div>
                                         </Html>
