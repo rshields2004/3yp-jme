@@ -2,11 +2,12 @@ import * as THREE from "three";
 import { LightColour } from "../../types/simulation";
 
 /**
- * RoundaboutController with position-based collision detection.
+ * RoundaboutController with lane-aware position-based collision detection.
  *
  * Uses actual world positions for gap checking and tracks vehicles
- * entering from different entry points to prevent simultaneous entry
- * from adjacent entries while allowing opposite entries to proceed.
+ * per ring lane. Entering vehicles only need a clear gap on the outer
+ * lane they physically cross, so inner-lane circulating traffic no
+ * longer causes false conflicts or abrupt stops during lane merges.
  */
 export class RoundaboutController {
     id: string;
@@ -36,10 +37,15 @@ export class RoundaboutController {
     private center = new THREE.Vector3();
     private now = 0;
 
-    private readonly MIN_GAP_DISTANCE = 3;       // Minimum distance to any circulating vehicle
-    private readonly MIN_TIME_GAP = 2.0;         // Seconds buffer for approaching vehicles
-    private readonly SAFE_ENTRY_DISTANCE = 5;   // Check approaching vehicles within this distance
-    private readonly ENTRY_TIMEOUT = 2.0;
+    // Lane geometry for lane-aware gap checking
+    private laneMidRadii: number[] = [];
+    private numLanes = 1;
+    private laneWidth = 3.0;
+
+    private readonly MIN_GAP_DISTANCE = 1;       // Minimum distance to any circulating vehicle
+    private readonly MIN_TIME_GAP = 1.0;         // Seconds buffer for approaching vehicles
+    private readonly SAFE_ENTRY_DISTANCE = 1;   // Check approaching vehicles within this distance
+    private readonly ENTRY_TIMEOUT = 1.0;
     private readonly MIN_ANGULAR_SEPARATION = Math.PI / 3;
 
     constructor(id: string, entryKeys: string[]) {
@@ -47,8 +53,51 @@ export class RoundaboutController {
         this.entryKeys = [...new Set(entryKeys)];
     }
 
-    setGeometry(center: THREE.Vector3): void {
+    setGeometry(center: THREE.Vector3, laneMidRadii?: number[]): void {
         this.center.copy(center);
+        if (laneMidRadii && laneMidRadii.length > 0) {
+            this.laneMidRadii = [...laneMidRadii];
+            this.numLanes = laneMidRadii.length;
+            if (laneMidRadii.length >= 2) {
+                this.laneWidth = Math.abs(
+                    laneMidRadii[laneMidRadii.length - 1] - laneMidRadii[0]
+                ) / (laneMidRadii.length - 1);
+            }
+        }
+    }
+
+    /** Determine which ring lane a world position is on based on distance from center */
+    getLaneIndexForPosition(position: THREE.Vector3): number {
+        if (this.laneMidRadii.length <= 1) return 0;
+        const dx = position.x - this.center.x;
+        const dz = position.z - this.center.z;
+        const distFromCenter = Math.sqrt(dx * dx + dz * dz);
+        let bestLane = 0;
+        let bestDist = Infinity;
+        for (let i = 0; i < this.laneMidRadii.length; i++) {
+            const diff = Math.abs(distFromCenter - this.laneMidRadii[i]);
+            if (diff < bestDist) {
+                bestDist = diff;
+                bestLane = i;
+            }
+        }
+        return bestLane;
+    }
+
+    /** Get the outermost lane radius (vehicles enter through this lane) */
+    getOuterLaneRadius(): number {
+        if (this.laneMidRadii.length === 0) return 10;
+        return this.laneMidRadii[this.laneMidRadii.length - 1];
+    }
+
+    /** Get the outermost lane index */
+    getOuterLaneIndex(): number {
+        return Math.max(0, this.laneMidRadii.length - 1);
+    }
+
+    /** Get lane width */
+    getLaneWidth(): number {
+        return this.laneWidth;
     }
 
     update(dt: number): void {
@@ -140,32 +189,36 @@ export class RoundaboutController {
             return true;
         }
 
-        // When entering a roundabout, the vehicle physically crosses ALL lanes
-        // at the entry point, regardless of which lane it will ultimately use.
-        // Therefore, we must check ALL circulating vehicles for safety.
-        
+        // Lane-aware gap checking: entering vehicles physically cross the outer lane.
+        // Outer-lane vehicles get a full gap check; inner-lane vehicles only need a
+        // tight physical-collision check since they are on a different ring strip.
+        const outerLaneIndex = this.getOuterLaneIndex();
 
-        // Check ALL circulating vehicles - entry point crosses all lanes
-        for (const [vehicleId, info] of this.circulating) {
+        for (const [, info] of this.circulating) {
             const distance = info.position.distanceTo(entryPosition);
+            const isOnOuterLane = info.laneIndex === outerLaneIndex;
 
-           
+            if (isOnOuterLane) {
+                // Full gap check for vehicles on the outer lane (entry path crosses this)
+                if (distance < this.MIN_GAP_DISTANCE) {
+                    return false;
+                }
 
-            if (distance < this.MIN_GAP_DISTANCE) {
-               
-                return false;
-            }
+                if (distance < this.SAFE_ENTRY_DISTANCE) {
+                    const toEntry = new THREE.Vector3().subVectors(entryPosition, info.position);
+                    const dotProduct = toEntry.dot(info.heading);
 
-            if (distance < this.SAFE_ENTRY_DISTANCE) {
-                const toEntry = new THREE.Vector3().subVectors(entryPosition, info.position);
-                const dotProduct = toEntry.dot(info.heading);
-
-                if (dotProduct > 0) {
-                    const timeToReach = distance / Math.max(0.5, info.speed);
-                    if (timeToReach < this.MIN_TIME_GAP) {
-                        
-                        return false;
+                    if (dotProduct > 0) {
+                        const timeToReach = distance / Math.max(0.5, info.speed);
+                        if (timeToReach < this.MIN_TIME_GAP) {
+                            return false;
+                        }
                     }
+                }
+            } else {
+                // Inner-lane vehicles: only block on actual physical collision risk
+                if (distance < this.MIN_GAP_DISTANCE * 0.5) {
+                    return false;
                 }
             }
         }
@@ -178,10 +231,14 @@ export class RoundaboutController {
         radius: number,
         entryKey?: string
     ): boolean {
+        // Use the outer lane radius for the entry position since that is where
+        // the entering vehicle physically crosses circulating traffic.
+        const outerRadius = this.getOuterLaneRadius();
+        const effectiveRadius = outerRadius > 0 ? outerRadius : radius;
         const entryPosition = new THREE.Vector3(
-            this.center.x + Math.cos(entryAngle) * radius,
+            this.center.x + Math.cos(entryAngle) * effectiveRadius,
             this.center.y,
-            this.center.z + Math.sin(entryAngle) * radius
+            this.center.z + Math.sin(entryAngle) * effectiveRadius
         );
         return this.canEnterSafelyAtPosition(entryPosition, entryKey);
     }

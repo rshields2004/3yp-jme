@@ -46,7 +46,6 @@ export const RoundaboutComponent = ({ id, roundaboutConfig }: RoundaboutProps) =
         const outerRadius = islandRadius + maxLaneWidth * maxNumLaneIn;
         
         
-        const ringLines = generateRingLines(maxNumLaneIn, islandRadius, maxLaneWidth);
         const islandGeometry = new THREE.CircleGeometry(islandRadius, 64);
         const floorCircle = new THREE.RingGeometry(islandRadius, outerRadius, 64);
 
@@ -62,7 +61,7 @@ export const RoundaboutComponent = ({ id, roundaboutConfig }: RoundaboutProps) =
             const stopLine = generateStopLineRound(config.numLanesIn, laneLines, outerRadius);
             exitStructures.push({ angle, laneLines, stopLine });
         }
-
+        const ringLines = generateRingLines(maxNumLaneIn, islandRadius, maxLaneWidth);
         const roundaboutFloor = generateRoundaboutFloorMesh(exitStructures);
         const edgeTubes = generateEdgeTubesRound(outerRadius, exitStructures);
         

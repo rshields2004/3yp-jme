@@ -214,64 +214,248 @@ function generateRoundaboutPathParts(
     const endL = roundabout.worldToLocal(endW.clone());
 
     const ringLines: RingLaneStructure[] = roundabout.userData.roundaboutRingStructure;
+    const numRingStrips = ringLines.length - 1;
+    const outermostStrip = numRingStrips - 1;
+    const exitConfigs: ExitConfig[] = roundabout.userData.exitConfig;
+    const numExits = exitConfigs.length;
 
-    const maxStrip = Math.max(0, ringLines.length - 2);
-    const ringStripIndex = Math.min(maxStrip, Math.max(0, maxStrip - entry.laneIndex));
-
-    const innerRadius = ringLines[ringStripIndex].radius;
-    const outerRadius = ringLines[ringStripIndex + 1].radius;
-    const midRadius = (innerRadius + outerRadius) / 2;
-
+    const TAU = Math.PI * 2;
     const startAngle = Math.atan2(midStartL.z, midStartL.x);
     const endAngle = Math.atan2(midEndL.z, midEndL.x);
 
-    const TAU = Math.PI * 2;
-    const deltaCCW = THREE.MathUtils.euclideanModulo(endAngle - startAngle, TAU);
+    // CW from +Y in Three.js XZ = angles increase
+    let deltaCW = THREE.MathUtils.euclideanModulo(endAngle - startAngle, TAU);
+    if (entry.exitIndex === exit.exitIndex) deltaCW = TAU;
+    if (deltaCW < 0.05 && entry.exitIndex !== exit.exitIndex) deltaCW = TAU;
 
-    const segments = 40;
+    // ---- Lane selection based on entry lane ----
+    let entryStripIndex: number;
+    if (numRingStrips <= 1) {
+        entryStripIndex = 0;
+    } else {
+        const depth = Math.min(entry.laneIndex, numRingStrips - 1);
+        entryStripIndex = outermostStrip - depth;
+    }
+    const exitStripIndex = outermostStrip;
+    const lanesCrossed = Math.abs(exitStripIndex - entryStripIndex);
 
-    // ---- Circle points in LOCAL space ----
-    const circleL: THREE.Vector3[] = [];
-    for (let i = 0; i <= segments; i++) {
-        const t = i / segments;
-        const a = startAngle + deltaCCW * t;
-        circleL.push(new THREE.Vector3(Math.cos(a) * midRadius, midStartL.y, Math.sin(a) * midRadius));
+    const getStripMidRadius = (strip: number) =>
+        (ringLines[strip].radius + ringLines[strip + 1].radius) / 2;
+
+    const entryRadius = getStripMidRadius(entryStripIndex);
+    const exitRadius = getStripMidRadius(exitStripIndex);
+    const needsLaneChange = lanesCrossed > 0;
+    const y = midStartL.y;
+
+    // ---- Helpers ----
+    const ringPoint = (angle: number, radius: number) =>
+        new THREE.Vector3(Math.cos(angle) * radius, y, Math.sin(angle) * radius);
+
+    const cwTangent = (angle: number) =>
+        new THREE.Vector3(-Math.sin(angle), 0, Math.cos(angle));
+
+    const makeArc = (fromAngle: number, toAngle: number, radius: number, segs: number): THREE.Vector3[] => {
+        const pts: THREE.Vector3[] = [];
+        const delta = toAngle - fromAngle;
+        if (Math.abs(delta) < 0.001) return [ringPoint(fromAngle, radius)];
+        for (let i = 0; i <= segs; i++) {
+            pts.push(ringPoint(fromAngle + delta * (i / segs), radius));
+        }
+        return pts;
+    };
+
+    // ---- Find all intermediate exits in CW travel order ----
+    // For each, compute the out→in boundary angle
+    type ExitBoundary = { angle: number; delta: number };
+    const intermediateBoundaries: ExitBoundary[] = [];
+
+    for (let ei = 0; ei < numExits; ei++) {
+        if (ei === entry.exitIndex || ei === exit.exitIndex) continue;
+
+        const config = exitConfigs[ei];
+        const numOutLanes = config.laneCount - config.numLanesIn;
+
+        // Find CW-most out-lane
+        let outFarDelta = -1;
+        let outFarAngle = startAngle;
+        for (let li = 0; li < numOutLanes; li++) {
+            const ptW = getLaneWorldPoint(roundabout, ei, li, "start", "out");
+            const ptL = roundabout.worldToLocal(ptW.clone());
+            const ptAngle = Math.atan2(ptL.z, ptL.x);
+            const d = THREE.MathUtils.euclideanModulo(ptAngle - startAngle, TAU);
+            if (d > outFarDelta) {
+                outFarDelta = d;
+                outFarAngle = ptAngle;
+            }
+        }
+
+        // Find CCW-most in-lane (first in-lane after the out-lanes)
+        let inNearDelta = Infinity;
+        let inNearAngle = outFarAngle;
+        for (let li = 0; li < config.numLanesIn; li++) {
+            const ptW = getLaneWorldPoint(roundabout, ei, li, "start", "in");
+            const ptL = roundabout.worldToLocal(ptW.clone());
+            const ptAngle = Math.atan2(ptL.z, ptL.x);
+            const d = THREE.MathUtils.euclideanModulo(ptAngle - startAngle, TAU);
+            if (d > outFarDelta && d < inNearDelta) {
+                inNearDelta = d;
+                inNearAngle = ptAngle;
+            }
+        }
+
+        const outD = THREE.MathUtils.euclideanModulo(outFarAngle - startAngle, TAU);
+        const inD = THREE.MathUtils.euclideanModulo(inNearAngle - startAngle, TAU);
+        const boundaryDelta = (outD + inD) / 2;
+
+        // Only include if it's between entry and exit
+        if (boundaryDelta > 0.05 && boundaryDelta < deltaCW - 0.05) {
+            intermediateBoundaries.push({
+                angle: startAngle + boundaryDelta,
+                delta: boundaryDelta,
+            });
+        }
     }
 
-    // ---- Entry/exit Beziers in LOCAL space ----
-    const curveEntryL = new THREE.CubicBezierCurve3(midStartL, circleL[1], circleL[2], circleL[3]);
-    const curveExitL = new THREE.CubicBezierCurve3(
-        circleL[circleL.length - 4],
-        circleL[circleL.length - 3],
-        circleL[circleL.length - 2],
-        midEndL
-    );
+    // Sort by CW delta (travel order)
+    intermediateBoundaries.sort((a, b) => a.delta - b.delta);
 
+    // ---- Plan lane changes: 1 per exit, using the LAST N exits ----
+    const laneWidth = exitConfigs[exit.exitIndex].laneWidth;
+    const singleMergeArcLength = (2 * laneWidth) / ((entryRadius + exitRadius) / 2);
+
+    // Pick the last `lanesCrossed` boundaries for lane changes
+    const mergePoints: { startAngle: number; fromStrip: number; toStrip: number }[] = [];
+    if (needsLaneChange && intermediateBoundaries.length > 0) {
+        const usable = intermediateBoundaries.slice(-lanesCrossed);
+        for (let i = 0; i < usable.length; i++) {
+            mergePoints.push({
+                startAngle: usable[i].angle,
+                fromStrip: entryStripIndex + i,
+                toStrip: entryStripIndex + i + 1,
+            });
+        }
+    }
+
+    // If not enough intermediate exits, merge remaining lanes right at the start
+    const lanesHandled = mergePoints.length;
+    if (needsLaneChange && lanesHandled < lanesCrossed) {
+        const remaining = lanesCrossed - lanesHandled;
+        for (let i = 0; i < remaining; i++) {
+            // Merge immediately after entry
+            mergePoints.unshift({
+                startAngle: startAngle + singleMergeArcLength * i,
+                fromStrip: entryStripIndex + i,
+                toStrip: entryStripIndex + i + 1,
+            });
+        }
+        // Re-sort by angle
+        mergePoints.sort((a, b) => a.startAngle - b.startAngle);
+    }
+
+    // ---- Build ring points: arc segments with lane changes between them ----
+    const exitRingAngle = startAngle + deltaCW;
+    const allRingPoints: THREE.Vector3[] = [];
+
+    let currentAngle = startAngle;
+    let currentStrip = entryStripIndex;
+
+    for (const mp of mergePoints) {
+        const currentRadius = getStripMidRadius(currentStrip);
+        const nextRadius = getStripMidRadius(mp.toStrip);
+        const mergeEnd = mp.startAngle + singleMergeArcLength;
+
+        // Arc before this merge
+        if (mp.startAngle - currentAngle > 0.01) {
+            const arc = makeArc(currentAngle, mp.startAngle, currentRadius, 16);
+            allRingPoints.push(...(allRingPoints.length > 0 ? arc.slice(1) : arc));
+        }
+
+        // Lane change Bézier (1 lane, 2*laneWidth arc distance)
+        const lcStartPt = ringPoint(mp.startAngle, currentRadius);
+        const clampedMergeEnd = Math.min(mergeEnd, exitRingAngle);
+        const lcEndPt = ringPoint(clampedMergeEnd, nextRadius);
+        const lcChordLen = lcStartPt.distanceTo(lcEndPt) * 0.4;
+
+        const lc = new THREE.CubicBezierCurve3(
+            lcStartPt,
+            lcStartPt.clone().addScaledVector(cwTangent(mp.startAngle), lcChordLen),
+            lcEndPt.clone().addScaledVector(cwTangent(clampedMergeEnd), -lcChordLen),
+            lcEndPt
+        );
+        const lcPts = lc.getPoints(10);
+        allRingPoints.push(...(allRingPoints.length > 0 ? lcPts.slice(1) : lcPts));
+
+        currentAngle = clampedMergeEnd;
+        currentStrip = mp.toStrip;
+    }
+
+    // Final arc to exit
+    const finalRadius = getStripMidRadius(currentStrip);
+    if (exitRingAngle - currentAngle > 0.01) {
+        const arc = makeArc(currentAngle, exitRingAngle, finalRadius, 16);
+        allRingPoints.push(...(allRingPoints.length > 0 ? arc.slice(1) : arc));
+    }
+
+    // ---- Trim and blend ----
+    const TRIM = 5;
+    const trimmed = allRingPoints.slice(TRIM, -TRIM || undefined);
+
+    const insidePoints: THREE.Vector3[] = [];
+    const entryDir = new THREE.Vector3().subVectors(midStartL, startL).normalize();
+    const exitDir = new THREE.Vector3().subVectors(endL, midEndL).normalize();
+
+    if (trimmed.length > 0) {
+        // Entry Bézier
+        const entryTarget = trimmed[0];
+        const entryTargetAngle = Math.atan2(entryTarget.z, entryTarget.x);
+        const entryChordLen = midStartL.distanceTo(entryTarget) * 0.6;
+        const entryBlend = new THREE.CubicBezierCurve3(
+            midStartL,
+            midStartL.clone().addScaledVector(entryDir, entryChordLen),
+            entryTarget.clone().addScaledVector(cwTangent(entryTargetAngle), -entryChordLen),
+            entryTarget
+        );
+        insidePoints.push(midStartL, ...entryBlend.getPoints(12).slice(1));
+
+        // Middle ring points
+        insidePoints.push(...trimmed.slice(1));
+
+        // Exit Bézier
+        const exitSource = trimmed[trimmed.length - 1];
+        const exitSourceAngle = Math.atan2(exitSource.z, exitSource.x);
+        const exitChordLen = midEndL.distanceTo(exitSource) * 0.6;
+        const exitBlend = new THREE.CubicBezierCurve3(
+            exitSource,
+            exitSource.clone().addScaledVector(cwTangent(exitSourceAngle), exitChordLen),
+            midEndL.clone().addScaledVector(exitDir, -exitChordLen),
+            midEndL
+        );
+        insidePoints.push(...exitBlend.getPoints(12).slice(1));
+    } else {
+        // Very short path — just Bézier directly
+        const chordLen = midStartL.distanceTo(midEndL) * 0.4;
+        const directBlend = new THREE.CubicBezierCurve3(
+            midStartL,
+            midStartL.clone().addScaledVector(entryDir, chordLen),
+            midEndL.clone().addScaledVector(exitDir, -chordLen),
+            midEndL
+        );
+        insidePoints.push(midStartL, ...directBlend.getPoints(16).slice(1));
+    }
+
+    // ---- Assemble ----
     const approachL: THREE.Vector3[] = [startL, midStartL];
-
-    const insideL: THREE.Vector3[] = [
-        midStartL,
-        ...curveEntryL.getPoints(10).slice(1, -1),
-        ...circleL.slice(3, -3),
-        ...curveExitL.getPoints(10).slice(1, -1),
-        midEndL,
-    ];
-
     const exitL: THREE.Vector3[] = [midEndL, endL];
 
-    const toWorld = (arr: THREE.Vector3[]) => arr.map((p) => roundabout.localToWorld(p.clone()));
-
-    const approachW = toWorld(approachL);
-    const insideW = toWorld(insideL);
-    const exitW = toWorld(exitL);
+    const toWorld = (arr: THREE.Vector3[]) =>
+        arr.map((p) => roundabout.localToWorld(p.clone()));
 
     return {
-        approach: approachW.map(v3ToTuple),
-        inside: insideW.map(v3ToTuple),
-        exit: exitW.map(v3ToTuple),
+        approach: toWorld(approachL).map(v3ToTuple),
+        inside: toWorld(insidePoints).map(v3ToTuple),
+        exit: toWorld(exitL).map(v3ToTuple),
     };
 }
-
 /* =========================================================
    Link lane centreline helper
    ========================================================= */
@@ -519,7 +703,19 @@ export function generateAllRoutes(
                 addEdge(mainG, from, { kind: "internal", to, parts });
             };
 
-            if (numIncomingLanes === totalOutgoingLanes) {
+            if (obj.type === "roundabout") {
+                // Roundabout: each incoming lane maps 1:1 to an exit in CW order
+                // Lane 0 (left/nearside) → 1st exit, lane 1 → 2nd exit, etc.
+                // Last lane → full loop back to same exit (U-turn)
+                // Always exit on out lane 0
+                const roundaboutExits = [...availableExitIndices, eIN]; // add self as last (full loop)
+                for (let lIN = 0; lIN < numIncomingLanes; lIN++) {
+                    if (lIN < roundaboutExits.length) {
+                        const eOUT = roundaboutExits[lIN];
+                        addInternal(lIN, eOUT, 0);
+                    }
+                }
+            } else if (numIncomingLanes === totalOutgoingLanes) {
                 // Case 1: strict 1-to-1 mapping
                 let globalOutLane = 0;
                 for (const eOUT of availableExitIndices) {

@@ -47,7 +47,7 @@ export class VehicleManager {
 
     private intersectionControllers = new Map<string, IntersectionController>();
     private roundaboutControllers = new Map<string, RoundaboutController>();
-    private roundaboutMeta = new Map<string, { center: THREE.Vector3; laneMidRadii: number[]; maxStrip: number; entryAngles: Map<string, number> }>();
+    private roundaboutMeta = new Map<string, { center: THREE.Vector3; laneMidRadii: number[]; maxStrip: number; entryAngles: Map<string, number>; avgRadius: number }>();
     private controllersBuilt = false;
 
     private lastActiveLogged: number | null = null;
@@ -435,35 +435,23 @@ export class VehicleManager {
                 let leader: Vehicle | null = null;
                 let leaderGap = Infinity;
 
-                // A) Same-route leader - but use proper circular coords for roundabouts
+                // A) Same-route leader
                 if (i > 0) {
                     const sameRouteLead = routeVehicles[i - 1];
                     
-                    // If both vehicles are on the same roundabout lane, use circular gap
-                    if (isRoundaboutInside && sameRouteLead.laneKey === v.laneKey && this.isRoundaboutLaneKey(v.laneKey)) {
-                        const ringLength = this.roundaboutCircumference(this.roundaboutLaneRadiusFromKey(v.laneKey));
-                        const myCoord = this.laneCoordFromS(v, v.s);
-                        const leadCoord = this.laneCoordFromS(sameRouteLead, sameRouteLead.s);
-                        const delta = THREE.MathUtils.euclideanModulo(leadCoord - myCoord, ringLength);
-                        const gap = delta - 0.5 * (sameRouteLead.length + v.length);
-                        if (gap < leaderGap && gap > -v.length) { // allow small negative for overlap tolerance
-                            leaderGap = gap;
-                            leader = sameRouteLead;
-                        }
-                    } else if (isRoundaboutInside && sameRouteLead.currentSegment?.phase === "exit") {
-                        // Same-route leader is exiting the roundabout - follow them using linear s-coords
-                        // to prevent stacking at the segment boundary when the exit backs up
+                    if (isRoundaboutInside && sameRouteLead.currentSegment?.phase === "exit") {
+                        // Same-route leader is exiting the roundabout - follow using linear s-coords
                         const leadS = desiredS.get(sameRouteLead) ?? sameRouteLead.s;
                         const gap = (leadS - v.s) - 0.5 * (sameRouteLead.length + v.length);
                         if (gap < leaderGap && gap > -v.length) {
                             leaderGap = gap;
                             leader = sameRouteLead;
                         }
-                    } else if (!isRoundaboutInside) {
-                        // Linear s-value based gap (only for non-roundabout segments)
+                    } else {
+                        // Linear s-value based gap (works for all segments including roundabout inside)
                         const leadS = desiredS.get(sameRouteLead) ?? sameRouteLead.s;
                         const gap = (leadS - v.s) - 0.5 * (sameRouteLead.length + v.length);
-                        if (gap < leaderGap) {
+                        if (gap < leaderGap && gap > -v.length) {
                             leaderGap = gap;
                             leader = sameRouteLead;
                         }
@@ -542,14 +530,8 @@ export class VehicleManager {
                 // NOTE: No exit blocking for roundabout inside phase - let cars flow freely
                 // They will naturally follow leaders on the exit lane via normal IDM once they transition
 
-                // ROUNDABOUT EXIT LANE CROSSING CHECK
-                // When a vehicle on an inner lane is about to exit, check if outer lanes are clear
-                if (isRoundaboutInside) {
-                    const exitCrossingStop = this.checkRoundaboutExitLaneCrossing(v);
-                    if (exitCrossingStop !== null) {
-                        stoplineS = stoplineS !== null ? Math.min(stoplineS, exitCrossingStop) : exitCrossingStop;
-                    }
-                }
+                // NOTE: No exit lane crossing check needed - routing handles gradual lane
+                // merging to the outer ring before the exit point.
 
                 // If a stopline is active, treat it as a virtual leader if closer than any real leader
                 let effectiveLeader = leader;
@@ -617,22 +599,29 @@ export class VehicleManager {
                 // Hard collision prevention
                 if (leader) {
                     if (isRoundaboutInside) {
-                        // For roundabout: only use circular gap if leader is ALSO on the same roundabout lane
-                        if (leader.laneKey === v.laneKey && this.isRoundaboutLaneKey(leader.laneKey)) {
-                            const ringLength = this.roundaboutCircumference(this.roundaboutLaneRadiusFromKey(v.laneKey));
-                            const myCoord = this.laneCoordFromS(v, newS);
-                            const leaderCoord = this.laneCoordFromS(leader, desiredS.get(leader) ?? leader.s);
-                            const delta = THREE.MathUtils.euclideanModulo(leaderCoord - myCoord, ringLength);
-                            const circularGap = delta - 0.5 * (leader.length + v.length);
-                            
-                            if (circularGap < this.cfg.minBumperGap) {
-                                // Don't move forward if too close
-                                newS = v.s;
-                                v.speed = Math.max(0, Math.min(v.speed, leader.speed * 0.8));
+                        // For roundabout: lane-aware world-position collision check
+                        const myPos = this.getPointAtS(v.route, newS);
+                        const leaderPos = leader.model.position;
+                        if (myPos) {
+                            // Only enforce collision for vehicles on a similar ring lane
+                            const jId = this.roundaboutIdFromLaneKey(v.laneKey);
+                            const rMeta = this.roundaboutMeta.get(jId);
+                            let sameLane = true;
+                            if (rMeta) {
+                                const myR = Math.sqrt((myPos.x - rMeta.center.x) ** 2 + (myPos.z - rMeta.center.z) ** 2);
+                                const leadR = Math.sqrt((leaderPos.x - rMeta.center.x) ** 2 + (leaderPos.z - rMeta.center.z) ** 2);
+                                const lw = this.roundaboutLaneWidth(jId);
+                                sameLane = Math.abs(myR - leadR) < lw * 1.2;
+                            }
+                            if (sameLane) {
+                                const dist = myPos.distanceTo(leaderPos);
+                                const minDist = 0.5 * (leader.length + v.length) + this.cfg.minBumperGap;
+                                if (dist < minDist) {
+                                    newS = v.s;
+                                    v.speed = Math.max(0, Math.min(v.speed, leader.speed * 0.8));
+                                }
                             }
                         }
-                        // If leader is on exit lane (from lookahead), use the gap from IDM - no hard stop needed
-                        // The IDM acceleration model will handle smooth following
                     } else {
                         // Regular collision prevention for non-roundabout segments
                         if (leader.route === v.route) {
@@ -759,14 +748,15 @@ export class VehicleManager {
         desiredS: Map<Vehicle, number>
     ): number {
         if (follower.laneKey && follower.laneKey === leader.laneKey) {
-            // For roundabout lanes, use circular gap calculation
+            // For roundabout lanes, use world-position distance
             if (this.isRoundaboutLaneKey(follower.laneKey)) {
-                const ringLength = this.roundaboutCircumference(this.roundaboutLaneRadiusFromKey(follower.laneKey));
-                const myNewCoord = this.laneCoordFromS(follower, newS);
-                const leaderCoord = this.laneCoordFromS(leader, desiredS.get(leader) ?? leader.s);
-                // Circular delta: leader ahead of follower
-                const delta = THREE.MathUtils.euclideanModulo(leaderCoord - myNewCoord, ringLength);
-                return delta - 0.5 * (leader.length + follower.length);
+                const myPos = this.getPointAtS(follower.route, newS);
+                const leaderPos = leader.model.position;
+                if (myPos) {
+                    const dist = myPos.distanceTo(leaderPos);
+                    return dist - 0.5 * (leader.length + follower.length);
+                }
+                return Infinity;
             }
             
             // Linear lanes
@@ -826,14 +816,21 @@ export class VehicleManager {
     ): { leader: Vehicle; gap: number } | null {
         if (!v.laneKey || !this.isRoundaboutLaneKey(v.laneKey)) return null;
 
-        const ringLength = this.roundaboutCircumference(this.roundaboutLaneRadiusFromKey(v.laneKey));
-        const myCoord = this.laneCoordFromS(v, desiredS.get(v) ?? v.s);
+        const junctionId = this.roundaboutIdFromLaneKey(v.laneKey);
+        const meta = this.roundaboutMeta.get(junctionId);
+        if (!meta) return null;
 
-        // Check if current vehicle is close to exiting
-        const segDists = this.getSegmentDistances(v.route);
-        const segInfo = segDists[v.segmentIndex];
-        const distToSegEnd = Math.max(0, (segInfo?.s1 ?? 0) - v.s);
-        const isNearExit = distToSegEnd < v.length * 2; // Within 2 car lengths of exit
+        const circumference = this.roundaboutCircumference(junctionId);
+        const myCoord = this.roundaboutCoordFromS(v, desiredS.get(v) ?? v.s);
+
+        // Determine this vehicle's distance from center for lane comparison
+        const myPos = v.model.position;
+        const myDistFromCenter = Math.sqrt(
+            (myPos.x - meta.center.x) ** 2 + (myPos.z - meta.center.z) ** 2
+        );
+
+        // Lane width for filtering: only consider vehicles on a similar ring lane
+        const laneWidth = this.roundaboutLaneWidth(junctionId);
 
         let bestDelta = Infinity;
         let bestLeader: Vehicle | null = null;
@@ -841,35 +838,27 @@ export class VehicleManager {
         for (const occ of laneOccs) {
             const other = occ.v;
             if (other === v) continue;
-            
-            // Check vehicles on the same roundabout lane
-            if (other.laneKey !== v.laneKey) continue;
-            
-            // Skip vehicles that have fully exited (on link/approach phases)
+            if (other.route === v.route) continue; // same-route handled separately
+
+            // Only care about vehicles inside or exiting the roundabout
             const otherPhase = other.currentSegment?.phase;
             if (otherPhase !== "inside" && otherPhase !== "exit") continue;
 
-            // If we're near our exit, check if the other vehicle just entered
-            // (i.e., they're early in their inside segment)
-            if (isNearExit && otherPhase === "inside") {
-                const otherSegDists = this.getSegmentDistances(other.route);
-                const otherSegInfo = otherSegDists[other.segmentIndex];
-                const otherDistIntoSeg = other.s - (otherSegInfo?.s0 ?? 0);
-                const otherSegLength = (otherSegInfo?.s1 ?? 0) - (otherSegInfo?.s0 ?? 0);
-                
-                // If other vehicle just entered (less than 25% into their inside segment), skip them
-                // This means they entered at a similar angle and we're exiting - don't treat them as a leader
-                if (otherDistIntoSeg < otherSegLength * 0.25) {
-                    continue;
-                }
-            }
+            // Lane filter: skip vehicles on a different ring lane (different radius)
+            // Vehicles on inner/outer lanes are not in conflict with each other
+            const otherPos = other.model.position;
+            const otherDistFromCenter = Math.sqrt(
+                (otherPos.x - meta.center.x) ** 2 + (otherPos.z - meta.center.z) ** 2
+            );
+            const radiusDiff = Math.abs(myDistFromCenter - otherDistFromCenter);
+            if (radiusDiff > laneWidth * 1.2) continue;
 
-            const otherCoord = this.occCoord(occ, v.laneKey, desiredS);
-            const delta = THREE.MathUtils.euclideanModulo(otherCoord - myCoord, ringLength);
+            const otherCoord = this.roundaboutCoordFromS(other, desiredS.get(other) ?? other.s);
+            // CW delta: how far ahead is the other vehicle
+            const delta = THREE.MathUtils.euclideanModulo(otherCoord - myCoord, circumference);
 
-            // Only consider vehicles that are actually ahead (reasonable delta)
-            // Skip if delta is too small (overlap) or too large (almost full circle = behind)
-            if (delta > 1e-3 && delta < ringLength * 0.9 && delta < bestDelta) {
+            // Only consider vehicles that are actually ahead (not behind/overlapping)
+            if (delta > 1e-3 && delta < circumference * 0.8 && delta < bestDelta) {
                 bestDelta = delta;
                 bestLeader = other;
             }
@@ -878,8 +867,7 @@ export class VehicleManager {
         if (!bestLeader || !Number.isFinite(bestDelta)) return null;
 
         const gap = bestDelta - 0.5 * (bestLeader.length + v.length);
-        // Return even small negative gaps so IDM can handle close following
-        if (gap < -bestLeader.length) return null;  // Only skip if severely overlapping
+        if (gap < -bestLeader.length) return null; // severely overlapping
         
         return { leader: bestLeader, gap: Math.max(0.1, gap) };
     }
@@ -897,27 +885,39 @@ export class VehicleManager {
     }
 
     private roundaboutIdFromLaneKey(laneKey: string): string {
-        const parts = laneKey.split(":");
-        return parts.length >= 3 ? parts[2] : laneKey.replace("lane:roundabout:", "");
+        // lane:roundabout:UUID -> UUID
+        return laneKey.replace("lane:roundabout:", "");
     }
 
-    private roundaboutLaneIndexFromLaneKey(laneKey: string): number {
-        const parts = laneKey.split(":");
-        if (parts.length >= 4) {
-            const idx = Number(parts[3]);
-            return Number.isFinite(idx) ? idx : 0;
-        }
-        return 0;
-    }
+    /**
+     * Universal roundabout coordinate: CW angle from center × avgRadius.
+     * Works for ALL vehicles on the roundabout regardless of route or ring lane.
+     */
+    private roundaboutCoordFromWorldPos(junctionId: string, pos: THREE.Vector3): number {
+        const meta = this.roundaboutMeta.get(junctionId);
+        if (!meta) return 0;
 
-    private roundaboutCircumference(radius: number): number {
-        return Math.max(1e-6, Math.PI * 2 * Math.max(0.01, radius));
-    }
-
-    private angleToCoord(angle: number, radius: number): number {
+        const dx = pos.x - meta.center.x;
+        const dz = pos.z - meta.center.z;
+        const angle = Math.atan2(dz, dx);
         const TAU = Math.PI * 2;
         const wrapped = THREE.MathUtils.euclideanModulo(angle, TAU);
-        return wrapped * Math.max(0.01, radius);
+        return wrapped * meta.avgRadius;
+    }
+
+    private roundaboutCircumference(junctionId: string): number {
+        const meta = this.roundaboutMeta.get(junctionId);
+        if (!meta) return 1;
+        return Math.max(1e-6, Math.PI * 2 * Math.max(0.01, meta.avgRadius));
+    }
+
+    /** Compute average lane width for a roundabout from its radii metadata */
+    private roundaboutLaneWidth(junctionId: string): number {
+        const meta = this.roundaboutMeta.get(junctionId);
+        if (!meta || meta.laneMidRadii.length < 2) return 3.0;
+        return Math.abs(
+            meta.laneMidRadii[meta.laneMidRadii.length - 1] - meta.laneMidRadii[0]
+        ) / Math.max(1, meta.laneMidRadii.length - 1);
     }
 
     private getPointAtS(route: Route, sValue: number): THREE.Vector3 | null {
@@ -954,31 +954,11 @@ export class VehicleManager {
         if (!laneKey || !this.isRoundaboutLaneKey(laneKey)) return sValue;
 
         const junctionId = this.roundaboutIdFromLaneKey(laneKey);
-        const meta = this.roundaboutMeta.get(junctionId);
-        if (!meta) return sValue;
-
-        const entryLaneIndex = this.roundaboutLaneIndexFromLaneKey(laneKey);
-        const ringLaneIndex = Math.min(meta.maxStrip, Math.max(0, meta.maxStrip - entryLaneIndex));
-        const radius = meta.laneMidRadii[ringLaneIndex] ?? meta.laneMidRadii[0] ?? 1;
 
         const pos = this.getPointAtS(v.route, sValue);
         if (!pos) return sValue;
 
-        const dx = pos.x - meta.center.x;
-        const dz = pos.z - meta.center.z;
-        const angle = Math.atan2(dz, dx);
-
-        return this.angleToCoord(angle, radius);
-    }
-
-    private roundaboutLaneRadiusFromKey(laneKey: string): number {
-        const junctionId = this.roundaboutIdFromLaneKey(laneKey);
-        const meta = this.roundaboutMeta.get(junctionId);
-        if (!meta) return 1;
-
-        const entryLaneIndex = this.roundaboutLaneIndexFromLaneKey(laneKey);
-        const ringLaneIndex = Math.min(meta.maxStrip, Math.max(0, meta.maxStrip - entryLaneIndex));
-        return meta.laneMidRadii[ringLaneIndex] ?? meta.laneMidRadii[0] ?? 1;
+        return this.roundaboutCoordFromWorldPos(junctionId, pos);
     }
 
     // -----------------------
@@ -1311,17 +1291,13 @@ export class VehicleManager {
     // -----------------------
 
     private laneKeyForSegment(seg: RouteSegment): string {
-        // For roundabouts, we NEED to track "inside" phase to prevent collisions
+        // For roundabouts: single lane key per roundabout. Vehicles cross ring lanes
+        // during gradual merges, so per-ring-lane keys don't work.
         if (seg.phase === "inside") {
             const junctionId = seg.to.structureID;
             const isRoundabout = this.roundaboutControllers.has(junctionId);
             if (isRoundabout) {
-                const meta = this.roundaboutMeta.get(junctionId);
-                const ringLaneIndex = meta
-                    ? Math.min(meta.maxStrip, Math.max(0, meta.maxStrip - seg.from.laneIndex))
-                    : seg.from.laneIndex;
-
-                return `lane:roundabout:${junctionId}:${ringLaneIndex}`;
+                return `lane:roundabout:${junctionId}`;
             }
             return "";  // Normal intersection - ignore inside phase
         }
@@ -1353,7 +1329,7 @@ export class VehicleManager {
     }
 
     /**
-     * Track vehicles on roundabout rings and manage commitment state
+     * Track vehicles on roundabout and manage commitment state
      */
     private updateRoundaboutTracking(v: Vehicle) {
         const seg = v.currentSegment;
@@ -1371,20 +1347,19 @@ export class VehicleManager {
         // If vehicle is in "inside" phase on a roundabout, update its position
         if (seg.phase === "inside" && this.isRoundaboutLaneKey(v.laneKey)) {
             const pos = v.model.position.clone();
-            const laneIndex = this.roundaboutLaneIndexFromLaneKey(v.laneKey);
             
             // Get the vehicle's heading from its model rotation
             const heading = new THREE.Vector3(0, 0, 1);
             heading.applyQuaternion(v.model.quaternion);
-            heading.y = 0; // Keep it horizontal
+            heading.y = 0;
             heading.normalize();
 
-            controller.updateCirculatingVehicle(v.id, pos, v.speed, laneIndex, heading);
-            
-            // Also set the geometry if not already set
-            controller.setGeometry(meta.center);
+            // Determine actual lane index from vehicle's distance to center
+            const actualLaneIndex = controller.getLaneIndexForPosition(pos);
+            controller.updateCirculatingVehicle(v.id, pos, v.speed, actualLaneIndex, heading);
+            controller.setGeometry(meta.center, meta.laneMidRadii);
         }
-        // If vehicle has exited the roundabout (no longer inside), remove from tracking
+        // If vehicle has exited the roundabout, remove from tracking
         else if (seg.phase === "exit" || seg.phase === "link") {
             controller.removeCirculatingVehicle(v.id);
             controller.clearCommitment(v.id);
@@ -1479,7 +1454,7 @@ export class VehicleManager {
                 const meta = buildRoundaboutMeta(junctionKey, junctionGroup as THREE.Group | undefined);
                 if (meta) {
                     this.roundaboutMeta.set(junctionKey, meta);
-                    controller.setGeometry(meta.center);
+                    controller.setGeometry(meta.center, meta.laneMidRadii);
                 }
             } else {
                 this.intersectionControllers.set(
@@ -1553,9 +1528,7 @@ export class VehicleManager {
                             if (meta) {
                                 const entryAngle = meta.entryAngles.get(entryKey);
                                 if (entryAngle !== undefined) {
-                                    const entryLaneIndex = nextSeg.from.laneIndex;
-                                    const ringLaneIndex = Math.min(meta.maxStrip, Math.max(0, meta.maxStrip - entryLaneIndex));
-                                    const radius = meta.laneMidRadii[ringLaneIndex] ?? meta.laneMidRadii[0] ?? 1;
+                                    const radius = meta.avgRadius;
                                     
                                     const canEnter = roundaboutController.canEnterSafely(entryAngle, radius, entryKey);
                                     
@@ -1695,19 +1668,18 @@ export class VehicleManager {
             return targetSpeed;
         }
 
-        // Get entry parameters for gap checking (need these before commitment check)
+        // Get entry parameters for gap checking
         const entryAngle = meta.entryAngles.get(entryKey);
         if (entryAngle === undefined) return targetSpeed;
 
-        const entryLaneIndex = seg.from.laneIndex;
-        const ringLaneIndex = Math.min(meta.maxStrip, Math.max(0, meta.maxStrip - entryLaneIndex));
-        const radius = meta.laneMidRadii[ringLaneIndex] ?? meta.laneMidRadii[0] ?? 1;
+        // Use average radius - vehicle crosses all lanes at entry point
+        const radius = meta.avgRadius;
 
-        // Check if safe to enter using the new gap-based logic
+        // Check if safe to enter using gap-based logic
         const canEnter = controller.canEnterSafely(entryAngle, radius, entryKey);
 
-        // Also check for vehicles physically present on the ring
-        const physicalClear = this.isRoundaboutEntryClear(v, junctionKey, entryKey, entryLaneIndex, lanes);
+        // Also check for vehicles physically present on the roundabout
+        const physicalClear = this.isRoundaboutEntryClear(v, junctionKey, entryKey, 0, lanes);
 
         if (canEnter && physicalClear) {
             // Gap is available!
@@ -1740,7 +1712,9 @@ export class VehicleManager {
     }
 
     /**
-     * Check if there are vehicles physically blocking the entry point on the ring
+     * Check if there are vehicles physically blocking the entry point on the roundabout.
+     * Lane-aware: uses the outer lane radius for the entry position and applies
+     * different gap thresholds for outer-lane vs inner-lane vehicles.
      */
     private isRoundaboutEntryClear(
         v: Vehicle,
@@ -1755,34 +1729,43 @@ export class VehicleManager {
         const entryAngle = meta.entryAngles.get(entryKey);
         if (entryAngle === undefined) return true;
 
-        const ringLaneIndex = Math.min(meta.maxStrip, Math.max(0, meta.maxStrip - entryLaneIndex));
-        const laneKey = `lane:roundabout:${junctionKey}:${ringLaneIndex}`;
+        const laneKey = `lane:roundabout:${junctionKey}`;
         const occs = lanes.get(laneKey) ?? [];
-        
         if (occs.length === 0) return true;
 
-        const radius = this.roundaboutLaneRadiusFromKey(laneKey);
-        
-        // Calculate entry position in world coordinates
+        // Entry position at the OUTER lane radius (where the vehicle physically crosses)
+        const outerRadius = meta.laneMidRadii.length > 0
+            ? meta.laneMidRadii[meta.laneMidRadii.length - 1]
+            : meta.avgRadius;
         const entryPosition = new THREE.Vector3(
-            meta.center.x + Math.cos(entryAngle) * radius,
+            meta.center.x + Math.cos(entryAngle) * outerRadius,
             meta.center.y,
-            meta.center.z + Math.sin(entryAngle) * radius
+            meta.center.z + Math.sin(entryAngle) * outerRadius
         );
-        
-        // Conservative gap requirements
-        const minDistGap = Math.max(v.length * 3, 6); // minimum physical distance (3 car lengths)
+
+        // Lane-aware gap: larger for outer-lane vehicles, minimal for inner-lane
+        const laneWidth = this.roundaboutLaneWidth(junctionKey);
+        const outerLaneGap = Math.max(v.length * 2, 4);
+        const innerLaneGap = v.length * 0.8;
 
         for (const occ of occs) {
             const other = occ.v;
             if (other.id === v.id) continue;
 
-            // Simple distance check using actual positions
             const distance = other.model.position.distanceTo(entryPosition);
-            
-            // Block if ANY vehicle is within minimum distance
-            if (distance < minDistGap) {
-                return false;
+
+            // Determine which lane this circulating vehicle is on
+            const otherDistFromCenter = Math.sqrt(
+                (other.model.position.x - meta.center.x) ** 2 +
+                (other.model.position.z - meta.center.z) ** 2
+            );
+            const isOnOuterLane = Math.abs(otherDistFromCenter - outerRadius) < laneWidth * 0.6;
+
+            if (isOnOuterLane) {
+                if (distance < outerLaneGap) return false;
+            } else {
+                // Inner-lane vehicle: only physical collision risk
+                if (distance < innerLaneGap) return false;
             }
         }
 
@@ -1854,12 +1837,10 @@ export class VehicleManager {
             if (meta) {
                 const entryAngle = meta.entryAngles.get(entryKey);
                 if (entryAngle !== undefined) {
-                    const entryLaneIndex = nextSeg.from.laneIndex;
-                    const ringLaneIndex = Math.min(meta.maxStrip, Math.max(0, meta.maxStrip - entryLaneIndex));
-                    const radius = meta.laneMidRadii[ringLaneIndex] ?? meta.laneMidRadii[0] ?? 1;
+                    const radius = meta.avgRadius;
                     
                     const canEnter = controller.canEnterSafely(entryAngle, radius, entryKey);
-                    const physicalClear = this.isRoundaboutEntryClear(v, junctionKey, entryKey, entryLaneIndex, lanes);
+                    const physicalClear = this.isRoundaboutEntryClear(v, junctionKey, entryKey, 0, lanes);
                     
                     return { stoplineS, shouldStop: !(canEnter && physicalClear) };
                 }
@@ -1971,74 +1952,6 @@ export class VehicleManager {
         const reserveThreshold = Math.max(v.length * 1.5, this.cfg.minBumperGap * 2, 3);
 
         return distToSegEnd <= reserveThreshold;
-    }
-
-    /**
-     * Check if a vehicle on an outer lane can safely exit without cutting off inner lane vehicles.
-     * Outer lanes yield to inner lanes when exiting (inner lanes have priority).
-     * Returns a stopS value if the vehicle should stop before exiting, null otherwise.
-     */
-    private checkRoundaboutExitLaneCrossing(v: Vehicle): number | null {
-        if (v.currentSegment?.phase !== "inside") return null;
-        if (!this.isRoundaboutLaneKey(v.laneKey)) return null;
-
-        // Get the lane index from the lane key
-        const laneIndex = this.roundaboutLaneIndexFromLaneKey(v.laneKey);
-        
-        // Get the roundabout ID and meta to find max lane index
-        const junctionId = this.roundaboutIdFromLaneKey(v.laneKey);
-        const meta = this.roundaboutMeta.get(junctionId);
-        const maxLaneIndex = meta?.maxStrip ?? 1;
-        
-        // ONLY outer lane vehicles (lane < maxLaneIndex) need to check for crossing
-        // Innermost lane vehicles have priority and don't yield
-        if (laneIndex >= maxLaneIndex) return null;
-        
-        // Check how close we are to the exit
-        const segDists = this.getSegmentDistances(v.route);
-        const segInfo = segDists[v.segmentIndex];
-        if (!segInfo) return null;
-
-        const distToSegEnd = Math.max(0, (segInfo.s1 ?? 0) - v.s);
-        
-        // Only check when close to exit
-        const checkThreshold = Math.max(v.length * 2, 8);
-        if (distToSegEnd > checkThreshold) return null;
-
-        // Get the exit position (end of current segment)
-        const exitPosition = this.getPointAtS(v.route, segInfo.s1 ?? v.s);
-        if (!exitPosition) return null;
-
-        // Check if any vehicle on an INNER lane (higher index) is near our exit point
-        const MIN_CROSSING_GAP = 5; // Minimum distance to inner lane vehicle at exit point
-        
-        for (const otherV of this.vehicles) {
-            if (otherV.id === v.id) continue;
-            if (otherV.currentSegment?.phase !== "inside") continue;
-            if (!this.isRoundaboutLaneKey(otherV.laneKey)) continue;
-            
-            // Check if this vehicle is on the same roundabout
-            const otherJunctionId = this.roundaboutIdFromLaneKey(otherV.laneKey);
-            if (otherJunctionId !== junctionId) continue;
-            
-            // Get the other vehicle's lane
-            const otherLaneIndex = this.roundaboutLaneIndexFromLaneKey(otherV.laneKey);
-            
-            // ONLY check vehicles on INNER lanes (higher index than us)
-            // They have priority - we must yield to them
-            if (otherLaneIndex <= laneIndex) continue;
-            
-            // Check distance from the other vehicle to our exit point
-            const distToExit = otherV.model.position.distanceTo(exitPosition);
-            
-            if (distToExit < MIN_CROSSING_GAP) {
-                // Vehicle on inner lane is too close to our exit point - wait
-                const stopS = (segInfo.s1 ?? 0) - v.length * 0.5 - this.cfg.stopLineOffset;
-                return stopS;
-            }
-        }
-
-        return null;
     }
 
     
