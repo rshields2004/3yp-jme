@@ -2,12 +2,11 @@ import * as THREE from "three";
 import { LightColour } from "../../types/simulation";
 
 /**
- * RoundaboutController with lane-aware position-based collision detection.
+ * RoundaboutController with position-based collision detection.
  *
  * Uses actual world positions for gap checking and tracks vehicles
- * per ring lane. Entering vehicles only need a clear gap on the outer
- * lane they physically cross, so inner-lane circulating traffic no
- * longer causes false conflicts or abrupt stops during lane merges.
+ * per ring lane. Entering vehicles must have a clear gap on ALL
+ * circulating lanes, since the entry path crosses every ring lane.
  */
 export class RoundaboutController {
     id: string;
@@ -42,11 +41,11 @@ export class RoundaboutController {
     private numLanes = 1;
     private laneWidth = 3.0;
 
-    private readonly MIN_GAP_DISTANCE = 1;       // Minimum distance to any circulating vehicle
-    private readonly MIN_TIME_GAP = 1.0;         // Seconds buffer for approaching vehicles
-    private readonly SAFE_ENTRY_DISTANCE = 1;   // Check approaching vehicles within this distance
+    private readonly MIN_GAP_DISTANCE = 2;       // Minimum distance to any circulating vehicle (~1 car length)
+    private readonly MIN_TIME_GAP = 1.5;         // Seconds buffer for approaching vehicles
+    private readonly SAFE_ENTRY_DISTANCE = 20;   // Check approaching vehicles within this distance
     private readonly ENTRY_TIMEOUT = 1.0;
-    private readonly MIN_ANGULAR_SEPARATION = Math.PI / 3;
+    private readonly MIN_ANGULAR_SEPARATION = Math.PI / 4;
 
     constructor(id: string, entryKeys: string[]) {
         this.id = id;
@@ -189,36 +188,49 @@ export class RoundaboutController {
             return true;
         }
 
-        // Lane-aware gap checking: entering vehicles physically cross the outer lane.
-        // Outer-lane vehicles get a full gap check; inner-lane vehicles only need a
-        // tight physical-collision check since they are on a different ring strip.
-        const outerLaneIndex = this.getOuterLaneIndex();
+        // Entering vehicles cross ALL ring lanes, so every circulating
+        // vehicle — inner or outer — must be checked with the full gap
+        // threshold.  We also check proximity at each lane radius so that
+        // an inner-lane vehicle approaching from the right is detected
+        // even when it is far from the outer-lane entry point.
 
         for (const [, info] of this.circulating) {
-            const distance = info.position.distanceTo(entryPosition);
-            const isOnOuterLane = info.laneIndex === outerLaneIndex;
+            // Distance from the circulating vehicle to the entry point on
+            // its OWN lane radius (more accurate than always using the
+            // outer-lane entry point, which under-estimates proximity for
+            // inner-lane traffic).
+            const laneRadius = this.laneMidRadii[info.laneIndex] ?? this.getOuterLaneRadius();
+            const laneEntryPos = new THREE.Vector3(
+                this.center.x + Math.cos(Math.atan2(
+                    entryPosition.z - this.center.z,
+                    entryPosition.x - this.center.x
+                )) * laneRadius,
+                this.center.y,
+                this.center.z + Math.sin(Math.atan2(
+                    entryPosition.z - this.center.z,
+                    entryPosition.x - this.center.x
+                )) * laneRadius
+            );
 
-            if (isOnOuterLane) {
-                // Full gap check for vehicles on the outer lane (entry path crosses this)
-                if (distance < this.MIN_GAP_DISTANCE) {
-                    return false;
-                }
+            const distance = info.position.distanceTo(laneEntryPos);
 
-                if (distance < this.SAFE_ENTRY_DISTANCE) {
-                    const toEntry = new THREE.Vector3().subVectors(entryPosition, info.position);
-                    const dotProduct = toEntry.dot(info.heading);
+            // Hard minimum gap — no vehicle may be this close regardless of
+            // heading or speed.
+            if (distance < this.MIN_GAP_DISTANCE) {
+                return false;
+            }
 
-                    if (dotProduct > 0) {
-                        const timeToReach = distance / Math.max(0.5, info.speed);
-                        if (timeToReach < this.MIN_TIME_GAP) {
-                            return false;
-                        }
+            // Time-gap check: is this vehicle heading toward the crossing
+            // point and will arrive within MIN_TIME_GAP seconds?
+            if (distance < this.SAFE_ENTRY_DISTANCE) {
+                const toEntry = new THREE.Vector3().subVectors(laneEntryPos, info.position);
+                const dotProduct = toEntry.dot(info.heading);
+
+                if (dotProduct > 0) {
+                    const timeToReach = distance / Math.max(0.5, info.speed);
+                    if (timeToReach < this.MIN_TIME_GAP) {
+                        return false;
                     }
-                }
-            } else {
-                // Inner-lane vehicles: only block on actual physical collision risk
-                if (distance < this.MIN_GAP_DISTANCE * 0.5) {
-                    return false;
                 }
             }
         }

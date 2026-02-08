@@ -259,7 +259,7 @@ export default function DebugPanel() {
 
             // Clamp to not exceed the lanes available from other exits
             if (thisObj.type === "roundabout") {
-                clamped = Math.min(clamped, thisObj.config.numExits);
+                clamped = Math.min(clamped, thisObj.config.numExits - 1);
             }
             else {
                 clamped = Math.min(clamped, totalLanesOutFromOtherExits);

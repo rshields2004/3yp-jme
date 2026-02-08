@@ -440,9 +440,22 @@ export class VehicleManager {
                     const sameRouteLead = routeVehicles[i - 1];
                     
                     if (isRoundaboutInside && sameRouteLead.currentSegment?.phase === "exit") {
-                        // Same-route leader is exiting the roundabout - follow using linear s-coords
+                        // Same-route leader is exiting — use world-position distance.
+                        // The s-delta can be misleading here because the exit arm Bézier
+                        // curves away from the ring, so physical distance better reflects
+                        // actual inter-vehicle clearance.
+                        const myPos = v.model.position;
+                        const leadPos = sameRouteLead.model.position;
+                        const worldDist = myPos.distanceTo(leadPos);
+                        const worldGap = worldDist - 0.5 * (sameRouteLead.length + v.length);
+
+                        // Also compute s-gap as a cross-check
                         const leadS = desiredS.get(sameRouteLead) ?? sameRouteLead.s;
-                        const gap = (leadS - v.s) - 0.5 * (sameRouteLead.length + v.length);
+                        const sGap = (leadS - v.s) - 0.5 * (sameRouteLead.length + v.length);
+
+                        // Take the LARGER (more optimistic) gap — if world distance is
+                        // large the paths are diverging and the s-gap overstates conflict.
+                        const gap = Math.max(worldGap, sGap);
                         if (gap < leaderGap && gap > -v.length) {
                             leaderGap = gap;
                             leader = sameRouteLead;
@@ -603,22 +616,29 @@ export class VehicleManager {
                         const myPos = this.getPointAtS(v.route, newS);
                         const leaderPos = leader.model.position;
                         if (myPos) {
-                            // Only enforce collision for vehicles on a similar ring lane
                             const jId = this.roundaboutIdFromLaneKey(v.laneKey);
                             const rMeta = this.roundaboutMeta.get(jId);
-                            let sameLane = true;
+                            let shouldCheck = true;
                             if (rMeta) {
                                 const myR = Math.sqrt((myPos.x - rMeta.center.x) ** 2 + (myPos.z - rMeta.center.z) ** 2);
                                 const leadR = Math.sqrt((leaderPos.x - rMeta.center.x) ** 2 + (leaderPos.z - rMeta.center.z) ** 2);
                                 const lw = this.roundaboutLaneWidth(jId);
-                                sameLane = Math.abs(myR - leadR) < lw * 1.2;
+                                const outerR = rMeta.laneMidRadii.length > 0
+                                    ? rMeta.laneMidRadii[rMeta.laneMidRadii.length - 1]
+                                    : rMeta.avgRadius;
+
+                                // Skip if leader is off the ring (diverging to exit arm)
+                                if (leadR > outerR + lw * 1.5) shouldCheck = false;
+                                // Skip if on clearly different ring lanes
+                                else if (Math.abs(myR - leadR) > lw * 1.5) shouldCheck = false;
                             }
-                            if (sameLane) {
+                            if (shouldCheck) {
                                 const dist = myPos.distanceTo(leaderPos);
                                 const minDist = 0.5 * (leader.length + v.length) + this.cfg.minBumperGap;
                                 if (dist < minDist) {
-                                    newS = v.s;
-                                    v.speed = Math.max(0, Math.min(v.speed, leader.speed * 0.8));
+                                    // Smooth deceleration: match leader speed instead of abrupt freeze
+                                    v.speed = Math.min(v.speed, Math.max(0, leader.speed));
+                                    newS = v.s + v.speed * dt;
                                 }
                             }
                         }
@@ -820,19 +840,29 @@ export class VehicleManager {
         const meta = this.roundaboutMeta.get(junctionId);
         if (!meta) return null;
 
-        const circumference = this.roundaboutCircumference(junctionId);
-        const myCoord = this.roundaboutCoordFromS(v, desiredS.get(v) ?? v.s);
-
-        // Determine this vehicle's distance from center for lane comparison
-        const myPos = v.model.position;
-        const myDistFromCenter = Math.sqrt(
-            (myPos.x - meta.center.x) ** 2 + (myPos.z - meta.center.z) ** 2
-        );
-
-        // Lane width for filtering: only consider vehicles on a similar ring lane
         const laneWidth = this.roundaboutLaneWidth(junctionId);
 
-        let bestDelta = Infinity;
+        // Ring radius bounds — vehicles must be within this to count as "on the ring"
+        const outerR = meta.laneMidRadii.length > 0
+            ? meta.laneMidRadii[meta.laneMidRadii.length - 1]
+            : meta.avgRadius;
+        const innerR = meta.laneMidRadii.length > 0
+            ? meta.laneMidRadii[0]
+            : meta.avgRadius;
+        const ringTolerance = laneWidth * 1.5;
+
+        // Use actual model position (always up-to-date) instead of s → world interpolation
+        const myPos = v.model.position;
+        const myDx = myPos.x - meta.center.x;
+        const myDz = myPos.z - meta.center.z;
+        const myR = Math.sqrt(myDx * myDx + myDz * myDz);
+        const myAngle = Math.atan2(myDz, myDx);
+
+        // If this vehicle is already off the ring (exit blend), skip ring leader search
+        if (myR > outerR + ringTolerance || myR < innerR - ringTolerance) return null;
+
+        const TAU = Math.PI * 2;
+        let bestWorldDist = Infinity;
         let bestLeader: Vehicle | null = null;
 
         for (const occ of laneOccs) {
@@ -840,36 +870,54 @@ export class VehicleManager {
             if (other === v) continue;
             if (other.route === v.route) continue; // same-route handled separately
 
-            // Only care about vehicles inside or exiting the roundabout
+            // Only consider vehicles still genuinely on the ring ("inside" phase).
+            // Vehicles in "exit" phase are diverging off — not a ring conflict.
             const otherPhase = other.currentSegment?.phase;
-            if (otherPhase !== "inside" && otherPhase !== "exit") continue;
+            if (otherPhase !== "inside") continue;
 
-            // Lane filter: skip vehicles on a different ring lane (different radius)
-            // Vehicles on inner/outer lanes are not in conflict with each other
             const otherPos = other.model.position;
-            const otherDistFromCenter = Math.sqrt(
-                (otherPos.x - meta.center.x) ** 2 + (otherPos.z - meta.center.z) ** 2
+            const otherDx = otherPos.x - meta.center.x;
+            const otherDz = otherPos.z - meta.center.z;
+            const otherR = Math.sqrt(otherDx * otherDx + otherDz * otherDz);
+
+            // Skip vehicles that have drifted off the ring (on exit-blend portion)
+            if (otherR > outerR + ringTolerance || otherR < innerR - ringTolerance) continue;
+
+            // Lane filter: skip vehicles on a clearly different ring lane
+            if (Math.abs(myR - otherR) > laneWidth * 1.5) continue;
+
+            // Angular ordering: is the other vehicle CW-ahead?
+            const otherAngle = Math.atan2(otherDz, otherDx);
+            const angularDelta = THREE.MathUtils.euclideanModulo(otherAngle - myAngle, TAU);
+            if (angularDelta < 0.01 || angularDelta > TAU * 0.8) continue;
+
+            // Heading filter: skip vehicles whose heading diverges from the ring
+            // tangent. A vehicle on the exit blend has its heading pointing radially
+            // outward rather than following the CW ring direction.
+            const otherFwd = new THREE.Vector3(
+                Math.sin(other.model.rotation.y), 0, Math.cos(other.model.rotation.y)
             );
-            const radiusDiff = Math.abs(myDistFromCenter - otherDistFromCenter);
-            if (radiusDiff > laneWidth * 1.2) continue;
+            const ringTangentCW = new THREE.Vector3(
+                -Math.sin(otherAngle), 0, Math.cos(otherAngle)
+            );
+            const tangentAlignment = otherFwd.dot(ringTangentCW);
+            if (tangentAlignment < 0.5) continue; // heading away from ring → exiting
 
-            const otherCoord = this.roundaboutCoordFromS(other, desiredS.get(other) ?? other.s);
-            // CW delta: how far ahead is the other vehicle
-            const delta = THREE.MathUtils.euclideanModulo(otherCoord - myCoord, circumference);
-
-            // Only consider vehicles that are actually ahead (not behind/overlapping)
-            if (delta > 1e-3 && delta < circumference * 0.8 && delta < bestDelta) {
-                bestDelta = delta;
+            // Use world-position distance as the gap measure.
+            // This is reliable at all positions including near exit transitions.
+            const worldDist = myPos.distanceTo(otherPos);
+            if (worldDist < bestWorldDist) {
+                bestWorldDist = worldDist;
                 bestLeader = other;
             }
         }
 
-        if (!bestLeader || !Number.isFinite(bestDelta)) return null;
+        if (!bestLeader || !Number.isFinite(bestWorldDist)) return null;
 
-        const gap = bestDelta - 0.5 * (bestLeader.length + v.length);
-        if (gap < -bestLeader.length) return null; // severely overlapping
-        
-        return { leader: bestLeader, gap: Math.max(0.1, gap) };
+        const gap = bestWorldDist - 0.5 * (bestLeader.length + v.length);
+        if (gap <= 0) return null; // overlapping — let hard collision handler deal with it
+
+        return { leader: bestLeader, gap };
     }
 
     private approachSpeed(current: number, target: number, dt: number, vehicle: Vehicle): number {
@@ -1733,40 +1781,30 @@ export class VehicleManager {
         const occs = lanes.get(laneKey) ?? [];
         if (occs.length === 0) return true;
 
-        // Entry position at the OUTER lane radius (where the vehicle physically crosses)
-        const outerRadius = meta.laneMidRadii.length > 0
-            ? meta.laneMidRadii[meta.laneMidRadii.length - 1]
-            : meta.avgRadius;
-        const entryPosition = new THREE.Vector3(
-            meta.center.x + Math.cos(entryAngle) * outerRadius,
-            meta.center.y,
-            meta.center.z + Math.sin(entryAngle) * outerRadius
-        );
-
-        // Lane-aware gap: larger for outer-lane vehicles, minimal for inner-lane
-        const laneWidth = this.roundaboutLaneWidth(junctionKey);
-        const outerLaneGap = Math.max(v.length * 2, 4);
-        const innerLaneGap = v.length * 0.8;
+        // Entering vehicles cross ALL ring lanes, so we must check every
+        // circulating vehicle with the same gap threshold.  For each vehicle
+        // we compute proximity on its own lane radius for accuracy.
+        const clearanceGap = Math.max(v.length * 2, 4);
 
         for (const occ of occs) {
             const other = occ.v;
             if (other.id === v.id) continue;
 
-            const distance = other.model.position.distanceTo(entryPosition);
-
-            // Determine which lane this circulating vehicle is on
+            // Compute the entry crossing point on THIS vehicle's ring lane
+            // so inner-lane proximity is measured accurately.
+            const otherPos = other.model.position;
             const otherDistFromCenter = Math.sqrt(
-                (other.model.position.x - meta.center.x) ** 2 +
-                (other.model.position.z - meta.center.z) ** 2
+                (otherPos.x - meta.center.x) ** 2 +
+                (otherPos.z - meta.center.z) ** 2
             );
-            const isOnOuterLane = Math.abs(otherDistFromCenter - outerRadius) < laneWidth * 0.6;
+            const laneEntryPos = new THREE.Vector3(
+                meta.center.x + Math.cos(entryAngle) * otherDistFromCenter,
+                meta.center.y,
+                meta.center.z + Math.sin(entryAngle) * otherDistFromCenter
+            );
 
-            if (isOnOuterLane) {
-                if (distance < outerLaneGap) return false;
-            } else {
-                // Inner-lane vehicle: only physical collision risk
-                if (distance < innerLaneGap) return false;
-            }
+            const distance = otherPos.distanceTo(laneEntryPos);
+            if (distance < clearanceGap) return false;
         }
 
         return true;

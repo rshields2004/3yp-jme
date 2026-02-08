@@ -228,12 +228,34 @@ function generateRoundaboutPathParts(
     if (entry.exitIndex === exit.exitIndex) deltaCW = TAU;
     if (deltaCW < 0.05 && entry.exitIndex !== exit.exitIndex) deltaCW = TAU;
 
-    // ---- Lane selection based on entry lane ----
+    // ---- Lane selection based on exit ordinal position (CW from entry) ----
+    // Count how many exits with outgoing lanes exist between entry and each
+    // candidate, then pick the ring lane that corresponds.
+    //   1st exit (nearest CW) → outermost lane
+    //   2nd exit              → next lane inward
+    //   …
+    //   last / same-exit      → innermost available lane
+    const exitOrdinal = (() => {
+        // Build the ordered list of exits CW from entry (same order used in routing)
+        const orderedExits: number[] = [];
+        for (let offset = 1; offset < numExits; offset++) {
+            const e = (entry.exitIndex + offset) % numExits;
+            const numOutLanes = exitConfigs[e].laneCount - exitConfigs[e].numLanesIn;
+            if (numOutLanes > 0) orderedExits.push(e);
+        }
+        // Full-loop U-turn counts as the last position
+        orderedExits.push(entry.exitIndex);
+
+        const idx = orderedExits.indexOf(exit.exitIndex);
+        return idx >= 0 ? idx : orderedExits.length - 1;
+    })();
+
     let entryStripIndex: number;
     if (numRingStrips <= 1) {
         entryStripIndex = 0;
     } else {
-        const depth = Math.min(entry.laneIndex, numRingStrips - 1);
+        // Clamp the ordinal so it doesn't exceed the available ring lanes
+        const depth = Math.min(exitOrdinal, numRingStrips - 1);
         entryStripIndex = outermostStrip - depth;
     }
     const exitStripIndex = outermostStrip;
@@ -397,7 +419,7 @@ function generateRoundaboutPathParts(
     }
 
     // ---- Trim and blend ----
-    const TRIM = 5;
+    const TRIM = 3;
     const trimmed = allRingPoints.slice(TRIM, -TRIM || undefined);
 
     const insidePoints: THREE.Vector3[] = [];
@@ -703,19 +725,20 @@ export function generateAllRoutes(
                 addEdge(mainG, from, { kind: "internal", to, parts });
             };
 
-            if (obj.type === "roundabout") {
-                // Roundabout: each incoming lane maps 1:1 to an exit in CW order
-                // Lane 0 (left/nearside) → 1st exit, lane 1 → 2nd exit, etc.
-                // Last lane → full loop back to same exit (U-turn)
-                // Always exit on out lane 0
-                const roundaboutExits = [...availableExitIndices, eIN]; // add self as last (full loop)
-                for (let lIN = 0; lIN < numIncomingLanes; lIN++) {
-                    if (lIN < roundaboutExits.length) {
-                        const eOUT = roundaboutExits[lIN];
-                        addInternal(lIN, eOUT, 0);
-                    }
-                }
-            } else if (numIncomingLanes === totalOutgoingLanes) {
+            // if (obj.type === "roundabout") {
+            //     // Roundabout: each incoming lane maps 1:1 to an exit in CW order
+            //     // Lane 0 (left/nearside) → 1st exit, lane 1 → 2nd exit, etc.
+            //     // Last lane → full loop back to same exit (U-turn)
+            //     // Always exit on out lane 0
+            //     const roundaboutExits = [...availableExitIndices, eIN]; // add self as last (full loop)
+            //     for (let lIN = 0; lIN < numIncomingLanes; lIN++) {
+            //         if (lIN < roundaboutExits.length) {
+            //             const eOUT = roundaboutExits[lIN];
+            //             addInternal(lIN, eOUT, 0);
+            //         }
+            //     }
+            // }
+             if (numIncomingLanes === totalOutgoingLanes) {
                 // Case 1: strict 1-to-1 mapping
                 let globalOutLane = 0;
                 for (const eOUT of availableExitIndices) {
