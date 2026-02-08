@@ -10,7 +10,7 @@ import { carFiles } from "../includes/types/carTypes";
 import { VehicleManager } from "../includes/junctionmanagerutils/vehicleManager";
 import { ThickLineHandle } from "./ThickLine";
 import { Billboard, Html } from "@react-three/drei";
-import { Route, SimulationStats, Tuple3 } from "../includes/types/simulation";
+import { Route, SimConfig, SimulationStats, Tuple3 } from "../includes/types/simulation";
 import { applyIntersectionStopLineColours, loadCarModels } from "../includes/junctionmanagerutils/helpers/simulationHelpers";
 
 // Global cache for car models (persists across simulation restarts)
@@ -88,11 +88,13 @@ function SpawnRateLabels({
     positionsCache,
     stats,
     routes,
+    simConfig,
 }: {
     junctionGroups: THREE.Group[];
     stats: SimulationStats;
     positionsCache: Map<string, THREE.Vector3>;
     routes: any[]; // Route array from vehicle manager
+    simConfig: SimConfig;
 }) {
     // Helper function to check if an exit is a spawn point (has routes starting from it)
     const isSpawnPoint = (structureID: string, exitIndex: number): boolean => {
@@ -125,7 +127,7 @@ function SpawnRateLabels({
                         if (!exitConfig || !exitInfo) return [];
 
                         return exitConfig.map((config, exitIndex) => {
-                            const spawnRate = config.spawnRate ?? 0;
+                            const spawnRate = config.spawnRate ?? simConfig.spawnRate;
                             if (spawnRate === 0) return null; // Don't show label for zero spawn rate
 
                             // Only show label if this exit is an actual spawn point
@@ -609,6 +611,7 @@ export const TrafficSimulation = () => {
                         stats={stats}
                         positionsCache={spawnRatePositionsRef.current}
                         routes={routes}
+                        simConfig={simConfig}
                     />
                 </>
             )}

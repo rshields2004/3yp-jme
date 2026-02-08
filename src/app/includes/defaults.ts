@@ -15,12 +15,11 @@ export const defaultExitConfig = {
     laneCount: 2,
     laneWidth: 1.5,
     exitLength: 20,
-    spawnRate: 0.5, // vehicles per second
 };
 
 export const defaultSimConfig: SimConfig = {
     // Spawning
-    demandRatePerSec: 2,
+    spawnRate: 0.5,
     maxVehicles: 100,
     maxSpawnAttemptsPerFrame: 20,
     maxSpawnQueue: 25,
@@ -47,6 +46,19 @@ export const defaultSimConfig: SimConfig = {
 
     // Roundabout-specific
     roundaboutDecelZone: 20,
+
+    // Roundabout controller
+    roundaboutMinGap: 2,
+    roundaboutMinTimeGap: 1.5,
+    roundaboutSafeEntryDist: 20,
+    roundaboutEntryTimeout: 1.0,
+    roundaboutMinAngularSep: Math.PI / 6,
+
+    // Intersection controller (traffic light timings)
+    intersectionGreenTime: 8,
+    intersectionAmberTime: 1,
+    intersectionRedAmberTime: 1,
+    intersectionAllRedTime: 2,
 };
 
 export const defaultIntersectionConfig: IntersectionConfig = {
@@ -59,16 +71,10 @@ export const defaultRoundaboutConfig: RoundaboutConfig = {
     exitConfig: Array.from({ length: 3 }, () => (defaultExitConfig)),
 };
 
-export const driverSide: "left" | "right" = "left";
-
-
 export const defaultJunctionConfig: JunctionConfig = {
     junctionObjects: [],
     junctionLinks: [],
 };
-
-export const carTypes = ["coupe", "hatchback", "micro", "microcargo", "microtransport", "minibus", "mpv", "normal", "pickup", "pickup-small", "station", "van"];
-export const carColours = ["blue", "citrus", "green", "orange", "red", "silver", "violet"];
 
 export const FLOOR_Y = 0;
 

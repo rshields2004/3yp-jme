@@ -145,54 +145,6 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
         draggedGroup.position.copy(newWorldPos);
     };
 
-
-    // const setBestRotation = () => {
-
-    //     for (const link of junction.junctionLinks) {
-
-    //         const [exitRefA, exitRefB] = link.objectPair;
-
-    //         const junctionA = junctionObjectRefs.current.find(j => j.userData.id === exitRefA.structureID);
-    //         const junctionB = junctionObjectRefs.current.find(j => j.userData.id === exitRefB.structureID);
-
-    //         console.log("running");
-
-    //         if (junctionA && junctionB) {
-    //             console.log("getting here");
-    //             const localA = getExitMidpoint(junctionA.userData.exitInfo[exitRefA.exitIndex]);
-    //             const localB = getExitMidpoint(junctionB.userData.exitInfo[exitRefB.exitIndex]);
-
-    //             let best = { dist: Infinity, a: 0, b: 0};
-
-    //             for (let i = 0; i < 360; i++) {
-    //                 const aAngle = THREE.MathUtils.degToRad(i);
-    //                 for (let j = 0; j < 360; j++) {
-    //                     const bAngle = THREE.MathUtils.degToRad(j);
-
-    //                     const worldA = getWorldPoint(junctionA, localA, aAngle);
-    //                     const worldB = getWorldPoint(junctionB, localB, bAngle);
-
-    //                     const dist = worldA.distanceTo(worldB);
-    //                     if (dist < best.dist) best = { dist, a: aAngle, b: bAngle };
-    //                 }
-    //             }
-
-    //             junctionA.rotation.y += best.a;
-    //             junctionB.rotation.y += best.b;
-
-    //             console.log(`Link ${link.id} aligned. Minimal distance:`, best.dist);
-    //         }
-
-
-    //     }
-
-
-    // };
-
-
-    
-
-
     const removeObject = (objID: string) => {
         setJunction(prev => ({
             ...prev,

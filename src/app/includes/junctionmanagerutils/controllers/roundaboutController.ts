@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { LightColour } from "../../types/simulation";
+import { LightColour, SimConfig } from "../../types/simulation";
 
 /**
  * RoundaboutController with position-based collision detection.
@@ -41,15 +41,18 @@ export class RoundaboutController {
     private numLanes = 1;
     private laneWidth = 3.0;
 
-    private readonly MIN_GAP_DISTANCE = 2;       // Minimum distance to any circulating vehicle (~1 car length)
-    private readonly MIN_TIME_GAP = 1.5;         // Seconds buffer for approaching vehicles
-    private readonly SAFE_ENTRY_DISTANCE = 20;   // Check approaching vehicles within this distance
-    private readonly ENTRY_TIMEOUT = 1.0;
-    private readonly MIN_ANGULAR_SEPARATION = Math.PI / 4;
+    private readonly getCfg: () => SimConfig;
 
-    constructor(id: string, entryKeys: string[]) {
+    private get MIN_GAP_DISTANCE() { return this.getCfg().roundaboutMinGap; }
+    private get MIN_TIME_GAP() { return this.getCfg().roundaboutMinTimeGap; }
+    private get SAFE_ENTRY_DISTANCE() { return this.getCfg().roundaboutSafeEntryDist; }
+    private get ENTRY_TIMEOUT() { return this.getCfg().roundaboutEntryTimeout; }
+    private get MIN_ANGULAR_SEPARATION() { return this.getCfg().roundaboutMinAngularSep; }
+
+    constructor(id: string, entryKeys: string[], cfgGetter: () => SimConfig) {
         this.id = id;
         this.entryKeys = [...new Set(entryKeys)];
+        this.getCfg = cfgGetter;
     }
 
     setGeometry(center: THREE.Vector3, laneMidRadii?: number[]): void {

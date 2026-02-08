@@ -39,9 +39,10 @@ export class VehicleManager {
     // Cache for segment distance info (s0, s1) per route
     private routeSegmentDistances = new Map<Route, Array<{ s0: number; s1: number }>>();
     
-    // Cache for route points and spacing
+    // Cache for route points, spacing, and cumulative distances
     private routePointsCache = new Map<Route, Tuple3[]>();
     private routeSpacingCache = new Map<Route, number>();
+    private routeCumulativeDistances = new Map<Route, number[]>();
 
     private cfg: SimConfig;
 
@@ -73,7 +74,7 @@ export class VehicleManager {
         this.buildRoutesByEntry();
 
         this.cfg = {
-            demandRatePerSec: 0.8,
+            spawnRate: 0.5,
             maxVehicles: 40,
             maxSpawnAttemptsPerFrame: 6,
             maxSpawnQueue: 25,
@@ -96,6 +97,19 @@ export class VehicleManager {
 
             // Roundabout-specific config
             roundaboutDecelZone: 20,  // Start decelerating 20 units before stopline
+
+            // Roundabout controller
+            roundaboutMinGap: 2,
+            roundaboutMinTimeGap: 1.5,
+            roundaboutSafeEntryDist: 20,
+            roundaboutEntryTimeout: 1.0,
+            roundaboutMinAngularSep: Math.PI / 6,
+
+            // Intersection controller
+            intersectionGreenTime: 8,
+            intersectionAmberTime: 1,
+            intersectionRedAmberTime: 1,
+            intersectionAllRedTime: 2,
 
             ...cfg,
         };
@@ -146,6 +160,47 @@ export class VehicleManager {
         return cached;
     }
 
+    /** Compute (or return cached) cumulative arc-length distances for each route point */
+    private getRouteCumulativeDistances(route: Route): number[] {
+        let cached = this.routeCumulativeDistances.get(route);
+        if (cached) return cached;
+
+        const pts = this.getRoutePointsCached(route);
+        const cumDist: number[] = [0];
+        for (let i = 1; i < pts.length; i++) {
+            const [ax, ay, az] = pts[i - 1];
+            const [bx, by, bz] = pts[i];
+            const d = Math.sqrt((bx - ax) ** 2 + (by - ay) ** 2 + (bz - az) ** 2);
+            cumDist.push(cumDist[i - 1] + d);
+        }
+
+        this.routeCumulativeDistances.set(route, cumDist);
+        return cumDist;
+    }
+
+    /**
+     * Binary-search cumulative distances to find the point-index interval
+     * containing a given s-value.  Returns { idx, t } where the position is
+     * lerp(pts[idx], pts[idx+1], t).
+     */
+    private findIndexAtS(cumDist: number[], s: number): { idx: number; t: number } {
+        const maxS = cumDist[cumDist.length - 1];
+        const clamped = Math.max(0, Math.min(s, maxS));
+
+        // Binary search for the interval
+        let lo = 0;
+        let hi = cumDist.length - 1;
+        while (lo < hi - 1) {
+            const mid = (lo + hi) >> 1;
+            if (cumDist[mid] <= clamped) lo = mid;
+            else hi = mid;
+        }
+
+        const segLen = cumDist[lo + 1] - cumDist[lo];
+        const t = segLen > 1e-9 ? (clamped - cumDist[lo]) / segLen : 0;
+        return { idx: lo, t };
+    }
+
     /** Step 5: used by TrafficSimulation.tsx to query light state for colouring stop lines */
     public getIntersectionController(junctionId: string): IntersectionController | RoundaboutController | null {
         return this.intersectionControllers.get(junctionId) ?? this.roundaboutControllers.get(junctionId) ?? null;
@@ -191,6 +246,7 @@ export class VehicleManager {
         this.routeSegmentDistances.clear();
         this.routePointsCache.clear();
         this.routeSpacingCache.clear();
+        this.routeCumulativeDistances.clear();
 
         this.intersectionControllers.clear();
         this.roundaboutControllers.clear();
@@ -575,29 +631,18 @@ export class VehicleManager {
 
                 let newS = v.s + v.speed * dt;
 
-                // Debug: log roundabout vehicle behavior
+                // Debug: log roundabout vehicle behavior (gated behind debugLaneQueues)
                 if (isRoundaboutInside && this.cfg.debugLaneQueues) {
-                    const segDists = this.getSegmentDistances(v.route);
-                    const segInfo = segDists[v.segmentIndex];
-                    const distToSegEnd = Math.max(0, (segInfo?.s1 ?? 0) - v.s);
-                    
-                    // Log ALL roundabout vehicles to see the flow
                     console.log("[RoundaboutDebug]", {
                         vid: v.id,
                         speed: v.speed.toFixed(2),
                         accel: accel.toFixed(2),
-                        distToExit: distToSegEnd.toFixed(1),
-                        leaderInfo: leader ? {
-                            id: leader.id,
-                            phase: leader.currentSegment?.phase,
-                            laneKey: leader.laneKey,
-                            gap: leaderGap === Infinity ? "∞" : leaderGap.toFixed(1),
-                            speed: leader.speed.toFixed(2)
-                        } : "none",
-                        myLaneKey: v.laneKey,
                         desiredSpeedCap: desiredSpeedCap.toFixed(2),
-                        effectiveLeaderGap: effectiveLeaderGap === Infinity ? "∞" : effectiveLeaderGap.toFixed(1),
-                        effectiveLeaderSpeed: effectiveLeaderSpeed?.toFixed(2) ?? "null",
+                        leader: leader ? {
+                            id: leader.id,
+                            gap: leaderGap === Infinity ? "∞" : leaderGap.toFixed(1),
+                            speed: leader.speed.toFixed(2),
+                        } : "none",
                     });
                 }
 
@@ -629,8 +674,12 @@ export class VehicleManager {
 
                                 // Skip if leader is off the ring (diverging to exit arm)
                                 if (leadR > outerR + lw * 1.5) shouldCheck = false;
-                                // Skip if on clearly different ring lanes
-                                else if (Math.abs(myR - leadR) > lw * 1.5) shouldCheck = false;
+                                // Skip if on non-adjacent ring lanes (allow ±1 for merge zones)
+                                else if (rMeta.laneMidRadii.length >= 2) {
+                                    const myLane = this.nearestRingLaneIndex(rMeta.laneMidRadii, myR);
+                                    const leadLane = this.nearestRingLaneIndex(rMeta.laneMidRadii, leadR);
+                                    if (Math.abs(myLane - leadLane) > 1) shouldCheck = false;
+                                }
                             }
                             if (shouldCheck) {
                                 const dist = myPos.distanceTo(leaderPos);
@@ -656,6 +705,59 @@ export class VehicleManager {
                             if (newGap < this.cfg.minBumperGap) {
                                 newS = v.s;
                                 v.speed = 0;
+                            }
+                        }
+                    }
+                }
+
+                // Unconditional world-space overlap prevention for roundabout vehicles.
+                // Catches lateral conflicts (lane-changes into occupied space) that
+                // leader-following can't detect because the other vehicle is beside us,
+                // not ahead.  ASYMMETRIC: only the vehicle that is angularly BEHIND
+                // yields, preventing mutual-deceleration death spirals.
+                if (isRoundaboutInside && v.laneKey) {
+                    const jId = this.roundaboutIdFromLaneKey(v.laneKey);
+                    const rMeta = this.roundaboutMeta.get(jId);
+                    if (rMeta) {
+                        const myPos = this.getPointAtS(v.route, newS) ?? v.model.position;
+                        const myDx = myPos.x - rMeta.center.x;
+                        const myDz = myPos.z - rMeta.center.z;
+                        const myAngle = Math.atan2(myDz, myDx);
+                        const TAU = Math.PI * 2;
+                        const laneOccs = lanes.get(v.laneKey) ?? [];
+
+                        for (const occ of laneOccs) {
+                            const other = occ.v;
+                            if (other === v || other === leader) continue;
+                            const otherPhase = other.currentSegment?.phase;
+                            if (otherPhase !== "inside") continue;
+
+                            const otherPos = other.model.position;
+                            const dist = myPos.distanceTo(otherPos);
+                            const minDist = 0.5 * (v.length + other.length) + this.cfg.minBumperGap;
+
+                            if (dist < minDist) {
+                                // Overlap — determine who yields via angular position.
+                                // The vehicle that is angularly behind the other yields.
+                                const otherDx = otherPos.x - rMeta.center.x;
+                                const otherDz = otherPos.z - rMeta.center.z;
+                                const otherAngle = Math.atan2(otherDz, otherDx);
+                                const angDelta = THREE.MathUtils.euclideanModulo(
+                                    otherAngle - myAngle, TAU
+                                );
+
+                                // angDelta in (0,π) → other is ahead → we yield
+                                // angDelta in (π,2π) → other is behind → they yield
+                                // Near 0 → use vehicle ID as tiebreaker
+                                const iAmBehind =
+                                    (angDelta > 0.01 && angDelta < Math.PI) ||
+                                    (angDelta <= 0.01 && v.id > other.id);
+
+                                if (iAmBehind) {
+                                    v.speed = Math.min(v.speed, Math.max(0, other.speed));
+                                    newS = v.s + v.speed * dt;
+                                    break;
+                                }
                             }
                         }
                     }
@@ -861,7 +963,11 @@ export class VehicleManager {
         // If this vehicle is already off the ring (exit blend), skip ring leader search
         if (myR > outerR + ringTolerance || myR < innerR - ringTolerance) return null;
 
+        // Determine which discrete ring lane this vehicle is on
+        const myLaneIdx = this.nearestRingLaneIndex(meta.laneMidRadii, myR);
+
         const TAU = Math.PI * 2;
+        let bestArcDist = Infinity;
         let bestWorldDist = Infinity;
         let bestLeader: Vehicle | null = null;
 
@@ -883,13 +989,20 @@ export class VehicleManager {
             // Skip vehicles that have drifted off the ring (on exit-blend portion)
             if (otherR > outerR + ringTolerance || otherR < innerR - ringTolerance) continue;
 
-            // Lane filter: skip vehicles on a clearly different ring lane
-            if (Math.abs(myR - otherR) > laneWidth * 1.5) continue;
+            // Lane filter: prefer vehicles on the SAME discrete ring lane.
+            // But also consider adjacent-lane vehicles if physically very close
+            // (catches lane-changers that are merging across our path).
+            const otherLaneIdx = this.nearestRingLaneIndex(meta.laneMidRadii, otherR);
+            const laneDiff = Math.abs(otherLaneIdx - myLaneIdx);
+            if (laneDiff > 1) continue; // 2+ lanes away — never a leader
 
-            // Angular ordering: is the other vehicle CW-ahead?
+            // Angular ordering: is the other vehicle ahead in the travel direction?
+            // Ring travel increases angle (CCW in atan2 space).  Only consider
+            // vehicles within half the ring ahead — beyond that they are actually
+            // behind us travelling in the same direction.
             const otherAngle = Math.atan2(otherDz, otherDx);
             const angularDelta = THREE.MathUtils.euclideanModulo(otherAngle - myAngle, TAU);
-            if (angularDelta < 0.01 || angularDelta > TAU * 0.8) continue;
+            if (angularDelta < 0.01 || angularDelta > Math.PI) continue;
 
             // Heading filter: skip vehicles whose heading diverges from the ring
             // tangent. A vehicle on the exit blend has its heading pointing radially
@@ -903,12 +1016,30 @@ export class VehicleManager {
             const tangentAlignment = otherFwd.dot(ringTangentCW);
             if (tangentAlignment < 0.5) continue; // heading away from ring → exiting
 
-            // Use world-position distance as the gap measure.
-            // This is reliable at all positions including near exit transitions.
+            // Prefer nearest vehicle by arc distance along the ring (not world
+            // distance, which on a small ring can be shorter across the diameter
+            // than around the arc, causing incorrect leader picks).
+            // Same-lane vehicles always take priority; adjacent-lane vehicles only
+            // count if they are within a close proximity threshold (catches
+            // lane-changers merging into our path).
+            const arcDist = angularDelta * meta.avgRadius;
             const worldDist = myPos.distanceTo(otherPos);
-            if (worldDist < bestWorldDist) {
-                bestWorldDist = worldDist;
-                bestLeader = other;
+            const proximityThreshold = v.length + 2.0; // car length + buffer
+
+            if (laneDiff === 0) {
+                // Same lane — normal arc-distance-based best leader
+                if (arcDist < bestArcDist) {
+                    bestArcDist = arcDist;
+                    bestWorldDist = worldDist;
+                    bestLeader = other;
+                }
+            } else {
+                // Adjacent lane — only treat as leader if physically very close
+                if (worldDist < proximityThreshold && worldDist < bestWorldDist) {
+                    bestArcDist = arcDist;
+                    bestWorldDist = worldDist;
+                    bestLeader = other;
+                }
             }
         }
 
@@ -968,25 +1099,30 @@ export class VehicleManager {
         ) / Math.max(1, meta.laneMidRadii.length - 1);
     }
 
+    /**
+     * Find which discrete ring lane index a given radius falls into.
+     * Returns the index into `laneMidRadii` whose value is closest to `radius`.
+     */
+    private nearestRingLaneIndex(laneMidRadii: number[], radius: number): number {
+        if (laneMidRadii.length <= 1) return 0;
+        let bestIdx = 0;
+        let bestDist = Math.abs(radius - laneMidRadii[0]);
+        for (let i = 1; i < laneMidRadii.length; i++) {
+            const d = Math.abs(radius - laneMidRadii[i]);
+            if (d < bestDist) {
+                bestDist = d;
+                bestIdx = i;
+            }
+        }
+        return bestIdx;
+    }
+
     private getPointAtS(route: Route, sValue: number): THREE.Vector3 | null {
         const pts = this.getRoutePointsCached(route);
         if (!pts || pts.length < 2) return null;
 
-        const spacing = this.getRouteSpacing(route);
-        const maxS = (pts.length - 1) * spacing;
-        const clampedS = Math.max(0, Math.min(sValue, maxS));
-
-        const idxFloat = clampedS / spacing;
-        let idx = Math.floor(idxFloat);
-        let t = idxFloat - idx;
-
-        if (idx >= pts.length - 1) {
-            idx = pts.length - 2;
-            t = 1;
-        } else if (idx < 0) {
-            idx = 0;
-            t = 0;
-        }
+        const cumDist = this.getRouteCumulativeDistances(route);
+        const { idx, t } = this.findIndexAtS(cumDist, sValue);
 
         const a = pts[idx];
         const b = pts[idx + 1];
@@ -1155,7 +1291,8 @@ export class VehicleManager {
                 
                 validEntries.add(entryKey);
                 
-                const rate = config.spawnRate ?? 0;
+                // Per-exit override takes priority, otherwise fall back to global SimConfig rate
+                const rate = config.spawnRate ?? this.cfg.spawnRate;
                 this.spawnRatesPerEntry.set(entryKey, rate);
                 
                 // Initialize demand to 0 if this is a new entry
@@ -1184,60 +1321,6 @@ export class VehicleManager {
 
         // Pick a random route from this entry
         const route = routesForEntry[Math.floor(Math.random() * routesForEntry.length)];
-        const points = this.getRoutePointsCached(route);
-        if (!points || points.length < 2) return false;
-
-        const template = this.carModels[Math.floor(Math.random() * this.carModels.length)];
-        const model = template.clone(true);
-
-        const length = this.computeModelLength(model);
-
-        if (!this.hasSpawnSpace(route, length)) return false;
-
-        const p0 = points[0];
-        const p1 = points[1];
-
-        const pos0 = new THREE.Vector3(p0[0], p0[1] + this.cfg.yOffset, p0[2]);
-        const pos1 = new THREE.Vector3(p1[0], p1[1] + this.cfg.yOffset, p1[2]);
-
-        model.position.copy(pos0);
-
-        const dir = pos1.clone().sub(pos0);
-        if (dir.lengthSq() > 1e-6) {
-            dir.normalize();
-            const yaw = Math.atan2(dir.x, dir.z);
-            model.rotation.set(0, yaw, 0);
-        }
-
-        this.scene.add(model);
-
-        const v = new Vehicle(this.nextId++, model, route, length, this.cfg.initialSpeed);
-        
-        // Initialize per-vehicle characteristics based on config with variation
-        const random = () => 0.85 + Math.random() * 0.3;
-        v.maxAccel = this.cfg.maxAccel * random();
-        v.maxDecel = this.cfg.maxDecel * random();
-        v.preferredSpeed = this.cfg.maxSpeed * random();
-        v.reactionTime = 0.15 + Math.random() * 0.25;
-        v.timeHeadway = this.cfg.timeHeadway * (0.8 + Math.random() * 0.4);
-        
-        v.s = 0;
-        v.segmentIndex = 0;
-        v.currentSegment = route.segments?.length ? route.segments[0] : null;
-        this.updateVehicleSegment(v);
-
-        v.spawnKey = this.spawnKeyForRoute(route);
-
-        this.vehicles.push(v);
-        this.spawned += 1;
-
-        return true;
-    }
-
-    private trySpawnOne(): boolean {
-        if (!this.routes.length || !this.carModels.length) return false;
-
-        const route = this.routes[Math.floor(Math.random() * this.routes.length)];
         const points = this.getRoutePointsCached(route);
         if (!points || points.length < 2) return false;
 
@@ -1422,22 +1505,12 @@ export class VehicleManager {
         const pts = this.getRoutePointsCached(v.route);
         if (!pts || pts.length < 2) return true;
 
-        const spacing = this.getRouteSpacing(v.route);
-        const maxS = (pts.length - 1) * spacing;
+        const cumDist = this.getRouteCumulativeDistances(v.route);
+        const maxS = cumDist[cumDist.length - 1];
 
         v.s = Math.max(0, Math.min(targetS, maxS));
 
-        const idxFloat = v.s / spacing;
-        let idx = Math.floor(idxFloat);
-        let t = idxFloat - idx;
-
-        if (idx >= pts.length - 1) {
-            idx = pts.length - 2;
-            t = 1;
-        } else if (idx < 0) {
-            idx = 0;
-            t = 0;
-        }
+        const { idx, t } = this.findIndexAtS(cumDist, v.s);
 
         v.routeIndex = idx;
         v.t = t;
@@ -1496,7 +1569,7 @@ export class VehicleManager {
             const isRoundabout = isRoundaboutType(junctionKey, junctionType);
 
             if (isRoundabout) {
-                const controller = new RoundaboutController(junctionKey, Array.from(laneSet));
+                const controller = new RoundaboutController(junctionKey, Array.from(laneSet), () => this.cfg);
                 this.roundaboutControllers.set(junctionKey, controller);
 
                 const meta = buildRoundaboutMeta(junctionKey, junctionGroup as THREE.Group | undefined);
@@ -1507,7 +1580,7 @@ export class VehicleManager {
             } else {
                 this.intersectionControllers.set(
                     junctionKey,
-                    new IntersectionController(junctionKey, Array.from(laneSet), 8, 1)
+                    new IntersectionController(junctionKey, Array.from(laneSet), () => this.cfg)
                 );
             }
 

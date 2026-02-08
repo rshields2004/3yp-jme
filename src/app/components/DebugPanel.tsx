@@ -23,7 +23,8 @@ export default function DebugPanel() {
         resumeSim,
         isConfigConfirmed,
         confirmConfig,
-        resetConfig
+        resetConfig,
+        simConfig
     } = useJModellerContext();
 
     
@@ -320,6 +321,27 @@ export default function DebugPanel() {
                             exitConfig: obj.config.exitConfig.map((ex, idx) =>
                                 idx === exitIndex ? { ...ex, spawnRate: value } : ex
                             )
+                        }
+                    }
+                    : obj
+            )
+        }));
+    };
+
+    const clearSpawnRateOverride = (objID: string, exitIndex: number) => {
+        setJunction(prev => ({
+            ...prev,
+            junctionObjects: prev.junctionObjects.map(obj =>
+                obj.id === objID
+                    ? {
+                        ...obj,
+                        config: {
+                            ...obj.config,
+                            exitConfig: obj.config.exitConfig.map((ex, idx) => {
+                                if (idx !== exitIndex) return ex;
+                                const { spawnRate, ...rest } = ex;
+                                return rest;
+                            })
                         }
                     }
                     : obj
@@ -627,17 +649,29 @@ export default function DebugPanel() {
                                 )}
                                 {isConfigConfirmed && (
                                     <>
-                                        <label>Spawn Rate (veh/s):
+                                        <label>Spawn Rate Override (veh/s):
                                             <input
                                                 type="range"
                                                 min={0}
                                                 max={10}
                                                 step={0.1}
-                                                value={exit.spawnRate ?? 0}
-                                                onChange={e => handleSpawnRateChange(firstSelectedObject.id, j, Number(e.target.value))}
+                                                value={exit.spawnRate ?? simConfig.spawnRate}
+                                                onChange={e => {
+                                                    const val = Number(e.target.value);
+                                                    // Set override; clear if matches global
+                                                    handleSpawnRateChange(firstSelectedObject.id, j, val);
+                                                }}
                                             />
                                         </label>
-                                        <span>{(exit.spawnRate ?? 0).toFixed(1)}</span>
+                                        <span>{exit.spawnRate != null ? exit.spawnRate.toFixed(1) : `${simConfig.spawnRate.toFixed(1)} (global)`}</span>
+                                        {exit.spawnRate != null && (
+                                            <button
+                                                style={{ marginLeft: 6, fontSize: 10, cursor: "pointer" }}
+                                                onClick={() => clearSpawnRateOverride(firstSelectedObject.id, j)}
+                                            >
+                                                Reset
+                                            </button>
+                                        )}
                                     </>
                                 )}
                             </div>
@@ -755,17 +789,28 @@ export default function DebugPanel() {
                                 )}
                                 {isConfigConfirmed && (
                                     <>
-                                        <label>Spawn Rate (veh/s):
+                                        <label>Spawn Rate Override (veh/s):
                                             <input
                                                 type="range"
                                                 min={0}
                                                 max={10}
                                                 step={0.1}
-                                                value={exit.spawnRate ?? 0}
-                                                onChange={e => handleSpawnRateChange(secondSelectedObject.id, j, Number(e.target.value))}
+                                                value={exit.spawnRate ?? simConfig.spawnRate}
+                                                onChange={e => {
+                                                    const val = Number(e.target.value);
+                                                    handleSpawnRateChange(secondSelectedObject.id, j, val);
+                                                }}
                                             />
                                         </label>
-                                        <span>{(exit.spawnRate ?? 0).toFixed(1)}</span>
+                                        <span>{exit.spawnRate != null ? exit.spawnRate.toFixed(1) : `${simConfig.spawnRate.toFixed(1)} (global)`}</span>
+                                        {exit.spawnRate != null && (
+                                            <button
+                                                style={{ marginLeft: 6, fontSize: 10, cursor: "pointer" }}
+                                                onClick={() => clearSpawnRateOverride(secondSelectedObject.id, j)}
+                                            >
+                                                Reset
+                                            </button>
+                                        )}
                                     </>
                                 )}
                             </div>

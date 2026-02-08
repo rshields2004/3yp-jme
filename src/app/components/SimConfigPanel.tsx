@@ -3,7 +3,7 @@
 import { useJModellerContext } from "../context/JModellerContext";
 
 export default function SimConfigPanel() {
-    const { isConfigConfirmed, simIsRunning, simConfig, setSimConfig, junction, setJunction } = useJModellerContext();
+    const { isConfigConfirmed, simIsRunning, simConfig, setSimConfig } = useJModellerContext();
 
     // Only show during spawn config phase (confirmed but not running yet)
     if (!isConfigConfirmed || simIsRunning) {
@@ -18,22 +18,7 @@ export default function SimConfigPanel() {
         setSimConfig(prev => ({ ...prev, [key]: value }));
     };
 
-    const handleGlobalSpawnRateChange = (value: number) => {
-        // Update all exit spawn rates to this value
-        setJunction(prev => ({
-            ...prev,
-            junctionObjects: prev.junctionObjects.map(obj => ({
-                ...obj,
-                config: {
-                    ...obj.config,
-                    exitConfig: obj.config.exitConfig.map(ex => ({
-                        ...ex,
-                        spawnRate: value
-                    }))
-                }
-            }))
-        }));
-    };
+
 
     return (
         <div
@@ -63,15 +48,11 @@ export default function SimConfigPanel() {
                             step="0.1"
                             min="0"
                             max="10"
-                            value={simConfig.demandRatePerSec}
-                            onChange={(e) => {
-                                const value = parseFloat(e.target.value) || 0;
-                                handleNumberChange("demandRatePerSec", value);
-                                handleGlobalSpawnRateChange(value);
-                            }}
+                            value={simConfig.spawnRate}
+                            onChange={(e) => handleNumberChange("spawnRate", parseFloat(e.target.value) || 0)}
                         />
                     </label>
-                    <span>{simConfig.demandRatePerSec.toFixed(1)}</span>
+                    <span>{simConfig.spawnRate.toFixed(1)}</span>
                     <br />
                     <label>Max Vehicles:
                         <input
@@ -284,6 +265,83 @@ export default function SimConfigPanel() {
                         />
                     </label>
                     <span>{simConfig.roundaboutDecelZone.toFixed(0)}</span>
+                    <br />
+                </div>
+            </div>
+
+            {/* Roundabout Controller */}
+            <div style={{ marginBottom: 10 }}>
+                <h3>Roundabout Controller</h3>
+                <div>
+                    <label>Min Gap Distance:
+                        <input type="range" step="0.5" min="0.5" max="10"
+                            value={simConfig.roundaboutMinGap}
+                            onChange={(e) => handleNumberChange("roundaboutMinGap", parseFloat(e.target.value) || 0.5)} />
+                    </label>
+                    <span>{simConfig.roundaboutMinGap.toFixed(1)}</span>
+                    <br />
+                    <label>Min Time Gap (s):
+                        <input type="range" step="0.1" min="0.1" max="5"
+                            value={simConfig.roundaboutMinTimeGap}
+                            onChange={(e) => handleNumberChange("roundaboutMinTimeGap", parseFloat(e.target.value) || 0.1)} />
+                    </label>
+                    <span>{simConfig.roundaboutMinTimeGap.toFixed(1)}</span>
+                    <br />
+                    <label>Safe Entry Distance:
+                        <input type="range" step="1" min="5" max="50"
+                            value={simConfig.roundaboutSafeEntryDist}
+                            onChange={(e) => handleNumberChange("roundaboutSafeEntryDist", parseFloat(e.target.value) || 5)} />
+                    </label>
+                    <span>{simConfig.roundaboutSafeEntryDist.toFixed(0)}</span>
+                    <br />
+                    <label>Entry Timeout (s):
+                        <input type="range" step="0.1" min="0.1" max="5"
+                            value={simConfig.roundaboutEntryTimeout}
+                            onChange={(e) => handleNumberChange("roundaboutEntryTimeout", parseFloat(e.target.value) || 0.1)} />
+                    </label>
+                    <span>{simConfig.roundaboutEntryTimeout.toFixed(1)}</span>
+                    <br />
+                    <label>Min Angular Sep (°):
+                        <input type="range" step="1" min="5" max="90"
+                            value={Math.round(simConfig.roundaboutMinAngularSep * 180 / Math.PI)}
+                            onChange={(e) => handleNumberChange("roundaboutMinAngularSep", (parseFloat(e.target.value) || 5) * Math.PI / 180)} />
+                    </label>
+                    <span>{Math.round(simConfig.roundaboutMinAngularSep * 180 / Math.PI)}°</span>
+                    <br />
+                </div>
+            </div>
+
+            {/* Intersection Controller */}
+            <div style={{ marginBottom: 10 }}>
+                <h3>Intersection Controller</h3>
+                <div>
+                    <label>Green Time (s):
+                        <input type="range" step="1" min="1" max="30"
+                            value={simConfig.intersectionGreenTime}
+                            onChange={(e) => handleNumberChange("intersectionGreenTime", parseFloat(e.target.value) || 1)} />
+                    </label>
+                    <span>{simConfig.intersectionGreenTime.toFixed(0)}</span>
+                    <br />
+                    <label>Amber Time (s):
+                        <input type="range" step="0.5" min="0.5" max="10"
+                            value={simConfig.intersectionAmberTime}
+                            onChange={(e) => handleNumberChange("intersectionAmberTime", parseFloat(e.target.value) || 0.5)} />
+                    </label>
+                    <span>{simConfig.intersectionAmberTime.toFixed(1)}</span>
+                    <br />
+                    <label>Red-Amber Time (s):
+                        <input type="range" step="0.5" min="0.5" max="5"
+                            value={simConfig.intersectionRedAmberTime}
+                            onChange={(e) => handleNumberChange("intersectionRedAmberTime", parseFloat(e.target.value) || 0.5)} />
+                    </label>
+                    <span>{simConfig.intersectionRedAmberTime.toFixed(1)}</span>
+                    <br />
+                    <label>All-Red Time (s):
+                        <input type="range" step="0.5" min="0.5" max="5"
+                            value={simConfig.intersectionAllRedTime}
+                            onChange={(e) => handleNumberChange("intersectionAllRedTime", parseFloat(e.target.value) || 0.5)} />
+                    </label>
+                    <span>{simConfig.intersectionAllRedTime.toFixed(1)}</span>
                     <br />
                 </div>
             </div>

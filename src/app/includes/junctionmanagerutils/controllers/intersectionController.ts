@@ -1,4 +1,4 @@
-import { LightColour } from "../../types/simulation";
+import { LightColour, SimConfig } from "../../types/simulation";
 
 /**
  * UK light sequence per approach (simplified but correct):
@@ -16,10 +16,12 @@ export class IntersectionController {
     private laneKeys: string[] = [];
     private greenIndex = 0;
 
-    private greenSeconds: number;
-    private amberSeconds: number;
-    private redAmberSeconds: number;
-    private allRedSeconds: number;
+    private readonly getCfg: () => SimConfig;
+
+    private get greenSeconds() { return this.getCfg().intersectionGreenTime; }
+    private get amberSeconds() { return this.getCfg().intersectionAmberTime; }
+    private get redAmberSeconds() { return this.getCfg().intersectionRedAmberTime; }
+    private get allRedSeconds() { return this.getCfg().intersectionAllRedTime; }
 
     private timer = 0;
 
@@ -28,18 +30,11 @@ export class IntersectionController {
     constructor(
         id: string,
         laneKeys: string[],
-        greenSeconds = 8,
-        amberSeconds = 3,
-        redAmberSeconds = 1,
-        allRedSeconds = 2
+        cfgGetter: () => SimConfig
     ) {
         this.id = id;
         this.laneKeys = [...new Set(laneKeys)];
-
-        this.greenSeconds = greenSeconds;
-        this.amberSeconds = amberSeconds;
-        this.redAmberSeconds = redAmberSeconds;
-        this.allRedSeconds = allRedSeconds;
+        this.getCfg = cfgGetter;
 
         // If multiple approaches, start with GREEN for first approach
         // If 1 approach, also fine (it will never advance)
@@ -89,13 +84,6 @@ export class IntersectionController {
                 break;
             }
         }
-    }
-
-    setTimings(greenSeconds: number, amberSeconds: number, redAmberSeconds: number, allRedSeconds: number) {
-        this.greenSeconds = Math.max(1, greenSeconds);
-        this.amberSeconds = Math.max(1, amberSeconds);
-        this.redAmberSeconds = Math.max(0.5, redAmberSeconds);
-        this.allRedSeconds = Math.max(0.5, allRedSeconds);
     }
 
     /** True only during GREEN phase for the currently-served approach. */

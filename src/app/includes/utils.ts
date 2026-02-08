@@ -264,7 +264,7 @@ export function generateLaneLinesRound(
     return laneLines;
 };
 
-export function shortestAngleDiff(
+function shortestAngleDiff(
     a: number, 
     b: number
 ): number {
@@ -421,17 +421,6 @@ export function generateTextPosition(
     const position = new THREE.Vector3().lerpVectors(midpoint, midpoint2, 1 / midpoint.distanceTo(midpoint2)).add(new THREE.Vector3(0, 0.1, 0));
     return position.clone();
 };
-
-export function generateTextAngle(
-    exit: ExitStructure | RoundaboutExitStructure
-): number {
-    const position = generateTextPosition(exit);
-    const dir = new THREE.Vector3().subVectors(new THREE.Vector3(0, 0, 0), position).normalize();
-    const angleY = Math.atan2(dir.x, dir.z);
-
-    return angleY;
-};
-
 
 export function getExitWorldPosition(junctionGroup: THREE.Group, exit: ExitStructure | RoundaboutExitStructure, position: string): THREE.Vector3 {
 

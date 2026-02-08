@@ -46,13 +46,6 @@ export function estimateRouteSpacing(route: Route): number {
 }
 
 /**
- * Get total route length
- */
-export function getRouteLength(route: Route): number {
-    return polylineLength(getRoutePoints(route));
-}
-
-/**
  * Compute cumulative distance info for each segment in a route
  * Returns array with s0 (start distance) and s1 (end distance) for each segment
  */

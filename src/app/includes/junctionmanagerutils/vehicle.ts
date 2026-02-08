@@ -36,9 +36,6 @@ export class Vehicle {
     reactionTime: number;
     timeHeadway: number;
     
-    // Smooth target speed for gradual transitions
-    private smoothedTargetSpeed: number;
-
     constructor(id: number, model: THREE.Group, route: Route, length: number, initialSpeed = 0) {
         this.id = id;
         this.model = model;
@@ -61,14 +58,5 @@ export class Vehicle {
         this.reactionTime = 0.15 + Math.random() * 0.25; // 0.15-0.4s
         this.timeHeadway = 1.2 + Math.random() * 0.8; // 1.2-2.0s
         
-        this.smoothedTargetSpeed = initialSpeed;
-    }
-
-    smoothTargetSpeed(dt: number, targetSpeed: number): number {
-        // Exponential smoothing for gradual speed target transitions
-        // Higher reactionTime = slower response (more smoothing)
-        const smoothingFactor = Math.min(1, dt / Math.max(0.05, this.reactionTime));
-        this.smoothedTargetSpeed = this.smoothedTargetSpeed * (1 - smoothingFactor) + targetSpeed * smoothingFactor;
-        return this.smoothedTargetSpeed;
     }
 }

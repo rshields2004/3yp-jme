@@ -95,7 +95,7 @@ export type SimulationStats = {
 
 export type SimConfig = {
     // Spawning
-    demandRatePerSec: number;
+    spawnRate: number;  // default vehicles per second per entry
     maxVehicles: number;
     maxSpawnAttemptsPerFrame: number;
     maxSpawnQueue: number;
@@ -122,6 +122,19 @@ export type SimConfig = {
 
     // Roundabout-specific
     roundaboutDecelZone: number;  // Distance before stopline to start decelerating
+
+    // Roundabout controller
+    roundaboutMinGap: number;           // Min distance to any circulating vehicle
+    roundaboutMinTimeGap: number;       // Seconds buffer for approaching vehicles
+    roundaboutSafeEntryDist: number;    // Check approaching vehicles within this distance
+    roundaboutEntryTimeout: number;     // Seconds before a conflicting entry expires
+    roundaboutMinAngularSep: number;    // Radians — min angular separation between entries
+
+    // Intersection controller (traffic light timings)
+    intersectionGreenTime: number;
+    intersectionAmberTime: number;
+    intersectionRedAmberTime: number;
+    intersectionAllRedTime: number;
 };
 
 

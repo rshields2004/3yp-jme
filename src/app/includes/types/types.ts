@@ -1,7 +1,6 @@
 import * as THREE from "three";
 import { IntersectionObject } from "./intersection";
 import { RoundaboutObject } from "./roundabout";
-import { ThickLineHandle } from "@/app/components/ThickLine";
 import { SimulationStats, SimConfig } from "./simulation";
 
 
@@ -22,7 +21,7 @@ export type ExitConfig = {
     laneCount: number;
     laneWidth: number;
     exitLength: number;
-    spawnRate: number; // vehicles per second
+    spawnRate?: number; // optional per-exit override (vehicles per second)
 };
 
 
@@ -88,13 +87,3 @@ export type ExitRef = {
     exitIndex: number;
 };
 
-// Simulation stuff
-
-
-export type IntersectionTrafficController = {
-    stopLinesQueue: { ref: React.RefObject<ThickLineHandle | null>, exitIndex: number }[];
-    currentIndex: number;
-    currentStep: number;
-    intervalId: NodeJS.Timeout | null;
-    sequence: string[];
-};
