@@ -42,8 +42,13 @@ export const RoundaboutComponent = ({ id, roundaboutConfig }: RoundaboutProps) =
         const maxLaneWidth = Math.max(...exitConfig.map(c => c.laneWidth));
         const maxDistanceToStopLine = Math.max(...exitConfig.map(c => c.exitLength)) + 15;
         
-        const islandRadius = (maxLaneWidth * (maxLaneCount - maxNumLaneIn)) * 2;
-        const outerRadius = islandRadius + maxLaneWidth * maxNumLaneIn;
+        const geometricIslandRadius = (maxLaneWidth * (maxLaneCount - maxNumLaneIn)) * 2;
+        const laneBandWidth = maxLaneWidth * maxNumLaneIn;
+        const minArcPerExit = 20; // 2× clearanceGap (6)
+        const minAvgRadius = (minArcPerExit * numExits) / (2 * Math.PI);
+        const minIslandRadius = Math.max(0, minAvgRadius - laneBandWidth * 0.5);
+        const islandRadius = Math.max(geometricIslandRadius, minIslandRadius);
+        const outerRadius = islandRadius + laneBandWidth;
         
         
         const islandGeometry = new THREE.CircleGeometry(islandRadius, 64);

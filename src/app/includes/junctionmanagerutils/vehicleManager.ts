@@ -853,6 +853,46 @@ export class VehicleManager {
                     }
                 }
 
+                // World-space collision guard for committed approach vehicles.
+                // While crossing from the stop line into the ring, check for
+                // circulating vehicles that are physically close — a ring
+                // vehicle may have started a lane change after we committed.
+                if (v.currentSegment?.phase === "approach" && v.laneKey) {
+                    const jKey = v.currentSegment?.to?.structureID;
+                    if (jKey && this.roundaboutControllers.has(jKey)) {
+                        const ctrl = this.roundaboutControllers.get(jKey)!;
+                        if (ctrl.isCommitted(v.id)) {
+                            const rMeta = this.roundaboutMeta.get(jKey);
+                            if (rMeta) {
+                                const ringLaneKey = `lane:roundabout:${jKey}`;
+                                const ringOccs = lanes.get(ringLaneKey) ?? [];
+                                const myPos = this.getPointAtS(v.route, newS) ?? v.model.position;
+
+                                for (const occ of ringOccs) {
+                                    const other = occ.v;
+                                    if (other.id === v.id) continue;
+                                    const otherPhase = other.currentSegment?.phase;
+                                    if (otherPhase !== "inside") continue;
+
+                                    const otherPos = other.model.position;
+                                    const dist = myPos.distanceTo(otherPos);
+                                    const safetyDist = 0.5 * (v.length + other.length) + v.length;
+
+                                    if (dist < safetyDist) {
+                                        const bumpGap = dist - 0.5 * (v.length + other.length);
+                                        const idmBrake = this.computeIdmAccel(
+                                            v, v.preferredSpeed, other.speed, Math.max(0, bumpGap)
+                                        );
+                                        v.speed = Math.max(0, v.speed + idmBrake * dt);
+                                        newS = v.s + v.speed * dt;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 desiredS.set(v, newS);
             }
         }
@@ -1926,8 +1966,21 @@ export class VehicleManager {
         const frontBumperS = v.s + 0.5 * v.length;
         const frontBumperDistToLine = stopS + this.cfg.stopLineOffset - frontBumperS;
 
-        // Check if vehicle is already committed (front bumper has crossed the stopline)
+        // Check if vehicle is already committed (front bumper has crossed the stopline).
+        // Even when committed, keep checking for circulating vehicles that may
+        // have moved into the entry path (e.g., lane-changers).  If something
+        // is now blocking, brake smoothly rather than blindly charging in.
         if (controller.isCommitted(v.id)) {
+            const stillClear = this.isRoundaboutEntryClear(v, junctionKey, entryKey, 0, lanes);
+            if (!stillClear) {
+                // Something appeared in our path after we committed.
+                // Brake hard but smoothly — don't de-commit (we're already
+                // partway across), just slow to a crawl until the path clears.
+                const decel = v.maxDecel * 0.8;
+                const stoppingDist = Math.max(0.1, distToStopline + 2);
+                const cappedSpeed = Math.sqrt(2 * decel * stoppingDist);
+                return Math.min(targetSpeed, Math.max(0, cappedSpeed));
+            }
             return targetSpeed;
         }
 
@@ -2075,9 +2128,9 @@ export class VehicleManager {
             // (i.e., heading radially outward near the entry)?
             // If so, it will cross the entry path even though it's currently
             // on an inner lane.
-            if (meta.laneMidRadii.length >= 2 && otherDistFromCenter < outerR - 0.5) {
-                // Vehicle is on an inner lane. Check if it's heading outward
-                // toward the entry zone.
+            if (meta.laneMidRadii.length >= 2 && otherDistFromCenter < outerR) {
+                // Vehicle is inside the outer lane band. Check if it's heading
+                // outward toward the entry zone.
                 const otherFwd = new THREE.Vector3(
                     Math.sin(other.model.rotation.y), 0, Math.cos(other.model.rotation.y)
                 );
@@ -2090,14 +2143,25 @@ export class VehicleManager {
                 // If vehicle has a meaningful outward radial component,
                 // it's changing to an outer lane. Check if it's near the
                 // entry point angularly.
-                if (radialComponent > 0.15) {
-                    // Check angular proximity to entry — would this vehicle
-                    // cross our entry path while lane-changing?
-                    const distToOuterEntry = otherPos.distanceTo(outerEntryPos);
+                if (radialComponent > 0.1) {
+                    const distToOuter = otherPos.distanceTo(outerEntryPos);
                     // Use a larger clearance for lane-changers since they're
                     // sweeping across our merge path
                     const laneChangeClearance = clearanceGap * 1.5;
-                    if (distToOuterEntry < laneChangeClearance) return false;
+                    if (distToOuter < laneChangeClearance) return false;
+                }
+
+                // Also check: is this vehicle nearing the end of its inside
+                // segment? It will soon start moving outward to exit, sweeping
+                // across the entry path even if its heading hasn't turned yet.
+                const otherSegDists2 = this.getSegmentDistances(other.route);
+                const otherSegInfo2 = otherSegDists2[other.segmentIndex];
+                if (otherSegInfo2) {
+                    const otherDistToSegEnd = otherSegInfo2.s1 - other.s;
+                    if (otherDistToSegEnd < 8) {
+                        const distToOuter = otherPos.distanceTo(outerEntryPos);
+                        if (distToOuter < clearanceGap * 1.5) return false;
+                    }
                 }
             }
         }
