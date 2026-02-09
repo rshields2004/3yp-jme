@@ -599,6 +599,17 @@ export class VehicleManager {
 
                 if (v.currentSegment?.phase === "approach" && stoplineSpeed < v.preferredSpeed) {
                     stoplineS = this.getStoplineS(v);
+                } else if (v.currentSegment?.phase === "approach") {
+                    // For roundabout approaches: always know the stopline position
+                    // so the hard clamp can prevent overshoot if the gap closes
+                    // between frames.  Only let the car past once committed.
+                    const jKey = v.currentSegment?.to?.structureID;
+                    if (jKey && this.roundaboutControllers.has(jKey)) {
+                        const ctrl = this.roundaboutControllers.get(jKey)!;
+                        if (!ctrl.isCommitted(v.id)) {
+                            stoplineS = this.getStoplineS(v);
+                        }
+                    }
                 } else if (v.currentSegment?.phase === "link") {
                     const upcoming = this.getUpcomingStoplineForLink(v, lanes);
                     if (upcoming?.shouldStop) {
@@ -665,7 +676,7 @@ export class VehicleManager {
 
                 // Hard collision prevention
                 if (leader) {
-                    if (isRoundaboutInside) {
+                    if (isRoundaboutInside && !nearingExit) {
                         // For roundabout: lane-aware world-position collision check
                         const myPos = this.getPointAtS(v.route, newS);
                         const leaderPos = leader.model.position;
@@ -692,10 +703,14 @@ export class VehicleManager {
                             }
                             if (shouldCheck) {
                                 const dist = myPos.distanceTo(leaderPos);
-                                const minDist = 0.5 * (leader.length + v.length) + this.cfg.minBumperGap;
-                                if (dist < minDist) {
-                                    // Smooth deceleration: match leader speed instead of abrupt freeze
-                                    v.speed = Math.min(v.speed, Math.max(0, leader.speed));
+                                const bumpGap = dist - 0.5 * (leader.length + v.length);
+                                const safeGap = bumpGap - this.cfg.minBumperGap;
+                                if (safeGap < v.length) {
+                                    // Use IDM with the measured gap for smooth deceleration
+                                    const idmA = this.computeIdmAccel(
+                                        v, v.preferredSpeed, leader.speed, Math.max(0, bumpGap)
+                                    );
+                                    v.speed = Math.max(0, v.speed + idmA * dt);
                                     newS = v.s + v.speed * dt;
                                 }
                             }
@@ -706,14 +721,22 @@ export class VehicleManager {
                             const leaderS = desiredS.get(leader) ?? leader.s;
                             const minSafeS = leaderS - 0.5 * (leader.length + v.length) - this.cfg.minBumperGap;
                             if (newS > minSafeS) {
-                                newS = Math.max(v.s, minSafeS);
-                                v.speed = 0;
+                                const sGap = Math.max(0, minSafeS - v.s);
+                                const idmA = this.computeIdmAccel(
+                                    v, v.preferredSpeed, leader.speed, sGap
+                                );
+                                v.speed = Math.max(0, v.speed + idmA * dt);
+                                newS = Math.min(v.s + v.speed * dt, minSafeS);
                             }
                         } else {
                             const newGap = this.estimateGapAfterMove(v, newS, leader, desiredS);
                             if (newGap < this.cfg.minBumperGap) {
-                                newS = v.s;
-                                v.speed = 0;
+                                const curGap = this.estimateGapAfterMove(v, v.s, leader, desiredS);
+                                const idmA = this.computeIdmAccel(
+                                    v, v.preferredSpeed, leader.speed, Math.max(0, curGap)
+                                );
+                                v.speed = Math.max(0, v.speed + idmA * dt);
+                                newS = v.s + v.speed * dt;
                             }
                         }
                     }
@@ -722,9 +745,13 @@ export class VehicleManager {
                 // Unconditional world-space overlap prevention for roundabout vehicles.
                 // Catches lateral conflicts (lane-changes into occupied space) that
                 // leader-following can't detect because the other vehicle is beside us,
-                // not ahead.  ASYMMETRIC: only the vehicle that is angularly BEHIND
-                // yields, preventing mutual-deceleration death spirals.
-                if (isRoundaboutInside && v.laneKey) {
+                // not ahead.  ASYMMETRIC yield rules:
+                //   - A recently-entered vehicle (near start of its inside segment)
+                //     ALWAYS yields to an established circulating vehicle, because
+                //     circulating traffic has absolute priority on a roundabout.
+                //   - Between two established vehicles, the angularly-behind one yields.
+                // SKIP when nearing exit — at that point we only follow the exit arm.
+                if (isRoundaboutInside && !nearingExit && v.laneKey) {
                     const jId = this.roundaboutIdFromLaneKey(v.laneKey);
                     const rMeta = this.roundaboutMeta.get(jId);
                     if (rMeta) {
@@ -735,35 +762,89 @@ export class VehicleManager {
                         const TAU = Math.PI * 2;
                         const laneOccs = lanes.get(v.laneKey) ?? [];
 
+                        // Detect if I recently entered — near the start of my inside segment.
+                        const myDistFromSegStart = segInfo ? (v.s - segInfo.s0) : Infinity;
+                        const iAmRecentlyEntered = myDistFromSegStart < 6;
+
                         for (const occ of laneOccs) {
                             const other = occ.v;
                             if (other === v || other === leader) continue;
                             const otherPhase = other.currentSegment?.phase;
                             if (otherPhase !== "inside") continue;
 
+                            // Skip vehicles that entered from the same arm —
+                            // they go to different circulating lanes and shouldn't
+                            // block each other at the entry zone.
+                            // Only skip if BOTH vehicles are recently entered.
+                            if (iAmRecentlyEntered) {
+                                const otherSegs = other.route.segments;
+                                if (otherSegs && other.segmentIndex > 0) {
+                                    const otherPrevSeg = otherSegs[other.segmentIndex - 1];
+                                    if (otherPrevSeg?.phase === "approach") {
+                                        const mySegs = v.route.segments;
+                                        if (mySegs && v.segmentIndex > 0) {
+                                            const myPrevSeg = mySegs[v.segmentIndex - 1];
+                                            if (myPrevSeg?.phase === "approach") {
+                                                const myEntryKey = this.entryGroupKeyFromNodeKey(
+                                                    this.nodeToKey(myPrevSeg.from)
+                                                );
+                                                const otherEntryKey = this.entryGroupKeyFromNodeKey(
+                                                    this.nodeToKey(otherPrevSeg.from)
+                                                );
+                                                if (myEntryKey === otherEntryKey) {
+                                                    // Also check the other vehicle is near entry
+                                                    const otherSegDists2 = this.getSegmentDistances(other.route);
+                                                    const otherSegInfo2 = otherSegDists2[other.segmentIndex];
+                                                    const otherDistFromStart2 = otherSegInfo2
+                                                        ? (other.s - otherSegInfo2.s0) : Infinity;
+                                                    if (otherDistFromStart2 < 6) continue;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
                             const otherPos = other.model.position;
                             const dist = myPos.distanceTo(otherPos);
-                            const minDist = 0.5 * (v.length + other.length) + this.cfg.minBumperGap;
+                            const hardMinDist = 0.5 * (v.length + other.length) + this.cfg.minBumperGap;
+                            const softMinDist = hardMinDist + 1.0;
 
-                            if (dist < minDist) {
-                                // Overlap — determine who yields via angular position.
-                                // The vehicle that is angularly behind the other yields.
-                                const otherDx = otherPos.x - rMeta.center.x;
-                                const otherDz = otherPos.z - rMeta.center.z;
-                                const otherAngle = Math.atan2(otherDz, otherDx);
-                                const angDelta = THREE.MathUtils.euclideanModulo(
-                                    otherAngle - myAngle, TAU
-                                );
+                            if (dist < softMinDist) {
+                                // Determine if the other vehicle also recently entered.
+                                const otherSegDists = this.getSegmentDistances(other.route);
+                                const otherSegInfo = otherSegDists[other.segmentIndex];
+                                const otherDistFromSegStart = otherSegInfo ? (other.s - otherSegInfo.s0) : Infinity;
+                                const otherRecentlyEntered = otherDistFromSegStart < 6;
 
-                                // angDelta in (0,π) → other is ahead → we yield
-                                // angDelta in (π,2π) → other is behind → they yield
-                                // Near 0 → use vehicle ID as tiebreaker
-                                const iAmBehind =
-                                    (angDelta > 0.01 && angDelta < Math.PI) ||
-                                    (angDelta <= 0.01 && v.id > other.id);
+                                let iShouldYield: boolean;
 
-                                if (iAmBehind) {
-                                    v.speed = Math.min(v.speed, Math.max(0, other.speed));
+                                if (iAmRecentlyEntered && !otherRecentlyEntered) {
+                                    // I just entered, they're established — I ALWAYS yield.
+                                    iShouldYield = true;
+                                } else if (!iAmRecentlyEntered && otherRecentlyEntered) {
+                                    // They just entered, I'm established — they yield, not me.
+                                    iShouldYield = false;
+                                } else {
+                                    // Both established or both recently entered — use angular position.
+                                    const otherDx = otherPos.x - rMeta.center.x;
+                                    const otherDz = otherPos.z - rMeta.center.z;
+                                    const otherAngle = Math.atan2(otherDz, otherDx);
+                                    const angDelta = THREE.MathUtils.euclideanModulo(
+                                        otherAngle - myAngle, TAU
+                                    );
+                                    iShouldYield =
+                                        (angDelta > 0.01 && angDelta < Math.PI) ||
+                                        (angDelta <= 0.01 && v.id > other.id);
+                                }
+
+                                if (iShouldYield) {
+                                    // IDM deceleration using measured gap
+                                    const bumpGapOv = dist - 0.5 * (v.length + other.length);
+                                    const idmAov = this.computeIdmAccel(
+                                        v, v.preferredSpeed, other.speed, Math.max(0, bumpGapOv)
+                                    );
+                                    v.speed = Math.max(0, v.speed + idmAov * dt);
                                     newS = v.s + v.speed * dt;
                                     break;
                                 }
@@ -980,6 +1061,24 @@ export class VehicleManager {
         let bestWorldDist = Infinity;
         let bestLeader: Vehicle | null = null;
 
+        // Determine if *we* recently entered, and if so, which arm we came from.
+        const myDistFromSegStart = (() => {
+            const sd = this.getSegmentDistances(v.route);
+            const si = sd[v.segmentIndex];
+            return si ? (v.s - si.s0) : Infinity;
+        })();
+        const iAmRecentlyEnteredRL = myDistFromSegStart < 6;
+        let myEntryKeyRL: string | undefined;
+        if (iAmRecentlyEnteredRL) {
+            const segs = v.route.segments;
+            if (segs && v.segmentIndex > 0) {
+                const prev = segs[v.segmentIndex - 1];
+                if (prev?.phase === "approach") {
+                    myEntryKeyRL = this.entryGroupKeyFromNodeKey(this.nodeToKey(prev.from));
+                }
+            }
+        }
+
         for (const occ of laneOccs) {
             const other = occ.v;
             if (other === v) continue;
@@ -989,6 +1088,27 @@ export class VehicleManager {
             // Vehicles in "exit" phase are diverging off — not a ring conflict.
             const otherPhase = other.currentSegment?.phase;
             if (otherPhase !== "inside") continue;
+
+            // Skip same-arm vehicles when BOTH are recently entered — they are
+            // going to different circulating lanes and should not be leaders to
+            // each other in the entry zone.
+            if (iAmRecentlyEnteredRL && myEntryKeyRL) {
+                const otherSegs = other.route.segments;
+                if (otherSegs && other.segmentIndex > 0) {
+                    const otherPrev = otherSegs[other.segmentIndex - 1];
+                    if (otherPrev?.phase === "approach") {
+                        const otherEntryKey = this.entryGroupKeyFromNodeKey(
+                            this.nodeToKey(otherPrev.from)
+                        );
+                        if (otherEntryKey === myEntryKeyRL) {
+                            const otherSD = this.getSegmentDistances(other.route);
+                            const otherSI = otherSD[other.segmentIndex];
+                            const otherDFS = otherSI ? (other.s - otherSI.s0) : Infinity;
+                            if (otherDFS < 6) continue; // both near entry — skip
+                        }
+                    }
+                }
+            }
 
             const otherPos = other.model.position;
             const otherDx = otherPos.x - meta.center.x;
@@ -1496,7 +1616,20 @@ export class VehicleManager {
 
             // Determine actual lane index from vehicle's distance to center
             const actualLaneIndex = controller.getLaneIndexForPosition(pos);
-            controller.updateCirculatingVehicle(v.id, pos, v.speed, actualLaneIndex, heading);
+
+            // Determine which arm this vehicle entered from (for same-arm skip logic)
+            let vehicleEntryKey: string | undefined;
+            const segs = v.route.segments;
+            if (segs && v.segmentIndex > 0) {
+                const prevSeg = segs[v.segmentIndex - 1];
+                if (prevSeg?.phase === "approach") {
+                    vehicleEntryKey = this.entryGroupKeyFromNodeKey(
+                        this.nodeToKey(prevSeg.from)
+                    );
+                }
+            }
+
+            controller.updateCirculatingVehicle(v.id, pos, v.speed, actualLaneIndex, heading, vehicleEntryKey);
             controller.setGeometry(meta.center, meta.laneMidRadii);
         }
         // If vehicle has exited the roundabout, remove from tracking
@@ -1812,8 +1945,10 @@ export class VehicleManager {
         const physicalClear = this.isRoundaboutEntryClear(v, junctionKey, entryKey, 0, lanes);
 
         if (canEnter && physicalClear) {
-            // Gap is available!
-            // If front bumper has crossed the stopline, commit and go
+            // Gap is available — commit NOW if at the line, then go.
+            // We commit before releasing speed so that even if the gap
+            // closes on the next frame, the vehicle is already committed
+            // and won't freeze half-out over the stop line.
             if (frontBumperDistToLine <= 0) {
                 const entryPosition = controller.getEntryPosition(entryAngle, radius);
                 controller.commitVehicle(v.id, entryPosition, entryKey);
@@ -1821,30 +1956,23 @@ export class VehicleManager {
             return targetSpeed;
         }
 
-        // Gap not available - need to stop at the line
-        // Even if front bumper has crossed, DO NOT commit until the gap is clear
-        if (frontBumperDistToLine <= 0) {
-            return 0;
-        }
-        
+        // Gap NOT clear — hard stop at the stop line.  Never allow the
+        // vehicle to creep past where it would stick out into the ring.
         if (distToStopline > 0) {
-            // Calculate speed to stop at the line
-            // Use kinematic equation: v² = 2 * a * d, so v = sqrt(2 * a * d)
-            const decel = v.maxDecel * 0.7; // Use 70% of max decel for comfort
+            const decel = v.maxDecel * 0.7;
             const stoppingSpeed = Math.sqrt(2 * decel * Math.max(0.1, distToStopline));
-            
             return Math.min(targetSpeed, stoppingSpeed);
         }
 
-        // Already at/past the line but not committed - this shouldn't happen with proper logic
-        // but handle it by stopping
+        // At or past the stop line with no clear gap — full stop.
         return 0;
     }
 
     /**
      * Check if there are vehicles physically blocking the entry point on the roundabout.
-     * Lane-aware: uses the outer lane radius for the entry position and applies
-     * different gap thresholds for outer-lane vs inner-lane vehicles.
+     * Lane-aware: checks proximity at each vehicle's current radius AND detects
+     * vehicles that are changing lanes toward the entry path (radial movement
+     * toward the outer lane where the entering vehicle will merge).
      */
     private isRoundaboutEntryClear(
         v: Vehicle,
@@ -1863,30 +1991,115 @@ export class VehicleManager {
         const occs = lanes.get(laneKey) ?? [];
         if (occs.length === 0) return true;
 
-        // Entering vehicles cross ALL ring lanes, so we must check every
-        // circulating vehicle with the same gap threshold.  For each vehicle
-        // we compute proximity on its own lane radius for accuracy.
-        const clearanceGap = Math.max(v.length * 2, 4);
+        const clearanceGap = Math.max(v.length * 3, 6);
+
+        // The entry point on the outer lane (where entering vehicles merge)
+        const outerR = meta.laneMidRadii.length > 0
+            ? meta.laneMidRadii[meta.laneMidRadii.length - 1]
+            : meta.avgRadius;
+        const outerEntryPos = new THREE.Vector3(
+            meta.center.x + Math.cos(entryAngle) * outerR,
+            meta.center.y,
+            meta.center.z + Math.sin(entryAngle) * outerR
+        );
+
+        // Also compute the inner lane entry point — vehicles going to the
+        // inner lane cross ALL lanes, so we must check clearance at every
+        // lane radius, not just the outer one.
+        const innerR = meta.laneMidRadii.length > 0
+            ? meta.laneMidRadii[0]
+            : meta.avgRadius;
+        const innerEntryPos = new THREE.Vector3(
+            meta.center.x + Math.cos(entryAngle) * innerR,
+            meta.center.y,
+            meta.center.z + Math.sin(entryAngle) * innerR
+        );
 
         for (const occ of occs) {
             const other = occ.v;
             if (other.id === v.id) continue;
 
-            // Compute the entry crossing point on THIS vehicle's ring lane
-            // so inner-lane proximity is measured accurately.
+            // Skip vehicles entering from the SAME arm — they go to
+            // different circulating lanes and won't conflict with us.
+            // BUT only skip if they are still near the entry point (recently
+            // entered). Once they've progressed along the ring they may have
+            // merged into our path and MUST be checked.
+            const otherSeg = other.currentSegment;
+            if (otherSeg?.phase === "inside") {
+                const otherSegs = other.route.segments;
+                if (otherSegs && other.segmentIndex > 0) {
+                    const otherPrevSeg = otherSegs[other.segmentIndex - 1];
+                    if (otherPrevSeg?.phase === "approach") {
+                        const otherEntryKey = this.entryGroupKeyFromNodeKey(
+                            this.nodeToKey(otherPrevSeg.from)
+                        );
+                        if (otherEntryKey === entryKey) {
+                            // Only skip if the other vehicle is still near
+                            // the start of its inside segment (recently entered).
+                            const otherSegDists = this.getSegmentDistances(other.route);
+                            const otherSegInfo = otherSegDists[other.segmentIndex];
+                            const otherDistFromStart = otherSegInfo
+                                ? (other.s - otherSegInfo.s0) : Infinity;
+                            if (otherDistFromStart < 6) continue;
+                        }
+                    }
+                }
+            }
+
             const otherPos = other.model.position;
             const otherDistFromCenter = Math.sqrt(
                 (otherPos.x - meta.center.x) ** 2 +
                 (otherPos.z - meta.center.z) ** 2
             );
+
+            // Check 1: proximity at the vehicle's CURRENT radius
             const laneEntryPos = new THREE.Vector3(
                 meta.center.x + Math.cos(entryAngle) * otherDistFromCenter,
                 meta.center.y,
                 meta.center.z + Math.sin(entryAngle) * otherDistFromCenter
             );
-
             const distance = otherPos.distanceTo(laneEntryPos);
             if (distance < clearanceGap) return false;
+
+            // Check 2: distance to the inner entry point — catches inner-lane
+            // vehicles that are near the entry radially even if their own-radius
+            // projection looks far away.
+            const distToInnerEntry = otherPos.distanceTo(innerEntryPos);
+            if (distToInnerEntry < clearanceGap) return false;
+
+            // Check 3: distance to the outer entry point
+            const distToOuterEntry = otherPos.distanceTo(outerEntryPos);
+            if (distToOuterEntry < clearanceGap) return false;
+
+            // Check 4: is this vehicle lane-changing TOWARD the outer lane
+            // (i.e., heading radially outward near the entry)?
+            // If so, it will cross the entry path even though it's currently
+            // on an inner lane.
+            if (meta.laneMidRadii.length >= 2 && otherDistFromCenter < outerR - 0.5) {
+                // Vehicle is on an inner lane. Check if it's heading outward
+                // toward the entry zone.
+                const otherFwd = new THREE.Vector3(
+                    Math.sin(other.model.rotation.y), 0, Math.cos(other.model.rotation.y)
+                );
+                // Radial outward direction from center through the vehicle
+                const radialOut = new THREE.Vector3(
+                    otherPos.x - meta.center.x, 0, otherPos.z - meta.center.z
+                ).normalize();
+                const radialComponent = otherFwd.dot(radialOut);
+
+                // If vehicle has a meaningful outward radial component,
+                // it's changing to an outer lane. Check if it's near the
+                // entry point angularly.
+                if (radialComponent > 0.15) {
+                    // Check angular proximity to entry — would this vehicle
+                    // cross our entry path while lane-changing?
+                    const distToOuterEntry = otherPos.distanceTo(outerEntryPos);
+                    // Use a larger clearance for lane-changers since they're
+                    // sweeping across our merge path
+                    const laneChangeClearance = clearanceGap * 1.5;
+                    if (distToOuterEntry < laneChangeClearance) return false;
+                }
+            }
         }
 
         return true;

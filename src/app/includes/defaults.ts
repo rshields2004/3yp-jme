@@ -34,7 +34,7 @@ export const defaultSimConfig: SimConfig = {
 
     // Spacing
     minBumperGap: 0.5,
-    timeHeadway: 1,
+    timeHeadway: 0.5,
     stopLineOffset: 0.01,
 
     // Rendering

@@ -18,6 +18,8 @@ export class RoundaboutController {
             speed: number;
             laneIndex: number;
             heading: THREE.Vector3;
+            entryKey?: string;
+            entryTime: number;
         }
     >();
 
@@ -111,14 +113,17 @@ export class RoundaboutController {
         position: THREE.Vector3,
         speed: number,
         laneIndex: number,
-        heading: THREE.Vector3
+        heading: THREE.Vector3,
+        entryKey?: string
     ): void {
-        
+        const existing = this.circulating.get(vehicleId);
         this.circulating.set(vehicleId, {
             position: position.clone(),
             speed,
             laneIndex,
             heading: heading.clone().normalize(),
+            entryKey: entryKey ?? existing?.entryKey,
+            entryTime: existing?.entryTime ?? this.now,
         });
     }
 
@@ -198,6 +203,12 @@ export class RoundaboutController {
         // even when it is far from the outer-lane entry point.
 
         for (const [, info] of this.circulating) {
+            // Skip vehicles that entered from the same arm AND are still
+            // near the entry (entered within 2s).  Once they've been
+            // circulating longer they may have merged across our path.
+            if (entryKey && info.entryKey === entryKey
+                && (this.now - info.entryTime) < 2.0) continue;
+
             // Distance from the circulating vehicle to the entry point on
             // its OWN lane radius (more accurate than always using the
             // outer-lane entry point, which under-estimates proximity for
