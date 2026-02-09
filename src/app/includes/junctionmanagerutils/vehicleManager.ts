@@ -162,7 +162,7 @@ export class VehicleManager {
 
     /** Compute (or return cached) cumulative arc-length distances for each route point */
     private getRouteCumulativeDistances(route: Route): number[] {
-        let cached = this.routeCumulativeDistances.get(route);
+        const cached = this.routeCumulativeDistances.get(route);
         if (cached) return cached;
 
         const pts = this.getRoutePointsCached(route);
@@ -528,15 +528,24 @@ export class VehicleManager {
                 }
 
                 // B) Same-lane leader from different route (shared physical lane)
+                // When a roundabout vehicle is within 3 units of its segment
+                // exit, it should stop watching ring traffic and instead look
+                // ahead to the next segment (the exit arm) so it doesn't
+                // brake for a circulating vehicle that's continuing around.
+                const segDists = this.getSegmentDistances(v.route);
+                const segInfo = segDists[v.segmentIndex];
+                const distToSegEnd = segInfo ? (segInfo.s1 - v.s) : Infinity;
+                const nearingExit = isRoundaboutInside && distToSegEnd < 6;
+
                 if (v.laneKey) {
                     const laneOccs = lanes.get(v.laneKey) ?? [];
-                    if (this.isRoundaboutLaneKey(v.laneKey)) {
+                    if (this.isRoundaboutLaneKey(v.laneKey) && !nearingExit) {
                         const roundaboutLeader = this.findRoundaboutLeader(v, laneOccs, desiredS);
                         if (roundaboutLeader && roundaboutLeader.gap < leaderGap) {
                             leaderGap = roundaboutLeader.gap;
                             leader = roundaboutLeader.leader;
                         }
-                    } else {
+                    } else if (!this.isRoundaboutLaneKey(v.laneKey)) {
                         const myCoord = this.laneCoord(v);
 
                         for (const occ of laneOccs) {
@@ -557,19 +566,19 @@ export class VehicleManager {
                     }
                 }
 
-                // C) Cross-segment lookahead: link->approach (NOT for roundabout inside)
+                // C) Cross-segment lookahead.
+                // Normally skipped for roundabout inside, but ENABLED when
+                // the vehicle is nearing its exit (within 3 units) so it
+                // can see congestion on the exit arm and brake in time.
                 let lookaheadResult: { leader: Vehicle; gap: number } | null = null;
                 
-                if (!isRoundaboutInside) {
+                if (!isRoundaboutInside || nearingExit) {
                     lookaheadResult = this.findLeaderInUpcomingSegments(v, lanes, desiredS);
                     if (lookaheadResult && lookaheadResult.gap < leaderGap) {
                         leaderGap = lookaheadResult.gap;
                         leader = lookaheadResult.leader;
                     }
                 }
-                // For roundabout inside phase: NO exit lane lookahead
-                // Let vehicles flow freely on the ring - they'll naturally follow ring leaders via IDM
-                // Exit congestion is handled when they transition to exit phase
 
                 // Base speed caps (segment boundary lookahead)
                 // SKIP for roundabout inside phase - let cars flow freely to their exit
@@ -934,7 +943,7 @@ export class VehicleManager {
     private findRoundaboutLeader(
         v: Vehicle,
         laneOccs: LaneOcc[],
-        desiredS: Map<Vehicle, number>
+        _desiredS: Map<Vehicle, number>
     ): { leader: Vehicle; gap: number } | null {
         if (!v.laneKey || !this.isRoundaboutLaneKey(v.laneKey)) return null;
 

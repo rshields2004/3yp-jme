@@ -93,7 +93,7 @@ function SpawnRateLabels({
     junctionGroups: THREE.Group[];
     stats: SimulationStats;
     positionsCache: Map<string, THREE.Vector3>;
-    routes: any[]; // Route array from vehicle manager
+    routes: Route[];
     simConfig: SimConfig;
 }) {
     // Helper function to check if an exit is a spawn point (has routes starting from it)
