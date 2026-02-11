@@ -1,7 +1,7 @@
 "use client";
 
 import { useThree, useFrame } from "@react-three/fiber";
-import { useRef, useState, useEffect, useCallback } from "react";
+import { useRef, useState, useEffect, useCallback, startTransition } from "react";
 import { MTLLoader, OBJLoader } from "three/examples/jsm/Addons.js";
 import { useJModellerContext } from "../context/JModellerContext";
 import * as THREE from "three";
@@ -206,6 +206,7 @@ export const TrafficSimulation = () => {
 
     const statsAccumRef = useRef(0);
     const lastStatsRef = useRef<SimulationStats | null>(null);
+    const statsRef = useRef<SimulationStats | null>(null);
     const raycasterRef = useRef(new THREE.Raycaster());
     const simAccumulatorRef = useRef(0);
 
@@ -560,33 +561,42 @@ export const TrafficSimulation = () => {
 
         
 
-        // 4) stats (throttled)
+        // 4) stats (throttled, stored in ref)
         statsAccumRef.current += delta;
-
-        const s = vm.getStats(); // your full SimulationStats snapshot
-
-        // update React state only 10 times per second
         if (statsAccumRef.current >= 0.1) {
-        statsAccumRef.current = 0;
+            statsAccumRef.current = 0;
+            const s = vm.getStats();
 
-        // optional: avoid updating state if nothing changed
-        // (cheap shallow compare for a couple of fields)
-        const prev = lastStatsRef.current;
-        if (
-            !prev ||
-            prev.active !== s.active ||
-            prev.spawnQueue !== s.spawnQueue ||
-            prev.spawned !== s.spawned ||
-            prev.completed !== s.completed ||
-            prev.junctions.global.waiting !== s.junctions.global.waiting ||
-            prev.junctions.global.inside !== s.junctions.global.inside
-        ) {
-            lastStatsRef.current = s;
-            setStats(s);
-        }
+            // optional: avoid updating ref if nothing changed
+            const prev = lastStatsRef.current;
+            if (
+                !prev ||
+                prev.active !== s.active ||
+                prev.spawnQueue !== s.spawnQueue ||
+                prev.spawned !== s.spawned ||
+                prev.completed !== s.completed ||
+                prev.junctions.global.waiting !== s.junctions.global.waiting ||
+                prev.junctions.global.inside !== s.junctions.global.inside
+            ) {
+                lastStatsRef.current = s;
+                statsRef.current = s;
+            }
         }
 
     });
+
+    // Sync stats to React state outside the render loop
+    useEffect(() => {
+        const id = window.setInterval(() => {
+            const s = statsRef.current;
+            if (!s) return;
+            startTransition(() => {
+                setStats(s);
+            });
+        }, 100);
+
+        return () => window.clearInterval(id);
+    }, [setStats]);
 
 
 
