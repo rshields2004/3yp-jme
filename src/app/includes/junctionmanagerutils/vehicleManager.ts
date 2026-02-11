@@ -8,7 +8,7 @@ import { RoundaboutController } from "./controllers/roundaboutController";
 import { disposeObjectTree } from "./helpers/dispose";
 import { isRoundaboutType, buildRoundaboutMeta } from "./helpers/roundaboutMeta";
 import { segmentId, segmentLen } from "./helpers/segmentHelpers";
-import { SeededRNG, rngForEntry, CarClass, carClassForModelIndex, bodyTypeForModelIndex } from "../types/carTypes";
+import { SeededRNG, rngForEntry, CarClass, carClassForModelIndex, bodyTypeForModelIndex, hashString } from "../types/carTypes";
 
 
 
@@ -68,8 +68,12 @@ export class VehicleManager {
     // Per-entry seeded RNGs for deterministic car class selection
     private entryRNGs = new Map<string, SeededRNG>();
 
-    // Stable RNG key per entry (position-based, independent of UUID)
+    // Stable RNG key per entry (config-hash-based, independent of UUID)
     private entryRngKeys = new Map<string, string>();
+
+    // Stable key per junction structureID (config-hash + ordinal), computed once
+    private junctionStableKeys = new Map<string, string>();
+    private junctionStableKeysBuilt = false;
 
     // Fixed-rate accumulator for spawn demand (ensures frame-rate-independent spawn timing)
     private spawnAccumulator = 0;
@@ -274,6 +278,12 @@ export class VehicleManager {
         this.roundaboutMeta.clear();
         this.controllersBuilt = false;
 
+        this.junctionStableKeys.clear();
+        this.junctionStableKeysBuilt = false;
+        this.entryRngKeys.clear();
+        this.entryRNGs.clear();
+        this.spawnAccumulator = 0;
+
         this.lastActiveLogged = null;
 
         this.statsSnapshot = null;
@@ -292,6 +302,7 @@ export class VehicleManager {
         if (!this.laneBasesBuilt) this.buildLaneBases();
 
         this.buildControllersIfNeeded(junctionObjectRefs);
+        this.buildJunctionStableKeys(junctionObjectRefs);
         for (const c of this.intersectionControllers.values()) c.update(dt);
         for (const c of this.roundaboutControllers.values()) c.update(dt);
 
@@ -1451,35 +1462,115 @@ export class VehicleManager {
     /** Build a map of routes grouped by entry point (structureID-exitIndex) */
     private buildRoutesByEntry(): void {
         this.routesByEntry.clear();
-        this.entryRngKeys.clear();
-        
+        // Don't clear entryRngKeys here — they are rebuilt by
+        // buildJunctionStableKeys() once junction groups are available.
+
         for (const route of this.routes) {
             const firstSeg = route.segments?.[0];
             if (!firstSeg) continue;
-            
+
             const entryKey = `${firstSeg.from.structureID}-${firstSeg.from.exitIndex}`;
-            
+
             if (!this.routesByEntry.has(entryKey)) {
                 this.routesByEntry.set(entryKey, []);
             }
             this.routesByEntry.get(entryKey)!.push(route);
         }
+    }
 
-        // Build stable RNG keys based on world-space position of each
-        // entry point.  This is independent of the junction UUID so two
-        // tabs with the same layout get identical sequences.
-        const entries = Array.from(this.routesByEntry.entries());
-        for (const [entryKey, routes] of entries) {
-            const pts = this.getRoutePointsCached(routes[0]);
-            if (pts && pts.length > 0) {
-                const p = pts[0];
-                // Round to 2 dp to avoid floating-point noise
-                const stableKey = `entry:${p[0].toFixed(2)},${p[1].toFixed(2)},${p[2].toFixed(2)}`;
-                this.entryRngKeys.set(entryKey, stableKey);
+    /**
+     * Build stable, config-hash-based keys for every entry point.
+     * The key encodes the junction TYPE + CONFIG (excluding the random UUID)
+     * so that two browser tabs with the same layout always produce the
+     * same RNG sequences, even when the underlying structureIDs differ.
+     *
+     * To disambiguate identical junctions (same type + config), junctions
+     * with the same config hash are sub-indexed by their world-position
+     * sort order (x then z).  This relative ordering is robust even if
+     * positions have small floating-point differences between tabs.
+     */
+    private buildJunctionStableKeys(
+        junctionObjectRefs: React.RefObject<THREE.Group<THREE.Object3DEventMap>[]>
+    ): void {
+        if (this.junctionStableKeysBuilt) return;
+
+        const groups = junctionObjectRefs.current;
+        if (!groups || groups.length === 0) return;
+
+        // Collect unique structureIDs referenced by routes
+        const structureIDs = new Set<string>();
+        for (const r of this.routes) {
+            for (const seg of r.segments ?? []) {
+                structureIDs.add(seg.from.structureID);
+                structureIDs.add(seg.to.structureID);
+            }
+        }
+
+        // For each structureID, compute a config hash from the junction group userData
+        const idToHash = new Map<string, string>();
+        const idToPos = new Map<string, { x: number; z: number }>();
+
+        for (const sid of structureIDs) {
+            const g = groups.find((grp) => grp?.userData?.id === sid);
+            if (!g) continue;
+
+            // Serialise the config-relevant userData fields (exclude id)
+            const configObj: Record<string, unknown> = {
+                type: g.userData.type ?? "unknown",
+                exitConfig: g.userData.exitConfig ?? [],
+            };
+            const configHash = hashString(JSON.stringify(configObj)).toString(36);
+            idToHash.set(sid, configHash);
+
+            // World position for sub-index tiebreaker
+            const wp = new THREE.Vector3();
+            g.getWorldPosition(wp);
+            idToPos.set(sid, { x: wp.x, z: wp.z });
+        }
+
+        // Group structureIDs by their config hash
+        const hashGroups = new Map<string, string[]>();
+        for (const [sid, ch] of idToHash.entries()) {
+            const arr = hashGroups.get(ch) ?? [];
+            arr.push(sid);
+            hashGroups.set(ch, arr);
+        }
+
+        // Within each group, sort by world position (x then z) → assign sub-index
+        for (const [ch, sids] of hashGroups.entries()) {
+            sids.sort((a, b) => {
+                const pa = idToPos.get(a)!;
+                const pb = idToPos.get(b)!;
+                // Round to 0 dp — only the RELATIVE order matters, not the exact value
+                const ax = Math.round(pa.x), az = Math.round(pa.z);
+                const bx = Math.round(pb.x), bz = Math.round(pb.z);
+                return ax !== bx ? ax - bx : az - bz;
+            });
+            for (let i = 0; i < sids.length; i++) {
+                this.junctionStableKeys.set(sids[i], `${ch}:${i}`);
+            }
+        }
+
+        // Rebuild entryRngKeys from junctionStableKeys
+        this.entryRngKeys.clear();
+        this.entryRNGs.clear(); // force re-creation with new keys
+
+        for (const [entryKey] of this.routesByEntry.entries()) {
+            // entryKey format: "structureID-exitIndex"
+            const dashIdx = entryKey.lastIndexOf("-");
+            const sid = entryKey.substring(0, dashIdx);
+            const exitIdx = entryKey.substring(dashIdx + 1);
+
+            const jStable = this.junctionStableKeys.get(sid);
+            if (jStable) {
+                this.entryRngKeys.set(entryKey, `cfg:${jStable}:${exitIdx}`);
             } else {
+                // Fallback — shouldn't happen, but keeps things working
                 this.entryRngKeys.set(entryKey, `entry:${entryKey}`);
             }
         }
+
+        this.junctionStableKeysBuilt = true;
     }
 
     /** Update spawn rates per entry from junction object configs */
