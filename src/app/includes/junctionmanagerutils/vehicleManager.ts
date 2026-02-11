@@ -8,6 +8,7 @@ import { RoundaboutController } from "./controllers/roundaboutController";
 import { disposeObjectTree } from "./helpers/dispose";
 import { isRoundaboutType, buildRoundaboutMeta } from "./helpers/roundaboutMeta";
 import { segmentId, segmentLen } from "./helpers/segmentHelpers";
+import { SeededRNG, rngForEntry, CarClass, carClassForModelIndex, bodyTypeForModelIndex } from "../types/carTypes";
 
 
 
@@ -64,6 +65,15 @@ export class VehicleManager {
     private lanes = new Map<string, LaneOcc[]>();
     private desiredS = new Map<Vehicle, number>();
 
+    // Per-entry seeded RNGs for deterministic car class selection
+    private entryRNGs = new Map<string, SeededRNG>();
+
+    // Stable RNG key per entry (position-based, independent of UUID)
+    private entryRngKeys = new Map<string, string>();
+
+    // Fixed-rate accumulator for spawn demand (ensures frame-rate-independent spawn timing)
+    private spawnAccumulator = 0;
+
 
     constructor(scene: THREE.Scene, carModels: THREE.Group[], routes: Route[], cfg?: Partial<SimConfig>) {
         this.scene = scene;
@@ -84,7 +94,13 @@ export class VehicleManager {
             maxAccel: 3.0,
             maxDecel: 6.0,
             comfortDecel: 3,
-            maxJerk: 10,
+
+            simSeed: "default",
+
+            enabledCarClasses: [
+                "coupe", "hatchback", "micro", "microcargo", "microtransport",
+                "minibus", "mpv", "normal", "pickup", "pickup-small", "station", "van",
+            ],
 
             minBumperGap: 2.0,
             timeHeadway: 1.5,
@@ -117,7 +133,12 @@ export class VehicleManager {
 
     /** Update simulation configuration */
     public updateConfig(cfg: Partial<SimConfig>): void {
+        const oldSeed = this.cfg.simSeed;
         this.cfg = { ...this.cfg, ...cfg };
+        // Reset per-entry RNGs when the seed changes so the next run is reproducible
+        if (cfg.simSeed !== undefined && cfg.simSeed !== oldSeed) {
+            this.entryRNGs.clear();
+        }
     }
 
     /** Get current simulation configuration */
@@ -283,17 +304,31 @@ export class VehicleManager {
             ? this.cfg.maxSpawnQueue / numSpawnPoints 
             : this.cfg.maxSpawnQueue;
 
-        // 2) Accumulate demand per entry (capped at per-entry max)
+        // 2) Accumulate demand per entry using fixed-rate ticks for
+        //    seed reproducibility.  The demand counter increments at a
+        //    fixed rate (1/60 s) so the Nth vehicle is always attempted
+        //    at the same simulation-time regardless of frame rate.
+        const SPAWN_TICK = 1 / 60;
+        this.spawnAccumulator = (this.spawnAccumulator ?? 0) + dt;
+        const spawnTicks = Math.floor(this.spawnAccumulator / SPAWN_TICK);
+        this.spawnAccumulator -= spawnTicks * SPAWN_TICK;
+
         for (const [entryKey, rate] of this.spawnRatesPerEntry.entries()) {
             const currentDemand = this.spawnDemandPerEntry.get(entryKey) || 0;
-            const newDemand = currentDemand + rate * dt;
+            const newDemand = currentDemand + rate * (spawnTicks * SPAWN_TICK);
             // Cap demand at the per-entry maximum
             this.spawnDemandPerEntry.set(entryKey, Math.min(newDemand, maxQueuePerEntry));
         }
 
-        // 3) Try to spawn from each entry
+        // 3) Try to spawn from each entry (sorted by stable key for determinism)
+        const sortedEntries = Array.from(this.spawnDemandPerEntry.entries())
+            .sort((a, b) => {
+                const ka = this.entryRngKeys.get(a[0]) ?? a[0];
+                const kb = this.entryRngKeys.get(b[0]) ?? b[0];
+                return ka < kb ? -1 : ka > kb ? 1 : 0;
+            });
         let totalAttempts = 0;
-        for (const [entryKey, demand] of this.spawnDemandPerEntry.entries()) {
+        for (const [entryKey, demand] of sortedEntries) {
             const vehiclesToSpawn = Math.floor(demand);
             
             if (vehiclesToSpawn > 0 && this.vehicles.length < this.cfg.maxVehicles) {
@@ -1416,6 +1451,7 @@ export class VehicleManager {
     /** Build a map of routes grouped by entry point (structureID-exitIndex) */
     private buildRoutesByEntry(): void {
         this.routesByEntry.clear();
+        this.entryRngKeys.clear();
         
         for (const route of this.routes) {
             const firstSeg = route.segments?.[0];
@@ -1427,6 +1463,22 @@ export class VehicleManager {
                 this.routesByEntry.set(entryKey, []);
             }
             this.routesByEntry.get(entryKey)!.push(route);
+        }
+
+        // Build stable RNG keys based on world-space position of each
+        // entry point.  This is independent of the junction UUID so two
+        // tabs with the same layout get identical sequences.
+        const entries = Array.from(this.routesByEntry.entries());
+        for (const [entryKey, routes] of entries) {
+            const pts = this.getRoutePointsCached(routes[0]);
+            if (pts && pts.length > 0) {
+                const p = pts[0];
+                // Round to 2 dp to avoid floating-point noise
+                const stableKey = `entry:${p[0].toFixed(2)},${p[1].toFixed(2)},${p[2].toFixed(2)}`;
+                this.entryRngKeys.set(entryKey, stableKey);
+            } else {
+                this.entryRngKeys.set(entryKey, `entry:${entryKey}`);
+            }
         }
     }
 
@@ -1483,23 +1535,80 @@ export class VehicleManager {
     // Spawning
     // -----------------------
 
-    /** Try to spawn a vehicle from a specific entry point */
+    /**
+     * Try to spawn a vehicle from a specific entry point.
+     *
+     * IMPORTANT FOR SEED REPRODUCIBILITY:
+     * The seeded RNG is always advanced by the same number of values per
+     * spawn attempt, regardless of whether `hasSpawnSpace` allows the
+     * spawn.  This guarantees the Nth spawn attempt at a given entry
+     * always produces the same vehicle type / colour / stats, even when
+     * earlier attempts were blocked at different times due to frame-rate
+     * differences.
+     */
     private trySpawnFromEntry(entryKey: string): boolean {
         const routesForEntry = this.routesByEntry.get(entryKey);
         if (!routesForEntry || routesForEntry.length === 0 || !this.carModels.length) return false;
 
-        // Pick a random route from this entry
-        const route = routesForEntry[Math.floor(Math.random() * routesForEntry.length)];
+        // Get or create seeded RNG for this entry point
+        let rng = this.entryRNGs.get(entryKey);
+        if (!rng) {
+            // Use position-based stable key instead of UUID-based entryKey
+            const stableKey = this.entryRngKeys.get(entryKey) ?? entryKey;
+            rng = rngForEntry(this.cfg.simSeed, stableKey);
+            this.entryRNGs.set(entryKey, rng);
+        }
+
+        // ── Consume a fixed number of RNG values per attempt ──────────
+        // Even if the spawn fails (no space), these values are consumed
+        // so the sequence stays aligned.
+        const rRouteIdx   = rng.nextInt(routesForEntry.length);   // 1
+        const rCarClass   = rng.pickCarClass(this.cfg.enabledCarClasses); // 2 (internally consumes 1)
+        const rColourIdx  = rng.next();                           // 3
+        const rVariation0 = rng.next();                           // 4
+        const rVariation1 = rng.next();                           // 5
+        const rVariation2 = rng.next();                           // 6
+        const rReaction   = rng.next();                           // 7
+        const rHeadway    = rng.next();                           // 8
+
+        // ── Resolve route ─────────────────────────────────────────────
+        const route = routesForEntry[rRouteIdx];
         const points = this.getRoutePointsCached(route);
         if (!points || points.length < 2) return false;
 
-        const template = this.carModels[Math.floor(Math.random() * this.carModels.length)];
-        const model = template.clone(true);
+        const carClass: CarClass = rCarClass;
+        const length = carClass.length;
 
-        const length = this.computeModelLength(model);
-
+        // ── Space check (does NOT touch RNG) ─────────────────────────
         if (!this.hasSpawnSpace(route, length)) return false;
 
+        // ── Resolve model (colour variant) ───────────────────────────
+        const matchingModels: number[] = [];
+        for (let i = 0; i < this.carModels.length; i++) {
+            const carFileIdx = this.carModels[i].userData?.carFileIndex as number | undefined;
+            if (carFileIdx !== undefined) {
+                const bt = bodyTypeForModelIndex(carFileIdx);
+                if (bt === carClass.bodyType) matchingModels.push(i);
+            }
+        }
+        // Sort by carFileIndex for deterministic colour order
+        matchingModels.sort((a, b) => {
+            const ai = (this.carModels[a].userData?.carFileIndex as number) ?? 0;
+            const bi = (this.carModels[b].userData?.carFileIndex as number) ?? 0;
+            return ai - bi;
+        });
+
+        let loadedIndex: number;
+        if (matchingModels.length > 0) {
+            loadedIndex = matchingModels[Math.floor(rColourIdx * matchingModels.length)];
+        } else {
+            loadedIndex = Math.floor(rColourIdx * this.carModels.length);
+        }
+        const template = this.carModels[loadedIndex];
+        if (!template) return false;
+        const model = template.clone(true);
+
+        // ── Place ────────────────────────────────────────────────────
         const p0 = points[0];
         const p1 = points[1];
 
@@ -1518,15 +1627,14 @@ export class VehicleManager {
         this.scene.add(model);
 
         const v = new Vehicle(this.nextId++, model, route, length, this.cfg.initialSpeed);
-        
-        // Initialize per-vehicle characteristics based on config with variation
-        const random = () => 0.85 + Math.random() * 0.3;
-        v.maxAccel = this.cfg.maxAccel * random();
-        v.maxDecel = this.cfg.maxDecel * random();
-        v.preferredSpeed = this.cfg.maxSpeed * random();
-        v.reactionTime = 0.15 + Math.random() * 0.25;
-        v.timeHeadway = this.cfg.timeHeadway * (0.8 + Math.random() * 0.4);
-        
+
+        // Apply car-class-specific characteristics from pre-drawn RNG values
+        v.maxAccel      = this.cfg.maxAccel  * carClass.accelFactor * (0.9 + rVariation0 * 0.2);
+        v.maxDecel      = this.cfg.maxDecel  * carClass.decelFactor * (0.9 + rVariation1 * 0.2);
+        v.preferredSpeed = this.cfg.maxSpeed * carClass.speedFactor * (0.9 + rVariation2 * 0.2);
+        v.reactionTime  = 0.15 + rReaction * 0.25;
+        v.timeHeadway   = this.cfg.timeHeadway * (0.8 + rHeadway * 0.4);
+
         v.s = 0;
         v.segmentIndex = 0;
         v.currentSegment = route.segments?.length ? route.segments[0] : null;
@@ -1997,6 +2105,12 @@ export class VehicleManager {
         // Also check for vehicles physically present on the roundabout
         const physicalClear = this.isRoundaboutEntryClear(v, junctionKey, entryKey, 0, lanes);
 
+        // DEBUG: log entry attempts for first 30s
+        if (this.elapsedTime < 30 && distToStopline < 5) {
+            const circCount = controller.getState();
+            console.log(`[RoundaboutEntry] v${v.id} entry=${entryKey} distToLine=${distToStopline.toFixed(1)} canEnter=${canEnter} physClear=${physicalClear} ${circCount} avgR=${meta.avgRadius.toFixed(1)} entryAngle=${entryAngle.toFixed(2)}`);
+        }
+
         if (canEnter && physicalClear) {
             // Gap is available — commit NOW if at the line, then go.
             // We commit before releasing speed so that even if the gap
@@ -2112,17 +2226,26 @@ export class VehicleManager {
                 meta.center.z + Math.sin(entryAngle) * otherDistFromCenter
             );
             const distance = otherPos.distanceTo(laneEntryPos);
-            if (distance < clearanceGap) return false;
+            if (distance < clearanceGap) {
+                if (this.elapsedTime < 30) console.log(`[PhysClear] v${v.id} entry=${entryKey}: BLOCKED check1 by v${other.id} dist=${distance.toFixed(1)} < gap=${clearanceGap.toFixed(1)} otherR=${otherDistFromCenter.toFixed(1)} outerR=${outerR.toFixed(1)}`);
+                return false;
+            }
 
             // Check 2: distance to the inner entry point — catches inner-lane
             // vehicles that are near the entry radially even if their own-radius
             // projection looks far away.
             const distToInnerEntry = otherPos.distanceTo(innerEntryPos);
-            if (distToInnerEntry < clearanceGap) return false;
+            if (distToInnerEntry < clearanceGap) {
+                if (this.elapsedTime < 30) console.log(`[PhysClear] v${v.id} entry=${entryKey}: BLOCKED check2(inner) by v${other.id} dist=${distToInnerEntry.toFixed(1)} < gap=${clearanceGap.toFixed(1)}`);
+                return false;
+            }
 
             // Check 3: distance to the outer entry point
             const distToOuterEntry = otherPos.distanceTo(outerEntryPos);
-            if (distToOuterEntry < clearanceGap) return false;
+            if (distToOuterEntry < clearanceGap) {
+                if (this.elapsedTime < 30) console.log(`[PhysClear] v${v.id} entry=${entryKey}: BLOCKED check3(outer) by v${other.id} dist=${distToOuterEntry.toFixed(1)} < gap=${clearanceGap.toFixed(1)}`);
+                return false;
+            }
 
             // Check 4: is this vehicle lane-changing TOWARD the outer lane
             // (i.e., heading radially outward near the entry)?

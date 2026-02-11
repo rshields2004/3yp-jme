@@ -109,7 +109,8 @@ export async function loadCarModels(): Promise<THREE.Group[]> {
 
         console.log("Loading car models...");
 
-        for (const car of carFiles) {
+        for (let i = 0; i < carFiles.length; i++) {
+            const car = carFiles[i];
             try {
                 const materials = await mtlLoader.loadAsync(car.mtl);
                 materials.preload();
@@ -117,6 +118,9 @@ export async function loadCarModels(): Promise<THREE.Group[]> {
                 objLoader.setMaterials(materials);
                 const model = await objLoader.loadAsync(car.obj);
                 model.scale.set(1, 1, 1);
+                // Store the original carFiles index so model ↔ carFiles mapping
+                // survives even when some models fail to load.
+                model.userData.carFileIndex = i;
 
                 loadedModels.push(model);
             } catch (error) {

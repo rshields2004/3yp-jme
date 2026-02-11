@@ -106,7 +106,12 @@ export type SimConfig = {
     maxAccel: number;
     maxDecel: number;
     comfortDecel: number;
-    maxJerk: number;
+
+    // Seeding (same seed => same car-class sequence on every device)
+    simSeed: string;
+
+    // Car class filter (body type strings that are allowed to spawn)
+    enabledCarClasses: string[];
 
     // Spacing
     minBumperGap: number;

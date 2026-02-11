@@ -1,3 +1,163 @@
+// ── Car class definitions ─────────────────────────────────────────────
+
+/** Physical / kinematic properties for a vehicle body type. */
+export type CarClass = {
+    /** Human-readable body type name (matches model filename prefix) */
+    bodyType: string;
+    /** Typical vehicle length in world units */
+    length: number;
+    /** Max speed multiplier relative to SimConfig.maxSpeed (1.0 = 100%) */
+    speedFactor: number;
+    /** Max acceleration multiplier relative to SimConfig.maxAccel */
+    accelFactor: number;
+    /** Max deceleration multiplier relative to SimConfig.maxDecel */
+    decelFactor: number;
+    /** Spawn‐weight (higher = more common). Weights are normalised at runtime. */
+    weight: number;
+};
+
+/**
+ * Car classes indexed by body type.
+ * Speed / accel / decel factors are *multipliers* applied to the
+ * SimConfig base values so the UI sliders still scale everything.
+ */
+export const carClasses: CarClass[] = [
+    { bodyType: "coupe",          length: 1.99, speedFactor: 1.10, accelFactor: 1.15, decelFactor: 1.05, weight: 10 },
+    { bodyType: "hatchback",      length: 1.81, speedFactor: 1.00, accelFactor: 1.00, decelFactor: 1.00, weight: 20 },
+    { bodyType: "micro",          length: 1.42, speedFactor: 0.85, accelFactor: 1.05, decelFactor: 0.95, weight: 5 },
+    { bodyType: "microcargo",     length: 1.82, speedFactor: 0.80, accelFactor: 0.90, decelFactor: 0.90, weight: 3 },
+    { bodyType: "microtransport", length: 1.82, speedFactor: 0.80, accelFactor: 0.85, decelFactor: 0.90, weight: 3 },
+    { bodyType: "minibus",        length: 2.16, speedFactor: 0.90, accelFactor: 0.75, decelFactor: 0.85, weight: 4 },
+    { bodyType: "mpv",            length: 2.00, speedFactor: 0.95, accelFactor: 0.90, decelFactor: 0.95, weight: 10 },
+    { bodyType: "normal",         length: 1.82, speedFactor: 1.00, accelFactor: 1.00, decelFactor: 1.00, weight: 25 },
+    { bodyType: "pickup",         length: 1.97, speedFactor: 0.95, accelFactor: 0.85, decelFactor: 0.90, weight: 6 },
+    { bodyType: "pickup-small",   length: 1.92, speedFactor: 0.95, accelFactor: 0.90, decelFactor: 0.95, weight: 4 },
+    { bodyType: "station",        length: 2.10, speedFactor: 1.00, accelFactor: 0.95, decelFactor: 1.00, weight: 8 },
+    { bodyType: "van",            length: 2.16, speedFactor: 0.85, accelFactor: 0.70, decelFactor: 0.80, weight: 5 },
+];
+
+/** Lookup map: bodyType -> CarClass */
+const classByBodyType = new Map<string, CarClass>(
+    carClasses.map(c => [c.bodyType, c])
+);
+
+/**
+ * Derive the body type string from a model index into `carFiles`.
+ * Model filenames are `/models/car-<bodyType>-<color>.obj`.
+ */
+export function bodyTypeForModelIndex(modelIndex: number): string {
+    const entry = carFiles[modelIndex];
+    if (!entry) return "normal";
+    // e.g. "/models/car-pickup-small-blue.obj" -> "pickup-small"
+    const filename = entry.obj.split("/").pop() ?? "";      // "car-pickup-small-blue.obj"
+    const noExt = filename.replace(/\.obj$/, "");           // "car-pickup-small-blue"
+    const parts = noExt.split("-");                         // ["car","pickup","small","blue"]
+    // Remove leading "car" and trailing color
+    parts.shift();  // remove "car"
+    parts.pop();    // remove color
+    return parts.join("-"); // "pickup-small"
+}
+
+/** Get the CarClass for a loaded model index (falls back to "normal"). */
+export function carClassForModelIndex(modelIndex: number): CarClass {
+    const bt = bodyTypeForModelIndex(modelIndex);
+    return classByBodyType.get(bt) ?? classByBodyType.get("normal")!;
+}
+
+// ── Seeded PRNG (mulberry32) ──────────────────────────────────────────
+
+/**
+ * A simple, fast, seedable 32-bit PRNG.
+ * Same seed ⇒ same sequence on every device / JS engine.
+ */
+export class SeededRNG {
+    private state: number;
+
+    constructor(seed: number) {
+        this.state = seed | 0;
+    }
+
+    /** Return a float in [0, 1). */
+    next(): number {
+        let t = (this.state += 0x6d2b79f5);
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    }
+
+    /** Return an integer in [0, max). */
+    nextInt(max: number): number {
+        return Math.floor(this.next() * max);
+    }
+
+    /**
+     * Pick a CarClass based on weights using this RNG,
+     * filtered to only the enabled body types.
+     */
+    pickCarClass(enabledBodyTypes?: string[]): CarClass {
+        const pool = enabledBodyTypes && enabledBodyTypes.length > 0
+            ? carClasses.filter(c => enabledBodyTypes.includes(c.bodyType))
+            : carClasses;
+        if (pool.length === 0) return carClasses[0]; // fallback
+        const totalWeight = pool.reduce((s, c) => s + c.weight, 0);
+        let r = this.next() * totalWeight;
+        for (const cc of pool) {
+            r -= cc.weight;
+            if (r <= 0) return cc;
+        }
+        return pool[pool.length - 1];
+    }
+}
+
+/**
+ * Build a per-entry seeded RNG.  Combines the global seed with a
+ * deterministic hash of the entry-key string so every entry point
+ * gets its own independent, reproducible sequence.
+ */
+/** Hash a string into a 32-bit integer (FNV-1a inspired). */
+export function hashString(str: string): number {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < str.length; i++) {
+        h ^= str.charCodeAt(i);
+        h = Math.imul(h, 0x01000193);
+    }
+    return h | 0;
+}
+
+export function rngForEntry(globalSeed: string, entryKey: string): SeededRNG {
+    const baseSeed = hashString(globalSeed);
+    let hash = baseSeed;
+    for (let i = 0; i < entryKey.length; i++) {
+        hash = Math.imul(hash ^ entryKey.charCodeAt(i), 0x5bd1e995);
+        hash ^= hash >>> 15;
+    }
+    return new SeededRNG(hash);
+}
+
+/**
+ * Return the indices into `carFiles` whose body type matches the given CarClass.
+ */
+export function modelIndicesForClass(cc: CarClass): number[] {
+    const out: number[] = [];
+    for (let i = 0; i < carFiles.length; i++) {
+        if (bodyTypeForModelIndex(i) === cc.bodyType) out.push(i);
+    }
+    return out;
+}
+
+// Pre-compute index lists per class for fast lookup
+const _modelIndicesCache = new Map<string, number[]>();
+export function getModelIndicesForClass(cc: CarClass): number[] {
+    let cached = _modelIndicesCache.get(cc.bodyType);
+    if (!cached) {
+        cached = modelIndicesForClass(cc);
+        _modelIndicesCache.set(cc.bodyType, cached);
+    }
+    return cached;
+}
+
+
+
 export const carFiles = [
     { obj: "/models/car-coupe-blue.obj", mtl: "/models/car-coupe-blue.mtl" },
     { obj: "/models/car-coupe-citrus.obj", mtl: "/models/car-coupe-citrus.mtl" },

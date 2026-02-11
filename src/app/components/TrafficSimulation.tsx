@@ -226,12 +226,14 @@ export const TrafficSimulation = () => {
                 const models = await loadCarModels();
                 if (cancelled) return;
 
+
                 carModelsRef.current = models;
                 setCarsReady(true);
             } catch (error) {
                 console.error("Failed to load car models:", error);
             }
         })();
+        
 
         return () => {
             cancelled = true;
@@ -547,16 +549,11 @@ export const TrafficSimulation = () => {
         
         if (simIsPaused) return;
 
-        // 1) advance sim + controller state (fixed timestep for stability)
+        // 1) advance sim + controller state (variable timestep, clamped for stability)
         const maxDelta = 0.05;
-        const fixedDt = 1 / 60;
         const clamped = Math.min(delta, maxDelta);
-        simAccumulatorRef.current += clamped;
 
-        while (simAccumulatorRef.current >= fixedDt) {
-            vm.update(fixedDt, junctionObjectRefs);
-            simAccumulatorRef.current -= fixedDt;
-        }
+        vm.update(clamped, junctionObjectRefs);
 
         // 2) push controller colours into stop lines (visual sync)
         applyIntersectionStopLineColours(junctionObjectRefs.current, vm);

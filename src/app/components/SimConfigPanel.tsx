@@ -1,6 +1,7 @@
 "use client";
 
 import { useJModellerContext } from "../context/JModellerContext";
+import { carClasses } from "../includes/types/carTypes";
 
 export default function SimConfigPanel() {
     const { isConfigConfirmed, simIsRunning, simConfig, setSimConfig } = useJModellerContext();
@@ -31,7 +32,7 @@ export default function SimConfigPanel() {
                 padding: 10,
                 borderRadius: 8,
                 fontFamily: "system-ui, sans-serif",
-                maxHeight: "calc(100vh - 20px)",
+                maxHeight: 700,
                 overflowY: "auto",
                 minWidth: 280,
             }}
@@ -42,6 +43,15 @@ export default function SimConfigPanel() {
             <div style={{ marginBottom: 10 }}>
                 <h3>Spawning</h3>
                 <div>
+                    <label>Seed:
+                        <input
+                            type="text"
+                            value={simConfig.simSeed}
+                            onChange={(e) => setSimConfig(prev => ({ ...prev, simSeed: e.target.value }))}
+                            style={{ width: 120, marginLeft: 5, color: "black" }}
+                        />
+                    </label>
+                    <br />
                     <label>Global Spawn Rate (veh/s):
                         <input
                             type="range"
@@ -90,6 +100,37 @@ export default function SimConfigPanel() {
                     </label>
                     <span>{simConfig.maxSpawnQueue}</span>
                     <br />
+                </div>
+            </div>
+
+            {/* Car Classes Section */}
+            <div style={{ marginBottom: 10 }}>
+                <h3>Car Classes</h3>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2px 8px" }}>
+                    {carClasses.map(cc => {
+                        const enabled = simConfig.enabledCarClasses.includes(cc.bodyType);
+                        return (
+                            <label key={cc.bodyType} style={{ opacity: enabled ? 1 : 0.5, cursor: "pointer" }}>
+                                <input
+                                    type="checkbox"
+                                    checked={enabled}
+                                    onChange={() => {
+                                        setSimConfig(prev => {
+                                            const cur = prev.enabledCarClasses;
+                                            const next = enabled
+                                                ? cur.filter(b => b !== cc.bodyType)
+                                                : [...cur, cc.bodyType];
+                                            // Prevent unchecking all — keep at least one
+                                            if (next.length === 0) return prev;
+                                            return { ...prev, enabledCarClasses: next };
+                                        });
+                                    }}
+                                    style={{ marginRight: 4 }}
+                                />
+                                {cc.bodyType}
+                            </label>
+                        );
+                    })}
                 </div>
             </div>
 
@@ -156,18 +197,6 @@ export default function SimConfigPanel() {
                         />
                     </label>
                     <span>{simConfig.comfortDecel.toFixed(1)}</span>
-                    <br />
-                    <label>Max Jerk:
-                        <input
-                            type="range"
-                            step="1"
-                            min="1"
-                            max="30"
-                            value={simConfig.maxJerk}
-                            onChange={(e) => handleNumberChange("maxJerk", parseFloat(e.target.value) || 1)}
-                        />
-                    </label>
-                    <span>{simConfig.maxJerk.toFixed(1)}</span>
                     <br />
                 </div>
             </div>

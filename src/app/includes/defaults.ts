@@ -30,7 +30,15 @@ export const defaultSimConfig: SimConfig = {
     maxAccel: 4,
     maxDecel: 8,
     comfortDecel: 4,
-    maxJerk: 10,
+
+    // Seeding
+    simSeed: "default",
+
+    // Car classes (all enabled by default)
+    enabledCarClasses: [
+        "coupe", "hatchback", "micro", "microcargo", "microtransport",
+        "minibus", "mpv", "normal", "pickup", "pickup-small", "station", "van",
+    ],
 
     // Spacing
     minBumperGap: 0.5,

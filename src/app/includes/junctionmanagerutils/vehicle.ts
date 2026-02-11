@@ -48,15 +48,13 @@ export class Vehicle {
             this.currentSegment = route.segments[0];
         }
 
-        // Random variation for natural behavior (±20% variation)
-        const random = () => 0.85 + Math.random() * 0.3;
-        
-        // Base values will be set by VehicleManager from config
-        this.maxAccel = 3.0 * random();
-        this.maxDecel = 6.0 * random();
-        this.preferredSpeed = 10.0 * random();
-        this.reactionTime = 0.15 + Math.random() * 0.25; // 0.15-0.4s
-        this.timeHeadway = 1.2 + Math.random() * 0.8; // 1.2-2.0s
+        // Placeholder defaults — always overwritten by VehicleManager
+        // using the seeded RNG so behaviour is reproducible.
+        this.maxAccel = 3.0;
+        this.maxDecel = 6.0;
+        this.preferredSpeed = 10.0;
+        this.reactionTime = 0.25;
+        this.timeHeadway = 1.5;
         
     }
 }
