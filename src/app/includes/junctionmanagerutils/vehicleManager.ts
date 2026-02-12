@@ -1234,12 +1234,6 @@ export class VehicleManager {
         return wrapped * meta.avgRadius;
     }
 
-    private roundaboutCircumference(junctionId: string): number {
-        const meta = this.roundaboutMeta.get(junctionId);
-        if (!meta) return 1;
-        return Math.max(1e-6, Math.PI * 2 * Math.max(0.01, meta.avgRadius));
-    }
-
     /** Compute average lane width for a roundabout from its radii metadata */
     private roundaboutLaneWidth(junctionId: string): number {
         const meta = this.roundaboutMeta.get(junctionId);
@@ -2053,20 +2047,20 @@ export class VehicleManager {
 
         // If green, check downstream space
         if (green) {
-            // Intersections: check for downstream blocking
-            const exitLaneKey = this.getExitLaneKeyForVehicle(v);
-            if (exitLaneKey) {
-                const safetyMargin = Math.max(v.speed * v.timeHeadway * 0.5, this.cfg.spacing.minBumperGap);
-                const requiredGap = v.length + safetyMargin;
+            // // Intersections: check for downstream blocking slows down simulation massively
+            // const exitLaneKey = this.getExitLaneKeyForVehicle(v);
+            // if (exitLaneKey) {
+            //     const safetyMargin = this.cfg.spacing.minBumperGap;
+            //     const requiredGap = v.length + safetyMargin;
 
-                const laneStartBase = this.laneStartBaseForExitLane(exitLaneKey, v);
-                const nearest = this.nearestDistanceFromLaneStart(exitLaneKey, laneStartBase, lanes, desiredS);
+            //     const laneStartBase = this.laneStartBaseForExitLane(exitLaneKey, v);
+            //     const nearest = this.nearestDistanceFromLaneStart(exitLaneKey, laneStartBase, lanes, desiredS);
 
-                if (nearest !== null && nearest.dist < requiredGap) {
-                    // blocked by downstream congestion
-                    return this.capToStopline(v, targetSpeed);
-                }
-            }
+            //     if (nearest !== null && nearest.dist < requiredGap) {
+            //         // blocked by downstream congestion
+            //         return this.capToStopline(v, targetSpeed);
+            //     }
+            // }
             return targetSpeed;
         }
 

@@ -35,10 +35,6 @@ export class IntersectionController {
         this.id = id;
         this.laneKeys = [...new Set(laneKeys)];
         this.getCfg = cfgGetter;
-
-        // If multiple approaches, start with GREEN for first approach
-        // If 1 approach, also fine (it will never advance)
-        this.state = "GREEN";
     }
 
     update(dt: number) {
@@ -88,9 +84,7 @@ export class IntersectionController {
 
     /** True only during GREEN phase for the currently-served approach. */
     isGreen(laneKey: string): boolean {
-        if (this.laneKeys.length === 0) return true; // uncontrolled = always go
-        if (this.state !== "GREEN") return false;
-        return this.laneKeys[this.greenIndex] === laneKey;
+        return this.getCurrentGreen() === laneKey;
     }
 
     getState(): "GREEN" | "AMBER" | "ALL_RED" | "RED_AMBER" {

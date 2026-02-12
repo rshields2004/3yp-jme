@@ -134,7 +134,10 @@ export default function SimConfigPanel() {
                                             }
                                             return { 
                                                 ...prev, 
-                                                enabledCarClasses: next 
+                                                rendering: {
+                                                    ...prev.rendering,
+                                                    enabledCarClasses: next
+                                                }
                                             };
                                         });
                                     }}
@@ -144,6 +147,18 @@ export default function SimConfigPanel() {
                             </label>
                         );
                     })}
+                    <button
+                        onClick={() => setSimConfig(prev => {
+                            return {
+                                ...prev,
+                                rendering : {
+                                    ...prev.rendering,
+                                    enabledCarClasses: ["coupe"]
+                                }
+                            }
+                        })}
+                    >
+                    Unselect All</button>
                 </div>
             </div>
 
@@ -323,28 +338,28 @@ export default function SimConfigPanel() {
                 <h3>Intersection Controller</h3>
                 <div>
                     <label>Green Time (s):
-                        <input type="range" step="1" min="1" max="30"
+                        <input type="range" step="0.1" min="0.1" max="30"
                             value={simConfig.controllers.intersection.intersectionGreenTime}
                             onChange={(e) => handleNumberChange(["controllers", "intersection", "intersectionGreenTime"], parseFloat(e.target.value) || 1)} />
                     </label>
-                    <span>{simConfig.controllers.intersection.intersectionGreenTime.toFixed(0)}</span>
+                    <span>{simConfig.controllers.intersection.intersectionGreenTime.toFixed(1)}</span>
                     <br />
                     <label>Amber Time (s):
-                        <input type="range" step="0.5" min="0.5" max="10"
+                        <input type="range" step="0.1" min="0.1" max="10"
                             value={simConfig.controllers.intersection.intersectionAmberTime}
                             onChange={(e) => handleNumberChange(["controllers", "intersection", "intersectionAmberTime"], parseFloat(e.target.value) || 0.5)} />
                     </label>
                     <span>{simConfig.controllers.intersection.intersectionAmberTime.toFixed(1)}</span>
                     <br />
                     <label>Red-Amber Time (s):
-                        <input type="range" step="0.5" min="0.5" max="5"
+                        <input type="range" step="0.1" min="0.1" max="5"
                             value={simConfig.controllers.intersection.intersectionRedAmberTime}
                             onChange={(e) => handleNumberChange(["controllers", "intersection", "intersectionRedAmberTime"], parseFloat(e.target.value) || 0.5)} />
                     </label>
                     <span>{simConfig.controllers.intersection.intersectionRedAmberTime.toFixed(1)}</span>
                     <br />
                     <label>All-Red Time (s):
-                        <input type="range" step="0.5" min="0.5" max="5"
+                        <input type="range" step="0.1" min="0.1" max="5"
                             value={simConfig.controllers.intersection.intersectionAllRedTime}
                             onChange={(e) => handleNumberChange(["controllers", "intersection", "intersectionAllRedTime"], parseFloat(e.target.value) || 0.5)} />
                     </label>

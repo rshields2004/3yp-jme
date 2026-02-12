@@ -40,7 +40,6 @@ export class RoundaboutController {
 
     // Lane geometry for lane-aware gap checking
     private laneMidRadii: number[] = [];
-    private numLanes = 1;
     private laneWidth = 3.0;
 
     private readonly getCfg: () => SimConfig;
@@ -61,7 +60,6 @@ export class RoundaboutController {
         this.center.copy(center);
         if (laneMidRadii && laneMidRadii.length > 0) {
             this.laneMidRadii = [...laneMidRadii];
-            this.numLanes = laneMidRadii.length;
             if (laneMidRadii.length >= 2) {
                 this.laneWidth = Math.abs(
                     laneMidRadii[laneMidRadii.length - 1] - laneMidRadii[0]

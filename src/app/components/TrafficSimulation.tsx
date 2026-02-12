@@ -310,6 +310,9 @@ export const TrafficSimulation = () => {
 
             vehicleManagerRef.current = new VehicleManager(scene, carModelsRef.current, generatedRoutes, simConfig);
 
+            // Ensure config is applied immediately
+            vehicleManagerRef.current.updateConfig(simConfig);
+
             // Create debug route visualization if enabled
             if (showDebugRoutes) {
                 createDebugRoutes();
@@ -419,6 +422,13 @@ export const TrafficSimulation = () => {
             createDebugRoutes();
         }
     }, [showDebugRoutes, isInitialised, createDebugRoutes]);
+
+    // Update simulation config when it changes in the UI
+    useEffect(() => {
+        if (vehicleManagerRef.current) {
+            vehicleManagerRef.current.updateConfig(simConfig);
+        }
+    }, [simConfig]);
 
     // Double-click handler for selecting a vehicle to follow
     useEffect(() => {
