@@ -45,11 +45,11 @@ export class RoundaboutController {
 
     private readonly getCfg: () => SimConfig;
 
-    private get MIN_GAP_DISTANCE() { return this.getCfg().roundaboutMinGap; }
-    private get MIN_TIME_GAP() { return this.getCfg().roundaboutMinTimeGap; }
-    private get SAFE_ENTRY_DISTANCE() { return this.getCfg().roundaboutSafeEntryDist; }
-    private get ENTRY_TIMEOUT() { return this.getCfg().roundaboutEntryTimeout; }
-    private get MIN_ANGULAR_SEPARATION() { return this.getCfg().roundaboutMinAngularSep; }
+    private get MIN_GAP_DISTANCE() { return this.getCfg().controllers.roundabout.roundaboutMinGap; }
+    private get MIN_TIME_GAP() { return this.getCfg().controllers.roundabout.roundaboutMinTimeGap; }
+    private get SAFE_ENTRY_DISTANCE() { return this.getCfg().controllers.roundabout.roundaboutSafeEntryDist; }
+    private get ENTRY_TIMEOUT() { return this.getCfg().controllers.roundabout.roundaboutEntryTimeout; }
+    private get MIN_ANGULAR_SEPARATION() { return this.getCfg().controllers.roundabout.roundaboutMinAngularSep; }
 
     constructor(id: string, entryKeys: string[], cfgGetter: () => SimConfig) {
         this.id = id;

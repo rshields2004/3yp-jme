@@ -127,7 +127,7 @@ function SpawnRateLabels({
                         if (!exitConfig || !exitInfo) return [];
 
                         return exitConfig.map((config, exitIndex) => {
-                            const spawnRate = config.spawnRate ?? simConfig.spawnRate;
+                            const spawnRate = config.spawnRate ?? simConfig.spawning.spawnRate;
                             if (spawnRate === 0) return null; // Don't show label for zero spawn rate
 
                             // Only show label if this exit is an actual spawn point

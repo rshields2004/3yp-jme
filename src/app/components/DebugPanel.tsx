@@ -655,7 +655,7 @@ export default function DebugPanel() {
                                                 min={0}
                                                 max={10}
                                                 step={0.1}
-                                                value={exit.spawnRate ?? simConfig.spawnRate}
+                                                value={exit.spawnRate ?? simConfig.spawning.spawnRate}
                                                 onChange={e => {
                                                     const val = Number(e.target.value);
                                                     // Set override; clear if matches global
@@ -663,7 +663,7 @@ export default function DebugPanel() {
                                                 }}
                                             />
                                         </label>
-                                        <span>{exit.spawnRate != null ? exit.spawnRate.toFixed(1) : `${simConfig.spawnRate.toFixed(1)} (global)`}</span>
+                                        <span>{exit.spawnRate != null ? exit.spawnRate.toFixed(1) : `${simConfig.spawning.spawnRate.toFixed(1)} (global)`}</span>
                                         {exit.spawnRate != null && (
                                             <button
                                                 style={{ marginLeft: 6, fontSize: 10, cursor: "pointer" }}
@@ -795,14 +795,14 @@ export default function DebugPanel() {
                                                 min={0}
                                                 max={10}
                                                 step={0.1}
-                                                value={exit.spawnRate ?? simConfig.spawnRate}
+                                                value={exit.spawnRate ?? simConfig.spawning.spawnRate}
                                                 onChange={e => {
                                                     const val = Number(e.target.value);
                                                     handleSpawnRateChange(secondSelectedObject.id, j, val);
                                                 }}
                                             />
                                         </label>
-                                        <span>{exit.spawnRate != null ? exit.spawnRate.toFixed(1) : `${simConfig.spawnRate.toFixed(1)} (global)`}</span>
+                                        <span>{exit.spawnRate != null ? exit.spawnRate.toFixed(1) : `${simConfig.spawning.spawnRate.toFixed(1)} (global)`}</span>
                                         {exit.spawnRate != null && (
                                             <button
                                                 style={{ marginLeft: 6, fontSize: 10, cursor: "pointer" }}

@@ -18,55 +18,54 @@ export const defaultExitConfig = {
 };
 
 export const defaultSimConfig: SimConfig = {
-    // Spawning
-    spawnRate: 0.5,
-    maxVehicles: 100,
-    maxSpawnAttemptsPerFrame: 20,
-    maxSpawnQueue: 25,
 
-    // Motion
-    initialSpeed: 0,
-    maxSpeed: 10,
-    maxAccel: 4,
-    maxDecel: 8,
-    comfortDecel: 4,
+    spawning: {
+        spawnRate: 0.5,
+        maxVehicles: 100,
+        maxSpawnAttemptsPerFrame: 20,
+        maxSpawnQueue: 25,
+    },
 
-    // Seeding
+    motion: {
+        initialSpeed: 0,
+        maxSpeed: 10,
+        maxAccel: 4,
+        maxDecel: 8,
+        comfortDecel: 4,
+    },
+   
     simSeed: "default",
 
-    // Car classes (all enabled by default)
-    enabledCarClasses: [
-        "coupe", "hatchback", "micro", "microcargo", "microtransport",
-        "minibus", "mpv", "normal", "pickup", "pickup-small", "station", "van",
-    ],
+    spacing: {
+        minBumperGap: 0.5,
+        timeHeadway: 0.5,
+        stopLineOffset: 0.01,
+    },
 
-    // Spacing
-    minBumperGap: 0.5,
-    timeHeadway: 0.5,
-    stopLineOffset: 0.01,
 
-    // Rendering
-    yOffset: 0.01,
-
-    // Stage 2
-    enableLaneQueuing: true,
-    debugLaneQueues: false,
-
-    // Roundabout-specific
-    roundaboutDecelZone: 20,
-
-    // Roundabout controller
-    roundaboutMinGap: 2,
-    roundaboutMinTimeGap: 1.5,
-    roundaboutSafeEntryDist: 20,
-    roundaboutEntryTimeout: 1.0,
-    roundaboutMinAngularSep: Math.PI / 6,
-
-    // Intersection controller (traffic light timings)
-    intersectionGreenTime: 8,
-    intersectionAmberTime: 1,
-    intersectionRedAmberTime: 1,
-    intersectionAllRedTime: 2,
+    rendering: {
+        enabledCarClasses: [
+            "coupe", "hatchback", "micro", "microcargo", "microtransport",
+            "minibus", "mpv", "normal", "pickup", "pickup-small", "station", "van"
+        ],
+        yOffset: 0.01,    
+    },   
+    
+    controllers: {
+        roundabout: {
+            roundaboutMinGap: 2,
+            roundaboutMinTimeGap: 1.5,
+            roundaboutSafeEntryDist: 20,
+            roundaboutEntryTimeout: 1.0,
+            roundaboutMinAngularSep: Math.PI / 6,
+        },
+        intersection: {
+            intersectionGreenTime: 8,
+            intersectionAmberTime: 1,
+            intersectionRedAmberTime: 1,
+            intersectionAllRedTime: 2,
+        },
+    },
 };
 
 export const defaultIntersectionConfig: IntersectionConfig = {

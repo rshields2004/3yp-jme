@@ -94,52 +94,49 @@ export type SimulationStats = {
 };
 
 export type SimConfig = {
-    // Spawning
-    spawnRate: number;  // default vehicles per second per entry
-    maxVehicles: number;
-    maxSpawnAttemptsPerFrame: number;
-    maxSpawnQueue: number;
+    spawning: {
+        spawnRate: number;  // default vehicles per second per entry
+        maxVehicles: number;
+        maxSpawnAttemptsPerFrame: number;
+        maxSpawnQueue: number;
+    };
+    
+    motion: {
+        initialSpeed: number;
+        maxSpeed: number;
+        maxAccel: number;
+        maxDecel: number;
+        comfortDecel: number;
+    };
 
-    // Motion
-    initialSpeed: number;
-    maxSpeed: number;
-    maxAccel: number;
-    maxDecel: number;
-    comfortDecel: number;
-
-    // Seeding (same seed => same car-class sequence on every device)
     simSeed: string;
 
-    // Car class filter (body type strings that are allowed to spawn)
-    enabledCarClasses: string[];
+    spacing: {
+        minBumperGap: number;
+        timeHeadway: number;
+        stopLineOffset: number;
+    }
 
-    // Spacing
-    minBumperGap: number;
-    timeHeadway: number;
-    stopLineOffset: number;
+    rendering: {
+        enabledCarClasses: string[];
+        yOffset: number;
+    };
 
-    // Rendering
-    yOffset: number;
-
-    // Stage 2
-    enableLaneQueuing: boolean;
-    debugLaneQueues: boolean;
-
-    // Roundabout-specific
-    roundaboutDecelZone: number;  // Distance before stopline to start decelerating
-
-    // Roundabout controller
-    roundaboutMinGap: number;           // Min distance to any circulating vehicle
-    roundaboutMinTimeGap: number;       // Seconds buffer for approaching vehicles
-    roundaboutSafeEntryDist: number;    // Check approaching vehicles within this distance
-    roundaboutEntryTimeout: number;     // Seconds before a conflicting entry expires
-    roundaboutMinAngularSep: number;    // Radians — min angular separation between entries
-
-    // Intersection controller (traffic light timings)
-    intersectionGreenTime: number;
-    intersectionAmberTime: number;
-    intersectionRedAmberTime: number;
-    intersectionAllRedTime: number;
+    controllers: {
+        roundabout: {
+            roundaboutMinGap: number;           // Min distance to any circulating vehicle
+            roundaboutMinTimeGap: number;       // Seconds buffer for approaching vehicles
+            roundaboutSafeEntryDist: number;    // Check approaching vehicles within this distance
+            roundaboutEntryTimeout: number;     // Seconds before a conflicting entry expires
+            roundaboutMinAngularSep: number;    // Radians — min angular separation between entries
+        };
+        intersection: {
+            intersectionGreenTime: number;
+            intersectionAmberTime: number;
+            intersectionRedAmberTime: number;
+            intersectionAllRedTime: number;
+        };
+    }
 };
 
 

@@ -9,6 +9,7 @@ import { disposeObjectTree } from "./helpers/dispose";
 import { isRoundaboutType, buildRoundaboutMeta } from "./helpers/roundaboutMeta";
 import { segmentId, segmentLen } from "./helpers/segmentHelpers";
 import { SeededRNG, rngForEntry, CarClass, carClassForModelIndex, bodyTypeForModelIndex, hashString } from "../types/carTypes";
+import { defaultSimConfig } from "../defaults";
 
 
 
@@ -87,52 +88,7 @@ export class VehicleManager {
         // Build routes by entry point
         this.buildRoutesByEntry();
 
-        this.cfg = {
-            spawnRate: 0.5,
-            maxVehicles: 40,
-            maxSpawnAttemptsPerFrame: 6,
-            maxSpawnQueue: 25,
-
-            initialSpeed: 0,
-            maxSpeed: 10,
-            maxAccel: 3.0,
-            maxDecel: 6.0,
-            comfortDecel: 3,
-
-            simSeed: "default",
-
-            enabledCarClasses: [
-                "coupe", "hatchback", "micro", "microcargo", "microtransport",
-                "minibus", "mpv", "normal", "pickup", "pickup-small", "station", "van",
-            ],
-
-            minBumperGap: 2.0,
-            timeHeadway: 1.5,
-
-            yOffset: 0.0,
-            stopLineOffset: 0.4,
-
-            enableLaneQueuing: true,
-            debugLaneQueues: false,
-
-            // Roundabout-specific config
-            roundaboutDecelZone: 20,  // Start decelerating 20 units before stopline
-
-            // Roundabout controller
-            roundaboutMinGap: 2,
-            roundaboutMinTimeGap: 1.5,
-            roundaboutSafeEntryDist: 20,
-            roundaboutEntryTimeout: 1.0,
-            roundaboutMinAngularSep: Math.PI / 6,
-
-            // Intersection controller
-            intersectionGreenTime: 8,
-            intersectionAmberTime: 1,
-            intersectionRedAmberTime: 1,
-            intersectionAllRedTime: 2,
-
-            ...cfg,
-        };
+        this.cfg = defaultSimConfig;
     }
 
     /** Update simulation configuration */
@@ -311,9 +267,7 @@ export class VehicleManager {
 
         // Calculate per-entry max spawn queue (global divided by number of spawn points)
         const numSpawnPoints = this.routesByEntry.size;
-        const maxQueuePerEntry = numSpawnPoints > 0 
-            ? this.cfg.maxSpawnQueue / numSpawnPoints 
-            : this.cfg.maxSpawnQueue;
+        const maxQueuePerEntry = numSpawnPoints > 0 ? this.cfg.spawning.maxSpawnQueue / numSpawnPoints : this.cfg.spawning.maxSpawnQueue;
 
         // 2) Accumulate demand per entry using fixed-rate ticks for
         //    seed reproducibility.  The demand counter increments at a
@@ -342,15 +296,15 @@ export class VehicleManager {
         for (const [entryKey, demand] of sortedEntries) {
             const vehiclesToSpawn = Math.floor(demand);
             
-            if (vehiclesToSpawn > 0 && this.vehicles.length < this.cfg.maxVehicles) {
+            if (vehiclesToSpawn > 0 && this.vehicles.length < this.cfg.spawning.maxVehicles) {
                 let spawned = 0;
                 let attempts = 0;
                 
                 while (
                     spawned < vehiclesToSpawn &&
-                    this.vehicles.length < this.cfg.maxVehicles &&
-                    attempts < this.cfg.maxSpawnAttemptsPerFrame &&
-                    totalAttempts < this.cfg.maxSpawnAttemptsPerFrame * 3
+                    this.vehicles.length < this.cfg.spawning.maxVehicles &&
+                    attempts < this.cfg.spawning.maxSpawnAttemptsPerFrame &&
+                    totalAttempts < this.cfg.spawning.maxSpawnAttemptsPerFrame * 3
                 ) {
                     attempts++;
                     totalAttempts++;
@@ -374,14 +328,9 @@ export class VehicleManager {
         // 4) compute desiredS with accel/decel + queuing constraints
         const desiredS = new Map<Vehicle, number>();
 
-        if (this.cfg.enableLaneQueuing) {
-            this.applyLaneQueuingWithKinematics(dt, desiredS);
-        } else {
-            for (const v of this.vehicles) {
-                v.speed = this.approachSpeed(v.speed, v.preferredSpeed, dt, v);
-                desiredS.set(v, v.s + v.speed * dt);
-            }
-        }
+      
+        this.applyLaneQueuingWithKinematics(dt, desiredS);
+       
 
         // 5) apply desired s -> pose + despawn
         for (let i = this.vehicles.length - 1; i >= 0; i--) {
@@ -471,7 +420,7 @@ export class VehicleManager {
     
 
     private stoppingDistance(speed: number, vehicle?: Vehicle): number {
-        const decel = vehicle ? vehicle.maxDecel : this.cfg.maxDecel;
+        const decel = vehicle ? vehicle.maxDecel : this.cfg.motion.maxDecel;
         return (speed * speed) / (2 * decel);
     }
 
@@ -697,20 +646,6 @@ export class VehicleManager {
 
                 let newS = v.s + v.speed * dt;
 
-                // Debug: log roundabout vehicle behavior (gated behind debugLaneQueues)
-                if (isRoundaboutInside && this.cfg.debugLaneQueues) {
-                    console.log("[RoundaboutDebug]", {
-                        vid: v.id,
-                        speed: v.speed.toFixed(2),
-                        accel: accel.toFixed(2),
-                        desiredSpeedCap: desiredSpeedCap.toFixed(2),
-                        leader: leader ? {
-                            id: leader.id,
-                            gap: leaderGap === Infinity ? "∞" : leaderGap.toFixed(1),
-                            speed: leader.speed.toFixed(2),
-                        } : "none",
-                    });
-                }
 
                 // Apply stopline clamping (but never for roundabout inside phase)
                 if (stoplineS !== null && Number.isFinite(stoplineS) && newS > stoplineS && !isRoundaboutInside) {
@@ -750,7 +685,7 @@ export class VehicleManager {
                             if (shouldCheck) {
                                 const dist = myPos.distanceTo(leaderPos);
                                 const bumpGap = dist - 0.5 * (leader.length + v.length);
-                                const safeGap = bumpGap - this.cfg.minBumperGap;
+                                const safeGap = bumpGap - this.cfg.spacing.minBumperGap;
                                 if (safeGap < v.length) {
                                     // Use IDM with the measured gap for smooth deceleration
                                     const idmA = this.computeIdmAccel(
@@ -765,7 +700,7 @@ export class VehicleManager {
                         // Regular collision prevention for non-roundabout segments
                         if (leader.route === v.route) {
                             const leaderS = desiredS.get(leader) ?? leader.s;
-                            const minSafeS = leaderS - 0.5 * (leader.length + v.length) - this.cfg.minBumperGap;
+                            const minSafeS = leaderS - 0.5 * (leader.length + v.length) - this.cfg.spacing.minBumperGap;
                             if (newS > minSafeS) {
                                 const sGap = Math.max(0, minSafeS - v.s);
                                 const idmA = this.computeIdmAccel(
@@ -776,7 +711,7 @@ export class VehicleManager {
                             }
                         } else {
                             const newGap = this.estimateGapAfterMove(v, newS, leader, desiredS);
-                            if (newGap < this.cfg.minBumperGap) {
+                            if (newGap < this.cfg.spacing.minBumperGap) {
                                 const curGap = this.estimateGapAfterMove(v, v.s, leader, desiredS);
                                 const idmA = this.computeIdmAccel(
                                     v, v.preferredSpeed, leader.speed, Math.max(0, curGap)
@@ -853,7 +788,7 @@ export class VehicleManager {
 
                             const otherPos = other.model.position;
                             const dist = myPos.distanceTo(otherPos);
-                            const hardMinDist = 0.5 * (v.length + other.length) + this.cfg.minBumperGap;
+                            const hardMinDist = 0.5 * (v.length + other.length) + this.cfg.spacing.minBumperGap;
                             const softMinDist = hardMinDist + 1.0;
 
                             if (dist < softMinDist) {
@@ -1087,9 +1022,9 @@ export class VehicleManager {
     ): number {
         const v0 = Math.max(0.1, desiredSpeed);
         const a = Math.max(0.1, v.maxAccel);
-        const b = Math.max(0.1, this.cfg.comfortDecel);
+        const b = Math.max(0.1, this.cfg.motion.comfortDecel);
         const delta = 4;
-        const s0 = Math.max(0.5, this.cfg.minBumperGap);
+        const s0 = Math.max(0.5, this.cfg.spacing.minBumperGap);
         const T = Math.max(0.5, v.timeHeadway);
 
         const freeRoadTerm = 1 - Math.pow(v.speed / v0, delta);
@@ -1342,8 +1277,8 @@ export class VehicleManager {
         const a = pts[idx];
         const b = pts[idx + 1];
 
-        const pA = new THREE.Vector3(a[0], a[1] + this.cfg.yOffset, a[2]);
-        const pB = new THREE.Vector3(b[0], b[1] + this.cfg.yOffset, b[2]);
+        const pA = new THREE.Vector3(a[0], a[1] + this.cfg.rendering.yOffset, a[2]);
+        const pB = new THREE.Vector3(b[0], b[1] + this.cfg.rendering.yOffset, b[2]);
 
         return pA.clone().lerp(pB, t);
     }
@@ -1604,7 +1539,7 @@ export class VehicleManager {
                 validEntries.add(entryKey);
                 
                 // Per-exit override takes priority, otherwise fall back to global SimConfig rate
-                const rate = config.spawnRate ?? this.cfg.spawnRate;
+                const rate = config.spawnRate ?? this.cfg.spawning.spawnRate;
                 this.spawnRatesPerEntry.set(entryKey, rate);
                 
                 // Initialize demand to 0 if this is a new entry
@@ -1654,7 +1589,7 @@ export class VehicleManager {
         // Even if the spawn fails (no space), these values are consumed
         // so the sequence stays aligned.
         const rRouteIdx   = rng.nextInt(routesForEntry.length);   // 1
-        const rCarClass   = rng.pickCarClass(this.cfg.enabledCarClasses); // 2 (internally consumes 1)
+        const rCarClass   = rng.pickCarClass(this.cfg.rendering.enabledCarClasses); // 2 (internally consumes 1)
         const rColourIdx  = rng.next();                           // 3
         const rVariation0 = rng.next();                           // 4
         const rVariation1 = rng.next();                           // 5
@@ -1703,8 +1638,8 @@ export class VehicleManager {
         const p0 = points[0];
         const p1 = points[1];
 
-        const pos0 = new THREE.Vector3(p0[0], p0[1] + this.cfg.yOffset, p0[2]);
-        const pos1 = new THREE.Vector3(p1[0], p1[1] + this.cfg.yOffset, p1[2]);
+        const pos0 = new THREE.Vector3(p0[0], p0[1] + this.cfg.rendering.yOffset, p0[2]);
+        const pos1 = new THREE.Vector3(p1[0], p1[1] + this.cfg.rendering.yOffset, p1[2]);
 
         model.position.copy(pos0);
 
@@ -1717,14 +1652,14 @@ export class VehicleManager {
 
         this.scene.add(model);
 
-        const v = new Vehicle(this.nextId++, model, route, length, this.cfg.initialSpeed);
+        const v = new Vehicle(this.nextId++, model, route, length, this.cfg.motion.initialSpeed);
 
         // Apply car-class-specific characteristics from pre-drawn RNG values
-        v.maxAccel      = this.cfg.maxAccel  * carClass.accelFactor * (0.9 + rVariation0 * 0.2);
-        v.maxDecel      = this.cfg.maxDecel  * carClass.decelFactor * (0.9 + rVariation1 * 0.2);
-        v.preferredSpeed = this.cfg.maxSpeed * carClass.speedFactor * (0.9 + rVariation2 * 0.2);
+        v.maxAccel      = this.cfg.motion.maxAccel  * carClass.accelFactor * (0.9 + rVariation0 * 0.2);
+        v.maxDecel      = this.cfg.motion.maxDecel  * carClass.decelFactor * (0.9 + rVariation1 * 0.2);
+        v.preferredSpeed = this.cfg.motion.maxSpeed * carClass.speedFactor * (0.9 + rVariation2 * 0.2);
         v.reactionTime  = 0.15 + rReaction * 0.25;
-        v.timeHeadway   = this.cfg.timeHeadway * (0.8 + rHeadway * 0.4);
+        v.timeHeadway   = this.cfg.spacing.timeHeadway * (0.8 + rHeadway * 0.4);
 
         v.s = 0;
         v.segmentIndex = 0;
@@ -1776,11 +1711,11 @@ export class VehicleManager {
 
         if (!nearest) return true;
 
-        const brakingDistance = (this.cfg.initialSpeed * this.cfg.initialSpeed) / (2 * this.cfg.maxDecel);
-        const timeHeadwayBuffer = this.cfg.initialSpeed * this.cfg.timeHeadway;
+        const brakingDistance = (this.cfg.motion.initialSpeed * this.cfg.motion.initialSpeed) / (2 * this.cfg.motion.maxDecel);
+        const timeHeadwayBuffer = this.cfg.motion.initialSpeed * this.cfg.spacing.timeHeadway;
 
         const safetyBuffer = Math.max(brakingDistance, timeHeadwayBuffer);
-        const required = newLen + this.cfg.minBumperGap + safetyBuffer;
+        const required = newLen + this.cfg.spacing.minBumperGap + safetyBuffer;
 
         return nearestS >= required;
     }
@@ -1899,8 +1834,8 @@ export class VehicleManager {
         const a = pts[idx];
         const b = pts[idx + 1];
 
-        const pA = new THREE.Vector3(a[0], a[1] + this.cfg.yOffset, a[2]);
-        const pB = new THREE.Vector3(b[0], b[1] + this.cfg.yOffset, b[2]);
+        const pA = new THREE.Vector3(a[0], a[1] + this.cfg.rendering.yOffset, a[2]);
+        const pB = new THREE.Vector3(b[0], b[1] + this.cfg.rendering.yOffset, b[2]);
 
         v.model.position.copy(pA.clone().lerp(pB, t));
 
@@ -2012,9 +1947,7 @@ export class VehicleManager {
 
                 // For roundabouts: use the configured decel zone
                 // For intersections: use braking distance calculation
-                const lookaheadDist = isRoundabout 
-                    ? this.cfg.roundaboutDecelZone 
-                    : Math.max(this.stoppingDistance(v.speed, v) * 1.5, 20);
+                const lookaheadDist = Math.max(this.stoppingDistance(v.speed, v) * 1.5, 20);
                 
                 if (totalDistToStopline < lookaheadDist) {
                     const controller = this.intersectionControllers.get(junctionKey) ?? this.roundaboutControllers.get(junctionKey);
@@ -2037,7 +1970,7 @@ export class VehicleManager {
                                     if (!canEnter) {
                                         // Need to stop - calculate deceleration
                                         const frontOffset = 0.5 * v.length;
-                                        const stopBuffer = this.cfg.stopLineOffset;
+                                        const stopBuffer = this.cfg.spacing.stopLineOffset;
                                         const adjustedDist = totalDistToStopline - frontOffset - stopBuffer;
                                         
                                         if (adjustedDist > 0) {
@@ -2056,7 +1989,7 @@ export class VehicleManager {
                             if (!green) {
                                 // Red light ahead - start slowing down
                                 const frontOffset = 0.5 * v.length;
-                                const stopBuffer = this.cfg.stopLineOffset;
+                                const stopBuffer = this.cfg.spacing.stopLineOffset;
                                 const adjustedDist = totalDistToStopline - frontOffset - stopBuffer;
                             
                                 if (adjustedDist > 0) {
@@ -2123,7 +2056,7 @@ export class VehicleManager {
             // Intersections: check for downstream blocking
             const exitLaneKey = this.getExitLaneKeyForVehicle(v);
             if (exitLaneKey) {
-                const safetyMargin = Math.max(v.speed * v.timeHeadway * 0.5, this.cfg.minBumperGap);
+                const safetyMargin = Math.max(v.speed * v.timeHeadway * 0.5, this.cfg.spacing.minBumperGap);
                 const requiredGap = v.length + safetyMargin;
 
                 const laneStartBase = this.laneStartBaseForExitLane(exitLaneKey, v);
@@ -2163,7 +2096,7 @@ export class VehicleManager {
 
         const distToStopline = stopS - v.s;
         const frontBumperS = v.s + 0.5 * v.length;
-        const frontBumperDistToLine = stopS + this.cfg.stopLineOffset - frontBumperS;
+        const frontBumperDistToLine = stopS + this.cfg.spacing.stopLineOffset - frontBumperS;
 
         // Check if vehicle is already committed (front bumper has crossed the stopline).
         // Even when committed, keep checking for circulating vehicles that may
@@ -2387,7 +2320,7 @@ export class VehicleManager {
         const frontOffset = 0.5 * v.length;
 
         // additional buffer so cars stop *before* the stop line
-        const stopBuffer = this.cfg.stopLineOffset;
+        const stopBuffer = this.cfg.spacing.stopLineOffset;
 
         const segDists = this.getSegmentDistances(v.route);
         const segInfo = segDists[v.segmentIndex];
@@ -2402,7 +2335,7 @@ export class VehicleManager {
 
     private getStoplineS(v: Vehicle): number | null {
         const frontOffset = 0.5 * v.length;
-        const stopBuffer = this.cfg.stopLineOffset;
+        const stopBuffer = this.cfg.spacing.stopLineOffset;
 
         const segDists = this.getSegmentDistances(v.route);
         const segInfo = segDists[v.segmentIndex];
@@ -2434,7 +2367,7 @@ export class VehicleManager {
         const totalDistToStopline = distToCurrentSegEnd + nextSegLength;
 
         const frontOffset = 0.5 * v.length;
-        const stopBuffer = this.cfg.stopLineOffset;
+        const stopBuffer = this.cfg.spacing.stopLineOffset;
         const stoplineS = v.s + totalDistToStopline - frontOffset - stopBuffer;
 
         const junctionKey = nextSeg.to.structureID;
@@ -2560,7 +2493,7 @@ export class VehicleManager {
         if (!segInfo) return false;
 
         const distToSegEnd = Math.max(0, (segInfo.s1 ?? 0) - v.s);
-        const reserveThreshold = Math.max(v.length * 1.5, this.cfg.minBumperGap * 2, 3);
+        const reserveThreshold = Math.max(v.length * 1.5, this.cfg.spacing.minBumperGap * 2, 3);
 
         return distToSegEnd <= reserveThreshold;
     }

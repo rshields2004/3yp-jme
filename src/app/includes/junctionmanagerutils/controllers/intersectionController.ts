@@ -18,10 +18,10 @@ export class IntersectionController {
 
     private readonly getCfg: () => SimConfig;
 
-    private get greenSeconds() { return this.getCfg().intersectionGreenTime; }
-    private get amberSeconds() { return this.getCfg().intersectionAmberTime; }
-    private get redAmberSeconds() { return this.getCfg().intersectionRedAmberTime; }
-    private get allRedSeconds() { return this.getCfg().intersectionAllRedTime; }
+    private get greenSeconds() { return this.getCfg().controllers.intersection.intersectionGreenTime; }
+    private get amberSeconds() { return this.getCfg().controllers.intersection.intersectionAmberTime; }
+    private get redAmberSeconds() { return this.getCfg().controllers.intersection.intersectionRedAmberTime; }
+    private get allRedSeconds() { return this.getCfg().controllers.intersection.intersectionAllRedTime; }
 
     private timer = 0;
 
