@@ -103,7 +103,7 @@ export type SimConfig = {
     
     motion: {
         initialSpeed: number;
-        maxSpeed: number;
+        preferredSpeed: number;
         maxAccel: number;
         maxDecel: number;
         comfortDecel: number;

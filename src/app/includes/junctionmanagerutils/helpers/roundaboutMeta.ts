@@ -50,5 +50,5 @@ export function buildRoundaboutMeta(
 
 export function isRoundaboutType(junctionKey: string, junctionType?: string): boolean {
     const key = junctionKey.toLowerCase();
-    return junctionType === "roundabout" || key.includes("roundabout") || key.includes("rndbt");
+    return junctionType === "roundabout" || key.includes("roundabout");
 }

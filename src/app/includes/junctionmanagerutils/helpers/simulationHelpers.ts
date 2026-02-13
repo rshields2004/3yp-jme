@@ -34,7 +34,7 @@ export function applyIntersectionStopLineColours(
         }
 
         // Find the controller associated with the intersection
-        const controller = vehicleManager.getIntersectionController?.(junctionId);
+        const controller = vehicleManager.getController?.(junctionId);
         if (!controller) {
             continue;
         }

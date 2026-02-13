@@ -42,7 +42,7 @@ export default function SimConfigPanel() {
                 padding: 10,
                 borderRadius: 8,
                 fontFamily: "system-ui, sans-serif",
-                maxHeight: 700,
+                maxHeight: 600,
                 overflowY: "auto",
                 minWidth: 280,
             }}
@@ -178,17 +178,17 @@ export default function SimConfigPanel() {
                     </label>
                     <span>{simConfig.motion.initialSpeed.toFixed(1)}</span>
                     <br />
-                    <label>Max Speed:
+                    <label>Preferred Speed:
                         <input
                             type="range"
                             step="0.5"
                             min="1"
                             max="30"
-                            value={simConfig.motion.maxSpeed}
-                            onChange={(e) => handleNumberChange(["motion", "maxSpeed"], parseInt(e.target.value))}
+                            value={simConfig.motion.preferredSpeed}
+                            onChange={(e) => handleNumberChange(["motion", "preferredSpeed"], parseInt(e.target.value))}
                         />
                     </label>
-                    <span>{simConfig.motion.maxSpeed.toFixed(1)}</span>
+                    <span>{simConfig.motion.preferredSpeed.toFixed(1)}</span>
                     <br />
                     <label>Max Accel:
                         <input

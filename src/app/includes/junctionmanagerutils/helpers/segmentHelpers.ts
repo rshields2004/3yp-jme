@@ -1,4 +1,4 @@
-import { RouteSegment } from "../../types/simulation";
+import { Node, NodeKey, RouteSegment } from "../../types/simulation";
 
 /**
  * Create a unique segment identifier.
@@ -22,4 +22,8 @@ export function segmentLen(seg: RouteSegment): number {
         len += Math.sqrt(dx * dx + dy * dy + dz * dz);
     }
     return len;
+}
+
+export function nodeKeyOf(n: Node): NodeKey {
+    return `${n.structureID}-${n.exitIndex}-${n.direction}-${n.laneIndex}`;
 }

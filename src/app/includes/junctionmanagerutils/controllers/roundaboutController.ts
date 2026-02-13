@@ -20,6 +20,7 @@ export class RoundaboutController {
             heading: THREE.Vector3;
             entryKey?: string;
             entryTime: number;
+            isExiting?: boolean;
         }
     >();
 
@@ -122,6 +123,7 @@ export class RoundaboutController {
             heading: heading.clone().normalize(),
             entryKey: entryKey ?? existing?.entryKey,
             entryTime: existing?.entryTime ?? this.now,
+            isExiting: existing?.isExiting
         });
     }
 
@@ -154,6 +156,13 @@ export class RoundaboutController {
         this.circulating.delete(vehicleId);
         this.committed.delete(vehicleId);
         this.entering.delete(vehicleId);
+    }
+
+    setVehicleExiting(vehicleId: number, isExiting: boolean) {
+        const veh = this.circulating.get(vehicleId);
+        if (veh) {
+            veh.isExiting = isExiting;
+        }
     }
 
     private hasConflictingEntry(entryKey: string, entryPosition: THREE.Vector3): boolean {
@@ -207,7 +216,7 @@ export class RoundaboutController {
             // circulating longer they may have merged across our path.
             if (entryKey && info.entryKey === entryKey
                 && (this.now - info.entryTime) < 2.0) continue;
-
+            if (info.isExiting) continue;
             // Distance from the circulating vehicle to the entry point on
             // its OWN lane radius (more accurate than always using the
             // outer-lane entry point, which under-estimates proximity for

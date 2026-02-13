@@ -28,7 +28,7 @@ export const defaultSimConfig: SimConfig = {
 
     motion: {
         initialSpeed: 0,
-        maxSpeed: 10,
+        preferredSpeed: 10,
         maxAccel: 4,
         maxDecel: 8,
         comfortDecel: 4,

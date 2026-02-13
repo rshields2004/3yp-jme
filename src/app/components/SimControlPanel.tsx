@@ -1,0 +1,313 @@
+ "use client";
+ 
+import { useEffect, useState } from "react";
+ import { useJModellerContext } from "../context/JModellerContext";
+import { NetMessage, SharedState, usePeer } from "../context/PeerContext";
+ 
+ export default function SimControlPanel() {
+    const { 
+        isConfigConfirmed, 
+        simIsRunning, 
+        carsReady, 
+        junction, 
+        confirmConfig, 
+        resetConfig, 
+        startSim, 
+        simIsPaused, 
+        pauseSim, 
+        resumeSim,
+        haltSim,
+        stats,
+        setJunction,
+        simConfig,
+        setSimConfig
+    } = useJModellerContext();
+ 
+    const {
+        isHost,
+        hostId,
+        connections,
+        createHost,
+        joinHost,
+        send,
+    } = usePeer();
+
+
+    const [joinCode, setJoinCode] = useState('');
+
+    // Client message handler
+
+    useEffect(() => {
+        if (isHost) {
+            return;
+        }
+
+        const conn = connections[0];
+
+        if (!conn) {
+            return;
+        }
+
+        conn.on("data", (msg: NetMessage) => {
+            if (msg.type === "INIT_CONFIG") {
+                setJunction(msg.appdata.junction);
+                setSimConfig(msg.appdata.simConfig);
+            }
+
+            if (msg.type === "START") {
+                startSim();
+            }
+
+            if (msg.type === "PAUSE") {
+                pauseSim();
+            }
+
+            if (msg.type === "RESUME") {
+                resumeSim();
+            }
+
+            if (msg.type === "HALT") {
+                haltSim();
+            }
+
+        });
+    }, [connections, isHost, setJunction])
+
+
+    useEffect(() => {
+
+        if (!isHost) {
+            return;
+        }
+
+        connections.forEach(conn => {
+            if ((conn as any)._initSent) {
+                return;
+            }
+
+            conn.on("open", () => {
+                conn.send({
+                    type: "INIT_CONFIG",
+                    appdata: {
+                        junction,
+                        simConfig
+                    }
+                });
+                (conn as any)._initSent = true;
+            });
+        });
+    }, [connections, isHost, junction, simConfig])
+
+    useEffect(() => {
+        if (!isHost) return;
+        send({ type: 'INIT_CONFIG', appdata: { 
+            junction,
+            simConfig 
+        }});
+    }, [junction, simConfig]);
+
+    return  (
+        <div
+            style={{
+                position: "absolute",
+                top: 10,
+                right: 10,
+                padding: 10,
+                background: "rgba(0,0,0,0.7)",
+                color: "white",
+                borderRadius: 8,
+                minWidth: 320,
+                fontFamily: "system-ui, sans-serif"
+            }}
+        >
+            <div style={{ marginBottom: 10 }}>
+                {!isHost && !connections.length && (
+                    <>
+                        <button onClick={createHost}>Host Session</button>
+                        <div style={{ marginTop: 10 }}>
+                            <input
+                                placeholder="Enter host code"
+                                value={joinCode}
+                                onChange={e => setJoinCode(e.target.value)}
+                            />
+                            <button onClick={() => joinHost(joinCode)}>Join</button>
+                        </div>
+                    </>
+                )}
+            </div>
+            <div style={{ marginBottom: 10 }}>
+                {isHost && (
+
+                    <p><strong>Share this code:</strong><br></br>{hostId}</p>
+
+                )}
+                {!isHost && connections.length > 0 && (
+                    <p>Connected to host</p>
+                )}
+            </div>
+            <h1 style={{ margin: "0 0 8px 0", fontSize: 18 }}>Simulation Control</h1>
+
+            {/* Loading indicator */}
+            <div style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 12, marginBottom: 4, opacity: 0.8 }}>
+                    {carsReady ? "Car models loaded ✓" : "Loading car models..."}
+                </div>
+                <div style={{
+                    width: "100%",
+                    height: 6,
+                    background: "rgba(255,255,255,0.2)",
+                    borderRadius: 3,
+                    overflow: "hidden"
+                }}>
+                    <div style={{
+                        width: carsReady ? "100%" : "30%",
+                        height: "100%",
+                        background: carsReady 
+                            ? "#4CAF50" 
+                            : "linear-gradient(90deg, #4CAF50, #8BC34A)",
+                        borderRadius: 3,
+                        transition: carsReady ? "width 0.3s ease-out" : "none",
+                        animation: carsReady ? "none" : "loadingPulse 1.5s ease-in-out infinite"
+                    }} />
+                </div>
+                {!carsReady && (
+                    <style>{`
+                        @keyframes loadingPulse {
+                            0%, 100% { width: 20%; margin-left: 0%; }
+                            50% { width: 40%; margin-left: 60%; }
+                        }
+                    `}</style>
+                )}
+            </div>
+            <fieldset
+                style={{
+                    fontFamily: "system-ui, sans-serif"
+                }}
+            >
+                {!isConfigConfirmed && (
+                    <>
+                        <button 
+                            disabled={simIsRunning || junction.junctionObjects.length === 0}
+                            onClick={() => confirmConfig()}
+                            style={{
+                                background: junction.junctionObjects.length > 0 ? "#FFA500" : "#666",
+                                fontWeight: "bold"
+                            }}
+                        >
+                            Confirm Config
+                        </button>
+                        <div style={{ fontSize: 11, opacity: 0.7, marginTop: 4, marginBottom: 8 }}>
+                            Configure junctions, then confirm to set spawn rates
+                        </div>
+                    </>
+                )}
+
+                {isConfigConfirmed && !simIsRunning && (
+                    <>
+                        <button 
+                            onClick={() => resetConfig()}
+                            style={{ background: "#666", marginBottom: 8 }}
+                        >
+                            ← Back to Config
+                        </button>
+                        <div style={{ fontSize: 11, opacity: 0.7, marginBottom: 8 }}>
+                            Select junctions to configure spawn rates
+                        </div>
+                    </>
+                )}
+
+                <button disabled={simIsRunning || !carsReady || !isConfigConfirmed} onClick={() => 
+                            {  
+                                send({ type: 'START' }); 
+                                startSim();
+                            }
+                        }>
+                    {!isConfigConfirmed ? "Confirm Config First" : carsReady ? "Start Simulation" : "Loading..."}
+                </button>
+                <br />
+                <button disabled={!simIsRunning} onClick={() => 
+                            { 
+                                if (simIsPaused) {
+                                    send({ type: 'RESUME' }); 
+                                    resumeSim()
+                                }
+                                else {
+                                    send({ type: 'PAUSE' }); 
+                                    pauseSim();
+                                }
+                            }
+                        }>
+                    {simIsPaused ? "Resume Simulation" : "Pause Simulation"}
+                </button>
+                <br />
+                <button disabled={!simIsRunning} onClick={() => {
+                    send({ type: "HALT" });
+                    haltSim();
+                }}>
+                    Stop Simulation
+                </button>
+
+                <hr style={{ margin: "10px 0", opacity: 0.3 }} />
+
+                <h2 style={{ margin: "0 0 8px 0", fontSize: 14, opacity: 0.9 }}>
+                    Global Stats
+                </h2>
+
+                <div style={{ fontSize: 13, lineHeight: 1.35 }}>
+                    <div><b>Active:</b> {stats.active}</div>
+                    <div><b>Spawn queue (total):</b> {stats.spawnQueue}</div>
+                    {stats.spawnQueueByEntry && Object.keys(stats.spawnQueueByEntry).length > 0 && (
+                        <div style={{ marginLeft: 12, fontSize: 12, opacity: 0.85, marginTop: 2 }}>
+                            {Object.entries(stats.spawnQueueByEntry)
+                                .filter(([_, queue]) => queue > 0)
+                                .map(([entryKey, queue]) => {
+                                    // Parse the entry key to show junction + exit
+                                    const parts = entryKey.split('-');
+                                    const exitIndex = parts[parts.length - 1];
+                                    const structureID = parts.slice(0, -1).join('-');
+                                    const junctionObj = junction.junctionObjects.find(obj => obj.id === structureID);
+                                    const junctionType = junctionObj?.type || 'junction';
+                                    const shortId = structureID.slice(0, 6);
+                                    return (
+                                        <div key={entryKey}>
+                                            • {junctionType} {shortId} Exit {exitIndex}: {queue}
+                                        </div>
+                                    );
+                                })}
+                        </div>
+                    )}
+                    <div><b>Spawned:</b> {stats.spawned}</div>
+                    <div><b>Completed:</b> {stats.completed}</div>
+                    <div><b>Routes:</b> {stats.routes}</div>
+                    <div><b>Elapsed Time:</b> {stats.elapsedTime.toFixed(1)}s</div>
+
+                    <hr style={{ margin: "8px 0", opacity: 0.2 }} />
+
+                    <div style={{ opacity: 0.9 }}>
+                        <div style={{ fontWeight: 700, marginBottom: 4 }}>
+                            Junctions ({stats.junctions.global.count})
+                        </div>
+
+                        <div>
+                            <b>Approaching:</b> {stats.junctions.global.approaching}{" "}
+                            <b>Waiting:</b> {stats.junctions.global.waiting}{" "}
+                            <b>Inside:</b> {stats.junctions.global.inside}{" "}
+                            <b>Exiting:</b> {stats.junctions.global.exiting}
+                        </div>
+
+                        <div>
+                            <b>Entered:</b> {stats.junctions.global.entered}{" "}
+                            <b>Exited:</b> {stats.junctions.global.exited}{" "}
+                        </div>
+                        
+                        <div>
+                            <b>Avg Wait Time:</b> {stats.junctions.global.avgWaitTime.toFixed(1)}s
+                        </div>
+                    </div>
+                </div>
+            </fieldset>
+        </div>
+     );
+ }
+ 
+ 

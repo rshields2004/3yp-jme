@@ -200,7 +200,7 @@ function SpawnRateLabels({
 export const TrafficSimulation = () => {
     const { junction, junctionObjectRefs, simIsRunning, stats, setStats, carsReady, setCarsReady, followedVehicleId, setFollowedVehicleId, simIsPaused, simConfig } = useJModellerContext();
     const { scene, camera, gl } = useThree();
-
+    const simIsPausedRef = useRef(simIsPaused);
     const [isInitialised, setisInitialised] = useState(false);
     const [showDebugRoutes] = useState(false);
 
@@ -217,6 +217,10 @@ export const TrafficSimulation = () => {
     const debugRoutesGroupRef = useRef<THREE.Group | null>(null);
     const wasRunningRef = useRef(false);
     const vehicleManagerRef = useRef<VehicleManager | null>(null);
+
+    useEffect(() => {
+        simIsPausedRef.current = simIsPaused;
+    }, [simIsPaused]);
 
     // Load car models on mount
     useEffect(() => {
@@ -558,7 +562,7 @@ export const TrafficSimulation = () => {
             }
         }
         
-        if (simIsPaused) return;
+        if (simIsPausedRef.current) return;
 
         // 1) advance sim + controller state (variable timestep, clamped for stability)
         const maxDelta = 0.05;

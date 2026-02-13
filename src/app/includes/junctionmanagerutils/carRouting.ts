@@ -4,6 +4,7 @@ import { ExitStructure } from "../types/intersection";
 import { ExitConfig, JunctionConfig, JunctionObject } from "../types/types";
 import { Tuple3, InternalParts, NodeKey, Graph, Edge, RouteSegment, EdgePart, Route, Node } from "../types/simulation";
 import { polylineLength } from "./helpers/routeHelpers";
+import { nodeKeyOf } from "./helpers/segmentHelpers";
 
 
 /* =========================================================
@@ -497,9 +498,6 @@ export function getMidCurve(curveA: Tuple3[], curveB: Tuple3[]): Tuple3[] {
    Graph internals (NOT exported)
    ========================================================= */
 
-
-
-const nodeKeyOf = (n: Node): NodeKey => `${n.structureID}-${n.exitIndex}-${n.direction}-${n.laneIndex}`;
 
 
 
