@@ -9,6 +9,7 @@ import { useThree } from "@react-three/fiber";
 import { IntersectionComponent } from "./IntersectionComponent";
 import { RoundaboutComponent } from "./RoundaboutComponent";
 import { LinkComponent } from "./LinkComponent";
+import { getStructureData } from "../includes/utils";
 
 
 export const JunctionComponents = () => {
@@ -79,8 +80,14 @@ export const JunctionComponents = () => {
         
         controls.enabled = true;
         // In the selectedObjects useEffect:
-        const controlObjects = selectedObjects.map(id => junctionObjectRefs.current.find(g => g.userData.id === id)).filter((g): g is THREE.Group => !!g);
+        
+        const controlObjects = selectedObjects.map(id => junctionObjectRefs.current.find(g => {
+            const data = getStructureData(g);
+            return data && data.id === id;
+        })).filter((g): g is THREE.Group => !!g);
+
         controls.objects = controlObjects;
+
 
     }, [selectedObjects, setSelectedObjects, snapToValidPosition, junctionObjectRefs, isConfigConfirmed]);
 
@@ -91,6 +98,7 @@ export const JunctionComponents = () => {
                 <IntersectionComponent
                     key={junctionObject.id.slice(0, 6)}
                     id={junctionObject.id}
+                    name={junctionObject.name}
                     intersectionConfig={junctionObject.config}
                     index={i}
                 />
@@ -100,6 +108,7 @@ export const JunctionComponents = () => {
                 <RoundaboutComponent
                     key={junctionObject.id.slice(0, 6)}
                     id={junctionObject.id}
+                    name={junctionObject.name}
                     roundaboutConfig={junctionObject.config}
                     index={i}
                 />

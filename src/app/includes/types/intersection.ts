@@ -23,6 +23,7 @@ export type IntersectionConfig = {
 
 export type IntersectionObject = {
     id: string;
+    name: string;
     type: "intersection"
     config: IntersectionConfig;
 };

@@ -13,7 +13,6 @@ export const defaultLaneProperties: LaneLineProperties = {
 export const defaultExitConfig = {
     numLanesIn: 1,
     laneCount: 2,
-    laneWidth: 1.5,
     exitLength: 30,
 };
 
@@ -81,6 +80,7 @@ export const defaultRoundaboutConfig: RoundaboutConfig = {
 export const defaultJunctionConfig: JunctionConfig = {
     junctionObjects: [],
     junctionLinks: [],
+    laneWidth: 1.5,
 };
 
 export const FLOOR_Y = 0;

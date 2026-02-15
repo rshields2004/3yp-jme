@@ -5,19 +5,21 @@ import { ThickLine, ThickLineHandle } from "./ThickLine";
 import * as THREE from "three";
 import { IntersectionConfig, IntersectionStructure } from "../includes/types/intersection";
 import { useJModellerContext } from "../context/JModellerContext";
-import { generateEdgeTubes, generateExitMesh, generateFloorMesh, generateLaneLines, generateStopLine, generateTextPosition } from "../includes/utils";
+import { generateEdgeTubes, generateExitMesh, generateFloorMesh, generateLaneLines, generateStopLine, generateTextPosition, getStructureData } from "../includes/utils";
 import { Text } from "@react-three/drei";
 import React from "react";
 import { ThreeEvent } from "@react-three/fiber";
+import { group } from "node:console";
 
 
 type IntersectionProps = {
     id: string;
+    name: string;
     intersectionConfig: IntersectionConfig;
     index: number;
 };
 
-export const IntersectionComponent = ({ id, intersectionConfig }: IntersectionProps) => {
+export const IntersectionComponent = ({ id, intersectionConfig, name }: IntersectionProps) => {
     const groupRef = useRef<THREE.Group>(null);
     const {
         junction,
@@ -34,13 +36,13 @@ export const IntersectionComponent = ({ id, intersectionConfig }: IntersectionPr
     const intersectionMemo: IntersectionStructure = useMemo(() => {
 
         const exitInfo = intersectionConfig.exitConfig.map((exitConfig, exitIndex) => {
-            const maxExitSpan = Math.max(...intersectionConfig.exitConfig.map(e => e.laneCount * e.laneWidth));
+            const maxExitSpan = Math.max(...intersectionConfig.exitConfig.map(e => e.laneCount * junction.laneWidth));
             const adjustedOffset = maxExitSpan / (2 * Math.sin(Math.PI / intersectionConfig.numExits));
             const angleStep = (2 * Math.PI) / intersectionConfig.numExits;
             const angle = angleStep * exitIndex;
 
-            const stopLine = generateStopLine(exitConfig.laneCount, exitConfig.laneWidth, adjustedOffset, angle, exitConfig.numLanesIn);
-            const laneLines = generateLaneLines(exitConfig.laneCount, exitConfig.laneWidth, adjustedOffset, angle, exitConfig.exitLength, exitConfig.laneCount, exitConfig.numLanesIn);
+            const stopLine = generateStopLine(exitConfig.laneCount, junction.laneWidth, adjustedOffset, angle, exitConfig.numLanesIn);
+            const laneLines = generateLaneLines(exitConfig.laneCount, junction.laneWidth, adjustedOffset, angle, exitConfig.exitLength, exitConfig.laneCount, exitConfig.numLanesIn);
 
             return { stopLine, laneLines };
         });
@@ -65,16 +67,12 @@ export const IntersectionComponent = ({ id, intersectionConfig }: IntersectionPr
         if (!group) {
             return;
         }
-        group.userData.id = id;
-        group.userData.type = "intersection";
-        group.userData.maxDistanceToStopLine = intersectionMemo.maxDistanceToStopLine;
-        group.userData.exitInfo = intersectionMemo.exitInfo;
-        group.userData.exitConfig = intersectionConfig.exitConfig;
+        group.userData.intersectionStructure = intersectionMemo;
 
         // Registration only works if intersection doesnt exist before, contains a check for ID
         registerJunctionObject(group);
         snapToValidPosition(group);
-    }, [id, intersectionMemo.exitInfo, intersectionMemo.maxDistanceToStopLine, registerJunctionObject, snapToValidPosition, intersectionConfig.exitConfig]);
+    }, [intersectionMemo]);
 
 
 
@@ -117,7 +115,10 @@ export const IntersectionComponent = ({ id, intersectionConfig }: IntersectionPr
 
 
 
-    const isSelected = groupRef.current ? selectedObjects.includes(groupRef.current.userData.id) : false;
+    const isSelected = groupRef.current ? (() => {
+        const data = getStructureData(groupRef.current);
+        return data ? selectedObjects.includes(data.id) : false;
+    })() : false;
 
     const handleIntersectionClick = (event: ThreeEvent<PointerEvent>) => {
         if (event.button !== 2) {
@@ -131,14 +132,20 @@ export const IntersectionComponent = ({ id, intersectionConfig }: IntersectionPr
         if (!group) {
             return;
         }
+
+        const data = getStructureData(group);
+        if (!data) {
+            return;
+        }
+
         setSelectedObjects(prev => {
-            if (prev.includes(group.userData.id)) {
-                return prev.filter(id => id !== group.userData.id);
+            if (prev.includes(data.id)) {
+                return prev.filter(id => id !== data.id);
             }
             if (prev.length >= 2) {
-                return [prev[1], group.userData.id];
+                return [prev[1], data.id];
             }
-            return [...prev, group.userData.id];
+            return [...prev, data.id];
         });
     };
 
@@ -152,8 +159,12 @@ export const IntersectionComponent = ({ id, intersectionConfig }: IntersectionPr
             return;
         }
 
+        const data = getStructureData(group);
+        if (!data) {
+            return;
+        }
         setSelectedExits(prev => {
-            const existingIndex = prev.findIndex(e => e.structureID === group.userData.id && e.exitIndex === exitIndex);
+            const existingIndex = prev.findIndex(e => e.structureID === data.id && e.exitIndex === exitIndex);
 
             // Deselect if already selected
             if (existingIndex !== -1) {
@@ -161,21 +172,22 @@ export const IntersectionComponent = ({ id, intersectionConfig }: IntersectionPr
             }
 
             // New selection
-            const newSelection = { structureID: group.userData.id, exitIndex };
+            const newSelection = { structureID: data.id, exitIndex };
 
-            const filteredPrev = prev.filter(e => e.structureID !== group.userData.id);
+            const filteredPrev = prev.filter(e => e.structureID !== data.id);
 
             if (prev.length < 2) {
                 return [...filteredPrev, newSelection];
             }
 
             if (filteredPrev.length < 2) {
-                return [...filteredPrev, { structureID: group.userData.id, exitIndex }];
+                return [...filteredPrev, { structureID: data.id, exitIndex }];
             }
             else {
-                return [filteredPrev[1], { structureID: group.userData.id, exitIndex }];
+                return [filteredPrev[1], { structureID: data.id, exitIndex }];
             }
         });
+        console.log(selectedExits.toString());
     };
 
 
@@ -197,7 +209,7 @@ export const IntersectionComponent = ({ id, intersectionConfig }: IntersectionPr
                 anchorX="center"
                 anchorY="middle"
             >
-                Intersection {id.slice(0, 6)}
+                Intersection {name}
             </Text>
 
             {/* Selection ring */}
@@ -240,12 +252,16 @@ export const IntersectionComponent = ({ id, intersectionConfig }: IntersectionPr
 
             {/* Invisible exit mesh for exit selection */}
             {intersectionMemo.exitInfo.map((exit, exitIndex) => {
-                const isSelectedExit = selectedExits.some(e => e.structureID === groupRef.current?.userData.id && e.exitIndex === exitIndex);
-                const inALink = junction.junctionLinks.some(link =>
-                    link.objectPair.some(linkExit =>
-                        linkExit.structureID === groupRef.current?.userData.id && linkExit.exitIndex === exitIndex
-                    )
-                );
+                const isSelectedExit = groupRef.current ? (() => {
+                    const data = getStructureData(groupRef.current);
+                    return data ? selectedExits.some(e => e.structureID === data.id && e.exitIndex === exitIndex) : false;
+                })() : false;
+
+                const inALink = groupRef.current ? (() => {
+                    const data = getStructureData(groupRef.current);
+                    return data ? junction.junctionLinks.some(link => link.objectPair.some(linkExit => linkExit.structureID === data.id && linkExit.exitIndex === exitIndex)) : false;
+                })() : false;
+                
                 const position = generateTextPosition(exit);
                 const dir = new THREE.Vector3().subVectors(new THREE.Vector3(0, 0, 0), position).normalize();
                 const angleY = Math.atan2(dir.x, dir.z);

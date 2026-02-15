@@ -5,7 +5,7 @@ import { RoundaboutConfig, RoundaboutExitStructure, RoundaboutStructure } from "
 import * as THREE from "three";
 import { useJModellerContext } from "../context/JModellerContext";
 import { ThickLine } from "./ThickLine";
-import { generateEdgeTubesRound, generateExitMesh, generateLaneLinesRound, generateRingLines, generateRoundaboutFloorMesh, generateStopLineRound, generateTextPosition } from "../includes/utils";
+import { generateEdgeTubesRound, generateExitMesh, generateLaneLinesRound, generateRingLines, generateRoundaboutFloorMesh, generateStopLineRound, generateTextPosition, getStructureData } from "../includes/utils";
 import React from "react";
 import { Text } from "@react-three/drei";
 import { ThreeEvent } from "@react-three/fiber";
@@ -14,12 +14,13 @@ import { ThreeEvent } from "@react-three/fiber";
 
 type RoundaboutProps = {
     id: string;
+    name: string;
     roundaboutConfig: RoundaboutConfig;
     index: number;
 };
 
 
-export const RoundaboutComponent = ({ id, roundaboutConfig }: RoundaboutProps) => {
+export const RoundaboutComponent = ({ id, roundaboutConfig, name }: RoundaboutProps) => {
 
     const groupRef = useRef<THREE.Group>(null);
     
@@ -39,17 +40,16 @@ export const RoundaboutComponent = ({ id, roundaboutConfig }: RoundaboutProps) =
 
         const maxLaneCount = Math.max(...exitConfig.map(c => c.laneCount));
         const maxNumLaneIn = Math.max(...exitConfig.map(c => c.numLanesIn));
-        const maxLaneWidth = Math.max(...exitConfig.map(c => c.laneWidth));
+        const maxLaneWidth = Math.max(...exitConfig.map(c => junction.laneWidth));
         const maxDistanceToStopLine = Math.max(...exitConfig.map(c => c.exitLength)) + 15;
         
         const geometricIslandRadius = (maxLaneWidth * (maxLaneCount - maxNumLaneIn)) * 2;
         const laneBandWidth = maxLaneWidth * maxNumLaneIn;
-        const minArcPerExit = 20; // 2× clearanceGap (6)
+        const minArcPerExit = 20;
         const minAvgRadius = (minArcPerExit * numExits) / (2 * Math.PI);
         const minIslandRadius = Math.max(0, minAvgRadius - laneBandWidth * 0.5);
         const islandRadius = Math.max(geometricIslandRadius, minIslandRadius);
         const outerRadius = islandRadius + laneBandWidth;
-        
         
         const islandGeometry = new THREE.CircleGeometry(islandRadius, 64);
         const floorCircle = new THREE.RingGeometry(islandRadius, outerRadius, 64);
@@ -58,19 +58,33 @@ export const RoundaboutComponent = ({ id, roundaboutConfig }: RoundaboutProps) =
 
         for (let i = 0; i < numExits; i++) {
             const angle = (i / numExits) * 2 * Math.PI;
-
             const config = exitConfig[i];
-
-            const laneLines = generateLaneLinesRound(outerRadius, config.laneCount, config.laneWidth, angle, config.exitLength - outerRadius, config.numLanesIn);
-
+            const laneLines = generateLaneLinesRound(outerRadius, config.laneCount, junction.laneWidth, angle, config.exitLength - outerRadius, config.numLanesIn);
             const stopLine = generateStopLineRound(config.numLanesIn, laneLines, outerRadius);
             exitStructures.push({ angle, laneLines, stopLine });
         }
+        
         const ringLines = generateRingLines(maxNumLaneIn, islandRadius, maxLaneWidth);
         const roundaboutFloor = generateRoundaboutFloorMesh(exitStructures);
         const edgeTubes = generateEdgeTubesRound(outerRadius, exitStructures);
         
-        return { id: id, islandGeometry, floorCircle, ringLines, exitStructures, roundaboutFloor, edgeTubes, maxDistanceToStopLine }
+        const laneMidRadii = ringLines.map(ring => ring.radius);
+        const avgRadius = laneMidRadii.reduce((sum, r) => sum + r, 0) / laneMidRadii.length;
+        
+        return { 
+            id, 
+            islandGeometry, 
+            floorCircle, 
+            ringLines, 
+            exitStructures, 
+            roundaboutFloor, 
+            edgeTubes, 
+            maxDistanceToStopLine,
+            islandRadius,      
+            outerRadius,      
+            avgRadius,         
+            laneMidRadii       
+        };
     }, [roundaboutConfig, id]);
 
     useEffect(() => {
@@ -78,20 +92,17 @@ export const RoundaboutComponent = ({ id, roundaboutConfig }: RoundaboutProps) =
         if (!group) { 
             return;
         }
-        group.userData.id = id;
-        group.userData.type = "roundabout";
-        group.userData.maxDistanceToStopLine = roundaboutMemo.maxDistanceToStopLine;
-        group.userData.roundaboutExitStructure = roundaboutMemo.exitStructures;
-        group.userData.exitInfo = roundaboutMemo.exitStructures;
-        group.userData.roundaboutRingStructure = roundaboutMemo.ringLines;
-        group.userData.exitConfig = roundaboutConfig.exitConfig;
+        group.userData.roundaboutStructure = roundaboutMemo;
         
         // Registration only works if intersection doesnt exist before, contains a check for ID
         registerJunctionObject(group);
         snapToValidPosition(group);
-    }, [roundaboutMemo.id, id, registerJunctionObject, roundaboutMemo.exitStructures, roundaboutMemo.ringLines, roundaboutMemo.maxDistanceToStopLine, snapToValidPosition, roundaboutConfig.exitConfig]);
+    }, [roundaboutMemo]);
 
-    const isSelected = groupRef.current ? selectedObjects.includes(groupRef.current.userData.id) : false;
+    const isSelected = groupRef.current ? (() => {
+        const data = getStructureData(groupRef.current);
+        return data ? selectedObjects.includes(data.id) : false;
+    })() : false;
 
     const handleRoundaboutClick = (event: ThreeEvent<PointerEvent>) => {
         if (event.button !== 2) {
@@ -105,14 +116,21 @@ export const RoundaboutComponent = ({ id, roundaboutConfig }: RoundaboutProps) =
         if (!group) {
             return;
         }
+
+        const data = getStructureData(group);
+        if (!data) {
+            return;
+        }
+
+
         setSelectedObjects(prev => {
-            if (prev.includes(group.userData.id)) {
-                return prev.filter(id => id !== group.userData.id);
+            if (prev.includes(data.id)) {
+                return prev.filter(id => id !== data.id);
             }
             if (prev.length >= 2) {
-                return [prev[1], group.userData.id];
+                return [prev[1], data.id];
             }
-            return [...prev, group.userData.id];
+            return [...prev, data.id];
         });
     };
 
@@ -126,8 +144,13 @@ export const RoundaboutComponent = ({ id, roundaboutConfig }: RoundaboutProps) =
             return;
         }
 
+        const data = getStructureData(group);
+        if (!data) {
+            return;
+        }
+
         setSelectedExits(prev => {
-            const existingIndex = prev.findIndex(e => e.structureID === group.userData.id && e.exitIndex === exitIndex);
+            const existingIndex = prev.findIndex(e => e.structureID === data.id && e.exitIndex === exitIndex);
 
             // Deselect if already selected
             if (existingIndex !== -1) {
@@ -135,19 +158,19 @@ export const RoundaboutComponent = ({ id, roundaboutConfig }: RoundaboutProps) =
             }
 
             // New selection
-            const newSelection = { structureID: group.userData.id, exitIndex };
+            const newSelection = { structureID: data.id, exitIndex };
 
-            const filteredPrev = prev.filter(e => e.structureID !== group.userData.id);
+            const filteredPrev = prev.filter(e => e.structureID !== data.id);
 
             if (prev.length < 2) {
                 return [...filteredPrev, newSelection];
             }
 
             if (filteredPrev.length < 2) {
-                return [...filteredPrev, { structureID: group.userData.id, exitIndex }];
+                return [...filteredPrev, { structureID: data.id, exitIndex }];
             }
             else {
-                return [filteredPrev[1], { structureID: group.userData.id, exitIndex }];
+                return [filteredPrev[1], { structureID: data.id, exitIndex }];
             }
         });
     };
@@ -167,7 +190,7 @@ export const RoundaboutComponent = ({ id, roundaboutConfig }: RoundaboutProps) =
                 anchorX="center"
                 anchorY="middle"
             >
-                Roundabout {id.slice(0, 6)}
+                Roundabout {name}
             </Text>
 
             {/* Selection ring */}
@@ -239,12 +262,14 @@ export const RoundaboutComponent = ({ id, roundaboutConfig }: RoundaboutProps) =
 
             {/* Invisible exit mesh for exit selection */}
             {roundaboutMemo.exitStructures.map((exit, exitIndex) => {
-                const isSelectedExit = selectedExits.some(e => e.structureID === groupRef.current?.userData.id && e.exitIndex === exitIndex);
-                const inALink = junction.junctionLinks.some(link =>
-                    link.objectPair.some(linkExit =>
-                        linkExit.structureID === groupRef.current?.userData.id && linkExit.exitIndex === exitIndex
-                    )
-                );
+                const isSelectedExit = groupRef.current ? (() => {
+                    const data = getStructureData(groupRef.current);
+                    return data ? selectedExits.some(e => e.structureID === data.id && e.exitIndex === exitIndex) : false;
+                })() : false;
+                const inALink = groupRef.current ? (() => {
+                    const data = getStructureData(groupRef.current);
+                    return data ? junction.junctionLinks.some(link => link.objectPair.some(linkExit => linkExit.structureID === data.id && linkExit.exitIndex === exitIndex)) : false;
+                })() : false;
                 const position =  generateTextPosition(exit);
                 const dir = new THREE.Vector3().subVectors(new THREE.Vector3(0, 0, 0), position).normalize();
                 const angleY = Math.atan2(dir.x, dir.z);

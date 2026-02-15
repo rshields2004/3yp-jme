@@ -2,196 +2,15 @@
 
 import { useThree, useFrame } from "@react-three/fiber";
 import { useRef, useState, useEffect, useCallback, startTransition } from "react";
-import { MTLLoader, OBJLoader } from "three/examples/jsm/Addons.js";
 import { useJModellerContext } from "../context/JModellerContext";
 import * as THREE from "three";
 import { generateAllRoutes, getRoutePoints } from "../includes/junctionmanagerutils/carRouting";
-import { carFiles } from "../includes/types/carTypes";
 import { VehicleManager } from "../includes/junctionmanagerutils/vehicleManager";
-import { ThickLineHandle } from "./ThickLine";
-import { Billboard, Html } from "@react-three/drei";
-import { Route, SimConfig, SimulationStats, Tuple3 } from "../includes/types/simulation";
+import { Route, SimulationStats, Tuple3 } from "../includes/types/simulation";
 import { applyIntersectionStopLineColours, loadCarModels } from "../includes/junctionmanagerutils/helpers/simulationHelpers";
+import { JunctionStatsLabels } from "./JunctionStatsLabels";
+import { SpawnRateLabels } from "./SpawnRateLabels";
 
-// Global cache for car models (persists across simulation restarts)
-
-
-
-
-
-function JunctionStatsLabels({
-    junctionGroups,
-    stats,
-    positionsCache,
-}: {
-    junctionGroups: THREE.Group[];
-    stats: SimulationStats;
-    positionsCache: Map<string, THREE.Vector3>;
-}) {
-        return (
-            <>
-                {junctionGroups
-                    .filter((g) => g?.userData?.id && g?.userData?.type && g.userData.type !== "link")
-                    .map((g) => {
-                        const id = g.userData.id as string;
-                        const js = stats.junctions.byId?.[id];
-                        if (!js) return null;
-
-                        // Use cached position or calculate once
-                        let pos = positionsCache.get(id);
-                        if (!pos) {
-                            pos = new THREE.Vector3();
-                            g.getWorldPosition(pos);
-                            pos.y += 10; // tweak height
-                            positionsCache.set(id, pos);
-                        }
-
-                        return (
-                            <group key={id} position={pos}>
-                                <Billboard follow lockX={false} lockY={false} lockZ={false}>
-                                    <Html center sprite distanceFactor={12} transform>
-                                        <div
-                                            style={{
-                                                background: "rgba(0,0,0,0.65)",
-                                                color: "white",
-                                                padding: "6px 8px",
-                                                borderRadius: 8,
-                                                fontSize: 12,
-                                                lineHeight: 1.2,
-                                                whiteSpace: "nowrap",
-                                                fontFamily: "system-ui, sans-serif"
-                                            }}
-                                        >
-                                            <div style={{ fontWeight: 700 }}>
-                                                {js.type} {id.slice(0, 6)}
-                                            </div>
-                                            <div>Approaching:{js.approaching} W:{js.waiting} I:{js.inside} X:{js.exiting}</div>
-                                            <div>in:{js.entered} out:{js.exited}</div>
-                                            <div>Avg Wait: {js.avgWaitTime.toFixed(1)}s</div>
-                                            {js.state && <div>sig:{js.state}</div>}
-                                        </div>
-                                    </Html>
-                                </Billboard>
-                            </group>
-                        );
-                    })}
-            </>
-        );
-}
-
-/**
- * Spawn Rate Labels Component - displays spawn rates at each entry point
- * Only shows labels for exits that are NOT connected to other junctions (actual spawn points)
- */
-function SpawnRateLabels({
-    junctionGroups,
-    positionsCache,
-    stats,
-    routes,
-    simConfig,
-}: {
-    junctionGroups: THREE.Group[];
-    stats: SimulationStats;
-    positionsCache: Map<string, THREE.Vector3>;
-    routes: Route[];
-    simConfig: SimConfig;
-}) {
-    // Helper function to check if an exit is a spawn point (has routes starting from it)
-    const isSpawnPoint = (structureID: string, exitIndex: number): boolean => {
-        // If routes aren't available yet, show all labels
-        if (!routes || routes.length === 0) {
-            return true;
-        }
-        
-        // An exit is a spawn point if it has routes that START from it
-        // Check the first segment's 'from' node
-        const hasRoutesStartingHere = routes.some(route => {
-            const firstSeg = route.segments?.[0];
-            const match = firstSeg?.from?.structureID === structureID && 
-                   firstSeg?.from?.exitIndex === exitIndex;
-            return match;
-        });
-        
-        return hasRoutesStartingHere;
-    };
-    
-    return (
-        <>
-            {junctionGroups
-                .filter((g) => g?.userData?.id && g?.userData?.type && g.userData.type !== "link")
-                .flatMap((g) => {
-                        const structureID = g.userData.id as string;
-                        const exitConfig = g.userData.exitConfig as Array<{ spawnRate?: number }> | undefined;
-                        const exitInfo = g.userData.exitInfo;
-                        
-                        if (!exitConfig || !exitInfo) return [];
-
-                        return exitConfig.map((config, exitIndex) => {
-                            const spawnRate = config.spawnRate ?? simConfig.spawning.spawnRate;
-                            if (spawnRate === 0) return null; // Don't show label for zero spawn rate
-
-                            // Only show label if this exit is an actual spawn point
-                            if (!isSpawnPoint(structureID, exitIndex)) return null;
-
-                            const entryKey = `${structureID}-${exitIndex}`;
-                            
-                            // Always update world matrix and recalculate position
-                            g.updateWorldMatrix(true, true);
-                            const pos = new THREE.Vector3();
-                            
-                            // Get the start position of this exit (where vehicles spawn)
-                            const exit = exitInfo[exitIndex];
-                            if (exit?.startPosition) {
-                                // Transform local position to world space
-                                pos.copy(exit.startPosition);
-                                g.localToWorld(pos);
-                            } else if (exit?.laneLines?.[0]?.line?.end) {
-                                // Fallback: use the end of the first lane line (exit start)
-                                // Transform local position to world space
-                                pos.copy(exit.laneLines[0].line.end);
-                                g.localToWorld(pos);
-                            } else {
-                                // Last fallback: offset from junction center
-                                g.getWorldPosition(pos);
-                            }
-                            
-                            pos.y += 3; // Lower height than junction stats
-                            positionsCache.set(entryKey, pos);
-
-                            const queuedVehicles = stats.spawnQueueByEntry?.[entryKey] ?? 0;
-
-                            return (
-                                <group key={entryKey} position={pos}>
-                                    <Billboard follow lockX={false} lockY={false} lockZ={false}>
-                                        <Html center sprite distanceFactor={10} transform>
-                                            <div
-                                                style={{
-                                                    background: "rgba(0, 0, 0, 0.75)",
-                                                    color: "white",
-                                                    padding: "4px 6px",
-                                                    borderRadius: 6,
-                                                    fontSize: 11,
-                                                    lineHeight: 1.2,
-                                                    whiteSpace: "nowrap",
-                                                    fontFamily: "system-ui, sans-serif",
-                                                    border: "1px solid rgba(0, 0, 0, 0.5)"
-                                                }}
-                                            >
-                                                <div style={{ fontWeight: 600 }}>
-                                                    {structureID.slice(0, 6)} Ex{exitIndex}
-                                                </div>
-                                                <div>{spawnRate.toFixed(1)} veh/s</div>
-                                                <div style={{ fontSize: 10, opacity: 0.9 }}>Queue: {queuedVehicles}</div>
-                                            </div>
-                                        </Html>
-                                    </Billboard>
-                                </group>
-                            );
-                        }).filter(Boolean);
-                    })}
-            </>
-        );
-}
 
 /**
  * Traffic Simulation Component
@@ -312,10 +131,7 @@ export const TrafficSimulation = () => {
             // Reset previous sim (if any)
             vehicleManagerRef.current?.reset();
 
-            vehicleManagerRef.current = new VehicleManager(scene, carModelsRef.current, generatedRoutes, simConfig);
-
-            // Ensure config is applied immediately
-            vehicleManagerRef.current.updateConfig(simConfig);
+            vehicleManagerRef.current = new VehicleManager(scene, carModelsRef.current, generatedRoutes, junction, simConfig);
 
             // Create debug route visualization if enabled
             if (showDebugRoutes) {

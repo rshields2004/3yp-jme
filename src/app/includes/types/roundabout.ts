@@ -23,7 +23,11 @@ export type RoundaboutStructure = {
     roundaboutFloor: THREE.ShapeGeometry;
     exitStructures: RoundaboutExitStructure[];
     edgeTubes: THREE.TubeGeometry[];
-    maxDistanceToStopLine: number;          
+    maxDistanceToStopLine: number;     
+    islandRadius: number;
+    outerRadius: number;       
+    avgRadius: number;         
+    laneMidRadii: number[];       
 };
 
 export type RoundaboutConfig = {
@@ -33,6 +37,7 @@ export type RoundaboutConfig = {
 
 export type RoundaboutObject = {
     id: string;
+    name: string;
     type: "roundabout";
     config: RoundaboutConfig;
 };

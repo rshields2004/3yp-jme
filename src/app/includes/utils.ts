@@ -1,8 +1,8 @@
 import * as THREE from "three";
 import { defaultLaneProperties } from "./defaults";
-import { ExitStructure } from "./types/intersection";
-import { LaneStructure } from "./types/types";
-import { RingLaneStructure, RoundaboutExitStructure } from "./types/roundabout";
+import { ExitStructure, IntersectionStructure } from "./types/intersection";
+import { JunctionObjectTypes, LaneStructure, LinkStructure } from "./types/types";
+import { RingLaneStructure, RoundaboutExitStructure, RoundaboutStructure } from "./types/roundabout";
 import { Tuple3 } from "./types/simulation";
 
 const getDirection = (
@@ -428,7 +428,6 @@ export function getExitWorldPosition(junctionGroup: THREE.Group, exit: ExitStruc
         position === "start" ? lane.line.start : lane.line.end
     );
 
-
     const left = points[0].clone();
     const right = points[points.length - 1].clone();
 
@@ -436,7 +435,46 @@ export function getExitWorldPosition(junctionGroup: THREE.Group, exit: ExitStruc
     midpoint.addVectors(left, right).multiplyScalar(0.5);
 
     return midpoint.applyMatrix4(junctionGroup.matrixWorld);
-
 };
 
 
+export function numberToExcelColumn(n: number): string {
+    let result = "";
+    n += 1;
+
+    while (n > 0) {
+        const remainder = (n - 1) % 26;
+        result = String.fromCharCode(65 + remainder) + result;
+        n = Math.floor((n - 1) / 26);
+    }
+
+    return result;
+}
+
+export function getStructureData(group: THREE.Group): { id: string; type: JunctionObjectTypes; maxDistanceToStopLine: number } | null {
+
+    if (group.userData.intersectionStructure) {
+        const data = group.userData.intersectionStructure as IntersectionStructure;
+        return {
+            id: data.id,
+            type: "intersection",
+            maxDistanceToStopLine: data.maxDistanceToStopLine,
+        };
+    }
+    else if (group.userData.roundaboutStructure) {
+        const data = group.userData.roundaboutStructure as RoundaboutStructure;
+        return {
+            id: data.id,
+            type: "roundabout",
+            maxDistanceToStopLine: data.maxDistanceToStopLine,
+        };
+    }
+    else {
+        const data = group.userData.linkStructure as LinkStructure;
+        return {
+            id: data.id,
+            type: "link",
+            maxDistanceToStopLine: 0
+        }
+    }
+};

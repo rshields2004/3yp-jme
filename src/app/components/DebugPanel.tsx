@@ -5,6 +5,7 @@ import { usePeer } from "../context/PeerContext";
 import { defaultExitConfig, defaultIntersectionConfig, defaultRoundaboutConfig } from "../includes/defaults";
 import { IntersectionConfig } from "../includes/types/intersection";
 import { ExitConfig, ExitRef, JunctionLink } from "../includes/types/types";
+import { numberToExcelColumn } from "../includes/utils";
 
 export default function DebugPanel() {
     const {
@@ -15,16 +16,9 @@ export default function DebugPanel() {
         setSelectedExits,
         removeObject,
         simIsRunning,
-        startSim,
-        haltSim,
-        stats,
-        carsReady,
-        simIsPaused,
-        pauseSim,
-        resumeSim,
         isConfigConfirmed,
-        confirmConfig,
-        resetConfig,
+        objectCounter,
+        setObjectCounter,
         simConfig
     } = useJModellerContext();
 
@@ -77,12 +71,12 @@ export default function DebugPanel() {
 
     const addNewIntersection = () => {
         if (junction.junctionObjects.filter(o => o.type === "intersection").length >= 10) return;
-
+        setObjectCounter(prev => prev += 1);
         setJunction(prev => ({
             ...prev,
             junctionObjects: [
                 ...prev.junctionObjects,
-                { id: crypto.randomUUID(), type: "intersection", config: defaultIntersectionConfig }
+                { id: crypto.randomUUID(), name: numberToExcelColumn(objectCounter), type: "intersection", config: defaultIntersectionConfig }
             ]
         }));
     };
@@ -114,8 +108,8 @@ export default function DebugPanel() {
         const junctionoB = junction.junctionObjects.find(jo => jo.id === exitB.structureID);
 
         // Get the exit configs !! NEED TO UPDATE FOR ROUNDABOUTS
-        const exitAConfig = junctionoA?.config as IntersectionConfig;
-        const exitBConfig = junctionoB?.config as IntersectionConfig;
+        const exitAConfig = junctionoA?.config
+        const exitBConfig = junctionoB?.config
 
         if (exitAConfig && exitBConfig) {
             const laneCountA = exitAConfig.exitConfig[exitA.exitIndex].laneCount;
@@ -140,11 +134,12 @@ export default function DebugPanel() {
     };
 
     const addNewRoundabout = () => {
+        setObjectCounter(prev => prev += 1)
         setJunction(prev => ({
             ...prev,
             junctionObjects: [
                 ...prev.junctionObjects,
-                { id: crypto.randomUUID(), type: "roundabout", config: defaultRoundaboutConfig }
+                { id: crypto.randomUUID(), name: numberToExcelColumn(objectCounter), type: "roundabout", config: defaultRoundaboutConfig }
             ]
         }));
     };
@@ -371,21 +366,45 @@ export default function DebugPanel() {
             >
                 {/* Add new object - hide when config confirmed */}
                 {!isConfigConfirmed && (
-                    <div style={{ position: "absolute", top: 10, right: 500, padding: 10, background: "rgba(0,0,0,0.7)", color: "white", borderRadius: 8, minWidth: 300 }}>
-                        <h2>Add Intersection</h2>
-                        <button onClick={addNewIntersection}>Add New</button>
-                        <h2>Add Roundabout</h2>
-                        <button onClick={addNewRoundabout}>Add New</button>
-                        <h2>Exit Links</h2>
-                        <button onClick={addNewLink} disabled={selectedExits.length !== 2}>Add Link</button>
-                        {junction.junctionLinks.map(link => (
-                            <div key={link.id} style={{ marginBottom: 5 }}>
-                                <p>Exit {link.objectPair[0].exitIndex} ↔ Exit {link.objectPair[1].exitIndex}</p>
-                                <button onClick={() => removeLink(link.id)}>Remove</button>
-                            </div>
-                        ))}
-                    </div>
-                )}
+            <div
+                style={{
+                    position: "absolute",
+                    top: 10,
+                    right: 500,
+                    padding: 10,
+                    background: "rgba(0,0,0,0.7)",
+                    color: "white",
+                    borderRadius: 8,
+                    minWidth: 300,
+                }}
+            >
+                <h2>Add Intersection</h2>
+                <button onClick={addNewIntersection}>Add New</button>
+
+                <h2>Add Roundabout</h2>
+                <button onClick={addNewRoundabout}>Add New</button>
+
+                <h2>Exit Links</h2>
+                <button onClick={addNewLink} disabled={selectedExits.length !== 2}>
+                    Add Link
+                </button>
+
+                {junction.junctionLinks.map((link) => {
+                    // Lookup structures by ID
+                    const objA = junction.junctionObjects.find((obj) => obj.id === link.objectPair[0].structureID);
+                    const objB = junction.junctionObjects.find((obj) => obj.id === link.objectPair[1].structureID);
+                    return (
+                        <div key={link.id} style={{ marginBottom: 5 }}>
+                            <p>
+                                {objA?.type === "roundabout" ? "Roundabout" : "Intersection"} {objA?.name} Exit {link.objectPair[0].exitIndex} {"<->"} {objB?.type === "roundabout" ? "Roundabout" : "Intersection"} {objB?.name} Exit {link.objectPair[1].exitIndex}
+                            </p>
+                            <button onClick={() => removeLink(link.id)}>Remove</button>
+                        </div>
+                    );
+                })}
+            </div>
+        )}
+
 
 
                 {/* First config panel for selected object */}
@@ -404,7 +423,7 @@ export default function DebugPanel() {
                     }}>
                         <h2>
                             {firstSelectedObject.type === "intersection" ? "Intersection" : "Roundabout"}{" "}
-                            {firstSelectedObject.id.slice(0, 6)}
+                            {firstSelectedObject.name}
                         </h2>
                         {isConfigConfirmed && (
                             <div style={{ 
@@ -544,7 +563,7 @@ export default function DebugPanel() {
                     }}>
                         <h2>
                             {secondSelectedObject.type === "intersection" ? "Intersection" : "Roundabout"}{" "}
-                            {secondSelectedObject.id.slice(0, 6)}
+                            {secondSelectedObject.name}
                         </h2>
                         {isConfigConfirmed && (
                             <div style={{ 
@@ -582,7 +601,7 @@ export default function DebugPanel() {
                                 border: "1px solid rgba(255,100,100,0.4)",
                                 fontSize: 12
                             }}>
-                                ⚠️ All exits are connected - no spawn points available
+                                All exits are connected - no spawn points available
                             </div>
                         )}
 

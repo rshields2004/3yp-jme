@@ -4,9 +4,9 @@ import { useRef, useMemo, useEffect } from "react";
 import { useJModellerContext } from "../context/JModellerContext";
 import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
-import { getExitWorldPosition } from "../includes/utils";
+import { getExitWorldPosition, getStructureData } from "../includes/utils";
 import { ThickLine, ThickLineHandle } from "./ThickLine";
-import type { ExitConfig, JunctionLink } from "../includes/types/types";
+import type { ExitConfig, JunctionLink, LinkStructure } from "../includes/types/types";
 import type { ExitStructure } from "../includes/types/intersection";
 import React from "react"
 import { RoundaboutExitStructure } from "../includes/types/roundabout";
@@ -26,7 +26,7 @@ type LinkInfo = {
 }
 
 export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkComponentProps) => {
-    const { junctionObjectRefs, registerJunctionObject } = useJModellerContext();
+    const { junctionObjectRefs, registerJunctionObject, junction } = useJModellerContext();
     const groupRef = useRef<THREE.Group>(null);
     const prevPositionsRef = useRef<[THREE.Vector3, THREE.Vector3] | null>(null);
     const prevLinkInfoRef = useRef<LinkInfo>(null);
@@ -34,9 +34,15 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
 
     // Precompute lane info
     const linkInfo: LinkInfo | null = useMemo(() => {
-        if (!config1 || !config2) return null;
+        if (!config1 || !config2) {
+            return null;
+        }
         const laneCount = Math.max(config1.laneCount, config2.laneCount);
-        return { laneWidth: config1.laneWidth, laneCount, numLanesIn: config1.numLanesIn };
+        return { 
+            laneWidth: junction.laneWidth, 
+            laneCount, 
+            numLanesIn: config1.numLanesIn 
+        };
     }, [config1, config2]);
 
     const roadRef = useRef<THREE.Mesh>(null);
@@ -97,19 +103,20 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
 
 
         const [exitA, exitB] = link.objectPair;
-        const groupA = junctionObjectRefs.current.find(g => g.userData.id === exitA.structureID);
-        const groupB = junctionObjectRefs.current.find(g => g.userData.id === exitB.structureID);
+        const groupA = junctionObjectRefs.current.find(g => getStructureData(g)?.id === exitA.structureID);
+        const groupB = junctionObjectRefs.current.find(g => getStructureData(g)?.id === exitB.structureID);
 
 
         if (!groupA || !groupB) return;
 
+        const infoA = getStructureData(groupA)?.type === "roundabout" ? groupA.userData.roundaboutStructure.exitStructures : groupA.userData.intersectionStructure.exitInfo;
+        const infoB = getStructureData(groupB)?.type === "roundabout" ? groupB.userData.roundaboutStructure.exitStructures : groupB.userData.intersectionStructure.exitInfo;
 
+        const exitInfoA = infoA[exitA.exitIndex];
+        const exitInfoB = infoB[exitB.exitIndex];
 
-        const infoA: ExitStructure | RoundaboutExitStructure = groupA.userData.exitInfo[exitA.exitIndex];
-        const infoB: ExitStructure | RoundaboutExitStructure = groupB.userData.exitInfo[exitB.exitIndex];
-
-        const pA = getExitWorldPosition(groupA, infoA, "end").add(new THREE.Vector3(0, yOffset, 0));
-        const pB = getExitWorldPosition(groupB, infoB, "end").add(new THREE.Vector3(0, yOffset, 0));
+        const pA = getExitWorldPosition(groupA, exitInfoA, "end").add(new THREE.Vector3(0, yOffset, 0));
+        const pB = getExitWorldPosition(groupB, exitInfoB, "end").add(new THREE.Vector3(0, yOffset, 0));
 
         const prevPositions = prevPositionsRef.current;
         const prevLinkInfo = prevLinkInfoRef.current;
@@ -136,8 +143,8 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
 
         console.log("resaw");
 
-        const dA = pA.clone().sub(getExitWorldPosition(groupA, infoA, "start")).setY(0).normalize();
-        const dB = pB.clone().sub(getExitWorldPosition(groupB, infoB, "start")).setY(0).normalize();
+        const dA = pA.clone().sub(getExitWorldPosition(groupA, exitInfoA, "start")).setY(0).normalize();
+        const dB = pB.clone().sub(getExitWorldPosition(groupB, exitInfoB, "start")).setY(0).normalize();
 
         const pA2 = pA.clone().addScaledVector(dA, 15);
         const pB2 = pB.clone().addScaledVector(dB, 15);
@@ -207,12 +214,12 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
             });
         }
         if (!groupRef.current) {
-            
             return;
         }
-        groupRef.current.userData.id = link.id;
-        groupRef.current.userData.type = "link";
-        groupRef.current.userData.laneCurves = laneCurves;
+
+        const linkStructure: LinkStructure = { id: link.id, laneCurves };
+
+        groupRef.current.userData.linkStructure = linkStructure;
         registerJunctionObject(groupRef.current);
     });
     

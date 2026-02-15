@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { IntersectionObject } from "./intersection";
 import { RoundaboutObject } from "./roundabout";
-import { SimulationStats, SimConfig } from "./simulation";
+import { SimulationStats, SimConfig, Tuple3 } from "./simulation";
 
 
 export type LaneLineProperties = {
@@ -19,7 +19,6 @@ export type LaneStructure = {
 export type ExitConfig = {
     numLanesIn: number;
     laneCount: number;
-    laneWidth: number;
     exitLength: number;
     spawnRate?: number; // optional per-exit override (vehicles per second)
 };
@@ -34,9 +33,15 @@ export type JunctionLink = {
     objectPair: [ExitRef, ExitRef];
 };
 
+export type LinkStructure = {
+    id: string;
+    laneCurves: Tuple3[][];
+}
+
 export type JunctionConfig = {
     junctionObjects: JunctionObject[];
     junctionLinks: JunctionLink[];
+    laneWidth: number;
 };
 
 export type JModellerState = {
@@ -55,6 +60,8 @@ export type JModellerState = {
 
     snapToValidPosition: (draggedGroup: THREE.Group<THREE.Object3DEventMap>) => void;
     removeObject: (objID: string) => void;
+    objectCounter: number;
+    setObjectCounter: React.Dispatch<React.SetStateAction<number>>;
 
     simIsRunning: boolean;
     simIsPaused: boolean;

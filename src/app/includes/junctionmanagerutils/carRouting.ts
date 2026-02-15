@@ -1,10 +1,11 @@
 import * as THREE from "three";
 import { RingLaneStructure, RoundaboutExitStructure } from "../types/roundabout";
 import { ExitStructure } from "../types/intersection";
-import { ExitConfig, JunctionConfig, JunctionObject } from "../types/types";
+import { ExitConfig, JunctionConfig, JunctionObject, LinkStructure } from "../types/types";
 import { Tuple3, InternalParts, NodeKey, Graph, Edge, RouteSegment, EdgePart, Route, Node } from "../types/simulation";
 import { polylineLength } from "./helpers/routeHelpers";
 import { nodeKeyOf } from "./helpers/segmentHelpers";
+import { getStructureData } from "../utils";
 
 
 /* =========================================================
@@ -84,14 +85,9 @@ export function getLaneWorldPoint(
     which: "start" | "end",
     dir: "in" | "out"
 ) {
-    let exitInfo: RoundaboutExitStructure | ExitStructure;
-    if (group.userData.type === "roundabout") {
-        exitInfo = group.userData.roundaboutExitStructure[exitIndex];
-    } 
-    else {
-        exitInfo = group.userData.exitInfo[exitIndex];
-    }
 
+    const infoArray = getStructureData(group)?.type === "roundabout" ? group.userData.roundaboutStructure.exitStructures : group.userData.intersectionStructure.exitInfo;
+    const exitInfo = infoArray[exitIndex];
     const lanes = exitInfo.laneLines;
 
     if (lanes.length === 1) {
@@ -193,7 +189,9 @@ function generateIntersectionPathParts(
 function generateRoundaboutPathParts(
     roundabout: THREE.Group,
     entry: { exitIndex: number; laneIndex: number },
-    exit: { exitIndex: number; laneIndex: number }
+    exit: { exitIndex: number; laneIndex: number },
+    laneWidth: number,
+    exitConfigs: ExitConfig[]
 ): InternalParts {
     // ---- World-space lane endpoints ----
     const startW = getLaneWorldPoint(roundabout, entry.exitIndex, entry.laneIndex, "end", "in");
@@ -207,10 +205,9 @@ function generateRoundaboutPathParts(
     const midEndL = roundabout.worldToLocal(midEndW.clone());
     const endL = roundabout.worldToLocal(endW.clone());
 
-    const ringLines: RingLaneStructure[] = roundabout.userData.roundaboutRingStructure;
+    const ringLines: RingLaneStructure[] = roundabout.userData.roundaboutStructure.ringLines;
     const numRingStrips = ringLines.length - 1;
     const outermostStrip = numRingStrips - 1;
-    const exitConfigs: ExitConfig[] = roundabout.userData.exitConfig;
     const numExits = exitConfigs.length;
 
     const TAU = Math.PI * 2;
@@ -336,7 +333,6 @@ function generateRoundaboutPathParts(
     intermediateBoundaries.sort((a, b) => a.delta - b.delta);
 
     // ---- Plan lane changes: 1 per exit, using the LAST N exits ----
-    const laneWidth = exitConfigs[exit.exitIndex].laneWidth;
     const singleMergeArcLength = (2 * laneWidth) / ((entryRadius + exitRadius) / 2);
 
     // Pick the last `lanesCrossed` boundaries for lane changes
@@ -669,12 +665,13 @@ export function generateAllRoutes(
         eIN: number,
         lIN: number,
         eOUT: number,
-        lOUT: number
+        lOUT: number,
+        exitConfigs: ExitConfig[]
     ): EdgePart[] => {
         const parts =
             objType === "intersection"
                 ? generateIntersectionPathParts(group, { exitIndex: eIN, laneIndex: lIN }, { exitIndex: eOUT, laneIndex: lOUT })
-                : generateRoundaboutPathParts(group, { exitIndex: eIN, laneIndex: lIN }, { exitIndex: eOUT, laneIndex: lOUT });
+                : generateRoundaboutPathParts(group, { exitIndex: eIN, laneIndex: lIN }, { exitIndex: eOUT, laneIndex: lOUT }, junction.laneWidth, exitConfigs);
 
         return [
             { phase: "approach", points: parts.approach },
@@ -687,7 +684,10 @@ export function generateAllRoutes(
        1) Internal routing
        -------------------------- */
     for (const obj of junction.junctionObjects) {
-        const group = junctionObjectRefs.find((g) => g.userData?.id === obj.id);
+        const group = junctionObjectRefs.find((g) => {
+            const data = getStructureData ? getStructureData(g) : g.userData;
+            return data?.id === obj.id;
+        });
         if (!group) continue;
 
         if (obj.type !== "intersection" && obj.type !== "roundabout") continue;
@@ -712,7 +712,7 @@ export function generateAllRoutes(
                 const from: Node = { structureID: obj.id, exitIndex: eIN, direction: "in", laneIndex: lIN };
                 const to: Node = { structureID: obj.id, exitIndex: eOUT, direction: "out", laneIndex: lOUT };
 
-                const parts = buildInternalParts(obj.type as "intersection" | "roundabout", group, eIN, lIN, eOUT, lOUT);
+                const parts = buildInternalParts(obj.type as "intersection" | "roundabout", group, eIN, lIN, eOUT, lOUT, exitConfigs);
                 addEdge(mainG, from, { kind: "internal", to, parts });
             };
 
@@ -783,10 +783,14 @@ export function generateAllRoutes(
        2) Links between components
        -------------------------- */
     for (const link of junction.junctionLinks) {
-        const linkGroup = junctionObjectRefs.find((g) => g.userData?.type === "link" && g.userData?.id === link.id);
-        if (!linkGroup) continue;
+        const linkGroup = junctionObjectRefs.find((g) => getStructureData(g)?.id === link.id);
+        if (!linkGroup) {
+            console.warn(`[LINK] No link group found for link id: ${link.id}`);
+            continue;
+        }
+        const linkStructure = linkGroup.userData.linkStructure as LinkStructure;
 
-        const laneCurves = linkGroup.userData?.laneCurves as Tuple3[][] | undefined;
+        const laneCurves = linkStructure.laneCurves as Tuple3[][] | undefined;
         if (!laneCurves || laneCurves.length < 2) continue;
 
         const [a, b] = link.objectPair;
@@ -807,7 +811,11 @@ export function generateAllRoutes(
         const lanesBA = Math.min(outB, inA);
 
         // AB (A out -> B in)
+        // For each lane, use the correct lane indices for A (outbound) and B (inbound)
         for (let i = 0; i < lanesAB; i++) {
+            // For A: outbound lane indices are 0...(outA-1)
+            // For B: inbound lane indices are 0...(inB-1)
+            // The laneCurves boundaries are indexed as inA + (lanesAB - 1 - i) and inA + (lanesAB - i)
             const flippedI = lanesAB - 1 - i;
             const leftBoundary = inA + flippedI;
             const rightBoundary = inA + flippedI + 1;
@@ -819,16 +827,25 @@ export function generateAllRoutes(
 
             const points = getMidCurve(laneCurves[leftBoundary], laneCurves[rightBoundary]);
 
+            // Use correct lane indices for node keys
             const from: Node = { structureID: a.structureID, exitIndex: a.exitIndex, direction: "out", laneIndex: i };
             const to: Node = { structureID: b.structureID, exitIndex: b.exitIndex, direction: "in", laneIndex: i };
 
             addEdge(mainG, from, { kind: "link", to, points });
-            hasOutgoingLink.add(nodeKeyOf(from));
-            hasIncomingLink.add(nodeKeyOf(to));
+            const fromKey = nodeKeyOf(from);
+            const toKey = nodeKeyOf(to);
+            hasOutgoingLink.add(fromKey);
+            hasIncomingLink.add(toKey);
+            // Debug: log link node keys
+            console.debug(`[LINK AB] fromKey: ${fromKey}, toKey: ${toKey}`);
         }
 
         // BA (B out -> A in)
+        // For each lane, use the correct lane indices for B (outbound) and A (inbound)
         for (let i = 0; i < lanesBA; i++) {
+            // For B: outbound lane indices are 0...(outB-1)
+            // For A: inbound lane indices are 0...(inA-1)
+            // The laneCurves boundaries are indexed as i and i+1
             const leftBoundary = i;
             const rightBoundary = i + 1;
 
@@ -839,12 +856,17 @@ export function generateAllRoutes(
 
             const points = getMidCurve(laneCurves[rightBoundary], laneCurves[leftBoundary]).slice().reverse();
 
+            // Use correct lane indices for node keys
             const from: Node = { structureID: b.structureID, exitIndex: b.exitIndex, direction: "out", laneIndex: i };
             const to: Node = { structureID: a.structureID, exitIndex: a.exitIndex, direction: "in", laneIndex: i };
 
             addEdge(mainG, from, { kind: "link", to, points });
-            hasOutgoingLink.add(nodeKeyOf(from));
-            hasIncomingLink.add(nodeKeyOf(to));
+            const fromKey = nodeKeyOf(from);
+            const toKey = nodeKeyOf(to);
+            hasOutgoingLink.add(fromKey);
+            hasIncomingLink.add(toKey);
+            // Debug: log link node keys
+            console.debug(`[LINK BA] fromKey: ${fromKey}, toKey: ${toKey}`);
         }
     }
 
@@ -862,14 +884,22 @@ export function generateAllRoutes(
             for (let l = 0; l < inCount(exitConfigs[e]); l++) {
                 const n: Node = { structureID: obj.id, exitIndex: e, direction: "in", laneIndex: l };
                 const kk = nodeKeyOf(n);
-                if (!hasIncomingLink.has(kk)) starts.push(n);
+                if (!hasIncomingLink.has(kk)) {
+                    starts.push(n);
+                    // Debug: log spawn candidate
+                    console.debug(`[SPAWN] start candidate: ${kk}`);
+                }
             }
 
             // outbound lanes with nothing linking out of them
             for (let l = 0; l < outCount(exitConfigs[e]); l++) {
                 const n: Node = { structureID: obj.id, exitIndex: e, direction: "out", laneIndex: l };
                 const kk = nodeKeyOf(n);
-                if (!hasOutgoingLink.has(kk)) ends.add(kk);
+                if (!hasOutgoingLink.has(kk)) {
+                    ends.add(kk);
+                    // Debug: log end candidate
+                    console.debug(`[END] end candidate: ${kk}`);
+                }
             }
         }
     }

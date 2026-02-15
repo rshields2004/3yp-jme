@@ -142,7 +142,7 @@ export type SimConfig = {
 
 
 export type LaneOcc = {
-    v: Vehicle;
+    vehicle: Vehicle;
     /** lane coordinate (used for sorting); for "reservation" occupants we pin this to start-of-lane */
     pinnedCoord?: number;
 };

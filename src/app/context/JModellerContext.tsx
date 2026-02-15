@@ -1,10 +1,13 @@
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode, useRef } from "react";
-import { ExitRef, JModellerState, JunctionConfig } from "../includes/types/types";
+import { ExitRef, JModellerState, JunctionConfig, JunctionObjectTypes } from "../includes/types/types";
 import { defaultJunctionConfig, defaultSimConfig } from "../includes/defaults";
 import * as THREE from "three";
 import { SimulationStats } from "../includes/types/simulation";
+import { IntersectionStructure } from "../includes/types/intersection";
+import { RoundaboutStructure } from "../includes/types/roundabout";
+import { getStructureData } from "../includes/utils";
 
 
 const JModellerContext = createContext<JModellerState | undefined>(undefined);
@@ -21,7 +24,7 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
     const [followedVehicleId, setFollowedVehicleId] = useState<number | null>(null);
     const [isConfigConfirmed, setIsConfigConfirmed] = useState<boolean>(false);
     const [simConfig, setSimConfig] = useState(defaultSimConfig);
-
+    const [objectCounter, setObjectCounter] = useState(0);
 
 
     // Simulation
@@ -53,16 +56,16 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
 
     const junctionObjectRefs = useRef<THREE.Group[]>([]);
 
-
     const registerJunctionObject = (group: THREE.Group) => {
-        if (!group.userData.id) {
+
+        const structureData = getStructureData(group);
+        if (!structureData) {
             return;
         }
-
         if (!junctionObjectRefs.current.includes(group)) {
             junctionObjectRefs.current.push(group);
         }
-    }
+    };
 
 
     const unregisterJunctionObject = (group: THREE.Group) => {
@@ -84,31 +87,34 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
 
 
     const snapToValidPosition = (draggedGroup: THREE.Group) => {
-        const draggedID = draggedGroup?.userData?.id;
-        if (!draggedID) return;
+        
+        
+        const draggedData = getStructureData(draggedGroup);
+        if (!draggedData) {
+            return;
+        }
 
         // Use world positions (robust if groups move / detach / reparent)
         const draggedWorld = new THREE.Vector3();
         draggedGroup.getWorldPosition(draggedWorld);
 
-        const draggedRadius = Number(draggedGroup.userData.maxDistanceToStopLine) || 0;
+        const draggedRadius = draggedData.maxDistanceToStopLine;
 
         const tmp = new THREE.Vector3();
 
-        const otherObjects = junctionObjectRefs.current
-            .filter((g): g is THREE.Group => !!g)
-            .filter(g => g !== draggedGroup)                         // prefer reference check
-            .filter(g => !!g.userData?.id)                           // ignore invalid
-            .filter(g => g.userData.type !== "link")
-            .filter(g => !!g.parent)                                 // ignore detached/deleted
-            .map(g => {
-                const pos = new THREE.Vector3();
-                g.getWorldPosition(pos);
-                return {
-                    pos,
-                    radius: Number(g.userData.maxDistanceToStopLine) || 0,
-                };
-            });
+        const otherObjects = junctionObjectRefs.current.filter((g): g is THREE.Group => !!g).filter(g => g !== draggedGroup).map(g => {
+            const data = getStructureData(g);
+            if (!data) {
+                return null;
+            }
+
+            const pos = new THREE.Vector3();
+            g.getWorldPosition(pos);
+            return {
+                pos,
+                radius: data.maxDistanceToStopLine,
+            };
+        }).filter((obj): obj is { pos: THREE.Vector3; radius: number} => obj !== null).filter(obj => !!obj);
 
         const newWorldPos = draggedWorld.clone();
         let safe = false;
@@ -129,7 +135,8 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
                     if (pushDir.lengthSq() === 0 || maxIterations < 10) {
                         const angle = Math.random() * 2 * Math.PI;
                         pushDir.set(Math.cos(angle), 0, Math.sin(angle));
-                    } else {
+                    } 
+                    else {
                         pushDir.normalize();
                     }
 
@@ -155,13 +162,17 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
         setSelectedObjects(prev => prev.filter(id => id !== objID));
         setSelectedExits(prev => prev.filter(exit => exit.structureID !== objID));
 
-        const groupIndex = junctionObjectRefs.current.findIndex(g => g.userData.id === objID);
+        const groupIndex = junctionObjectRefs.current.findIndex(g => {
+            const data = getStructureData(g);
+            return data && data.id === objID;
+        });
+
         if (groupIndex !== -1) {
             const group = junctionObjectRefs.current[groupIndex];
             unregisterJunctionObject(group);
         }
 
-    }
+    };
 
 
     const startSim = () => {
@@ -214,6 +225,8 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
             setSelectedExits,
             snapToValidPosition,
             removeObject,
+            objectCounter,
+            setObjectCounter,
             simIsRunning,
             simIsPaused,
             pauseSim,
