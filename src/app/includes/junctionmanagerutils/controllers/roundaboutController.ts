@@ -196,7 +196,6 @@ export class RoundaboutController {
         entryKey?: string
     ): boolean {
         if (entryKey && this.hasConflictingEntry(entryKey, entryPosition)) {
-            if (this.now < 30) 
             return false;
         }
 
@@ -239,7 +238,6 @@ export class RoundaboutController {
             // Hard minimum gap — no vehicle may be this close regardless of
             // heading or speed.
             if (distance < this.MIN_GAP_DISTANCE) {
-                if (this.now < 30) 
                 return false;
             }
 
@@ -252,7 +250,6 @@ export class RoundaboutController {
                 if (dotProduct > 0) {
                     const timeToReach = distance / Math.max(0.5, info.speed);
                     if (timeToReach < this.MIN_TIME_GAP) {
-                        if (this.now < 30) 
                         return false;
                     }
                 }

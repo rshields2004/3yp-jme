@@ -807,7 +807,17 @@ export class VehicleManager {
 
                 // Find position of stop point if we need to stop
                 if (vehicle.currentSegment?.phase === "approach" && stoplineSpeed < vehicle.preferredSpeed) {
-                    stoplineS = this.getStoplineS(vehicle);
+                    // For roundabouts: a committed vehicle must NEVER be
+                    // clamped back to the stop line — that causes the
+                    // visual teleport-back glitch.
+                    const jKey = vehicle.currentSegment?.to?.structureID;
+                    const isCommittedRoundabout = jKey
+                        && this.roundaboutControllers.has(jKey)
+                        && this.roundaboutControllers.get(jKey)!.isCommitted(vehicle.id);
+
+                    if (!isCommittedRoundabout) {
+                        stoplineS = this.getStoplineS(vehicle);
+                    }
                 } 
                 else if (vehicle.currentSegment?.phase === "approach") {
                   
@@ -818,6 +828,7 @@ export class VehicleManager {
                         const ctrl = this.roundaboutControllers.get(jKey)!;
                   
                         // If there is no safe gap then car stops at roundabout stop line
+                        // BUT committed vehicles must never be stopped here.
                         if (!ctrl.isCommitted(vehicle.id)) {
                             stoplineS = this.getStoplineS(vehicle);
                         }
@@ -2274,7 +2285,15 @@ export class VehicleManager {
     }
 
     /**
-     * New roundabout entry logic with proper gap acceptance and commitment
+     * New roundabout entry logic with proper gap acceptance and commitment.
+     *
+     * KEY DESIGN: A vehicle commits to entering the roundabout once it is
+     * within braking distance of the stop line AND a safe gap exists.
+     * Once committed the decision is IRREVERSIBLE — the vehicle will
+     * proceed through the entry smoothly.  Circulating traffic that
+     * arrives after the commitment is handled by the circulating
+     * give-way rules (inside-roundabout merge logic), NOT by yanking
+     * the entering vehicle back behind the stop line.
      */
     private applyRoundaboutEntryLogic(
         v: Vehicle,
@@ -2294,55 +2313,48 @@ export class VehicleManager {
         if (stopS === null) return targetSpeed;
 
         const distToStopline = stopS - v.s;
-        const frontBumperS = v.s + 0.5 * v.length;
-        const frontBumperDistToLine = stopS + this.cfg.spacing.stopLineOffset - frontBumperS;
 
-        // Check if vehicle is already committed (front bumper has crossed the stopline).
-        // Even when committed, keep checking for circulating vehicles that may
-        // have moved into the entry path (e.g., lane-changers).  If something
-        // is now blocking, brake smoothly rather than blindly charging in.
+        // ── Already committed — proceed unconditionally ─────────────
+        // Once committed the vehicle MUST continue into the roundabout.
+        // Re-checking the gap would cause the vehicle to oscillate
+        // (cross the line → brake → snap back) which is exactly the
+        // glitch we are eliminating.  Any conflict with circulating
+        // traffic is resolved by the ring merge / give-way logic that
+        // runs while the vehicle is in the "inside" phase.
         if (controller.isCommitted(v.id)) {
-            const stillClear = this.isRoundaboutEntryClear(v, junctionKey, entryKey, 0, lanes);
-            if (!stillClear) {
-                // Something appeared in our path after we committed.
-                // Brake hard but smoothly — don't de-commit (we're already
-                // partway across), just slow to a crawl until the path clears.
-                const decel = v.maxDecel * 0.8;
-                const stoppingDist = Math.max(0.1, distToStopline + 2);
-                const cappedSpeed = Math.sqrt(2 * decel * stoppingDist);
-                return Math.min(targetSpeed, Math.max(0, cappedSpeed));
-            }
             return targetSpeed;
         }
 
-        // Get entry parameters for gap checking
+        // ── Not yet committed — evaluate gap ────────────────────────
         const entryAngle = this.getEntryAngleForRoundabout(junctionKey, entryKey);
         if (entryAngle === undefined) return targetSpeed;
 
-        // Use average radius - vehicle crosses all lanes at entry point
         const radius = rData.structure.avgRadius;
 
-        // Check if safe to enter using gap-based logic
         const canEnter = controller.canEnterSafely(entryAngle, radius, entryKey);
-
-        // Also check for vehicles physically present on the roundabout
         const physicalClear = this.isRoundaboutEntryClear(v, junctionKey, entryKey, 0, lanes);
 
-
         if (canEnter && physicalClear) {
-            // Gap is available — commit NOW if at the line, then go.
-            // We commit before releasing speed so that even if the gap
-            // closes on the next frame, the vehicle is already committed
-            // and won't freeze half-out over the stop line.
-            if (frontBumperDistToLine <= 0) {
+            // Gap is available.
+            //
+            // COMMIT ZONE: commit as soon as the vehicle can no longer
+            // comfortably stop before the stop line.  This prevents the
+            // old behaviour where the car would coast up to the line,
+            // get hard-clamped, wait one frame, THEN commit — which
+            // looked like a stutter and was vulnerable to gap-flicker.
+            const brakingDist = this.stoppingDistance(v.speed, v);
+            const commitMargin = Math.max(brakingDist * 1.2, v.length);
+
+            if (distToStopline <= commitMargin) {
                 const entryPosition = controller.getEntryPosition(entryAngle, radius);
                 controller.commitVehicle(v.id, entryPosition, entryKey);
             }
+            // Whether just committed or still coasting toward the
+            // commit zone, allow full speed — the gap is clear.
             return targetSpeed;
         }
 
-        // Gap NOT clear — hard stop at the stop line.  Never allow the
-        // vehicle to creep past where it would stick out into the ring.
+        // ── Gap NOT clear — brake to stop at the line ───────────────
         if (distToStopline > 0) {
             const decel = v.maxDecel * 0.7;
             const stoppingSpeed = Math.sqrt(2 * decel * Math.max(0.1, distToStopline));
