@@ -1,10 +1,14 @@
  "use client";
  
 import { useEffect, useState } from "react";
- import { useJModellerContext } from "../context/JModellerContext";
-import { NetMessage, SharedState, usePeer } from "../context/PeerContext";
- 
- export default function SimControlPanel() {
+import { useJModellerContext } from "../context/JModellerContext";
+import { usePeer } from "../context/PeerContext";
+import { ExportedObject, NetMessage, SharedState } from "../includes/types/peer";
+import { getStructureData } from "../includes/utils";
+import { IntersectionStructure } from "../includes/types/intersection";
+import * as THREE from "three"; 
+
+export default function SimControlPanel() {
     const { 
         isConfigConfirmed, 
         simIsRunning, 
@@ -20,7 +24,8 @@ import { NetMessage, SharedState, usePeer } from "../context/PeerContext";
         stats,
         setJunction,
         simConfig,
-        setSimConfig
+        setSimConfig,
+        junctionObjectRefs
     } = useJModellerContext();
  
     const {
@@ -48,10 +53,29 @@ import { NetMessage, SharedState, usePeer } from "../context/PeerContext";
             return;
         }
 
-        conn.on("data", (msg: NetMessage) => {
+        conn.on("data", (data: unknown) => {
+            const msg = data as NetMessage;
             if (msg.type === "INIT_CONFIG") {
-                setJunction(msg.appdata.junction);
-                setSimConfig(msg.appdata.simConfig);
+                
+                setJunction(msg.appdata.junctionConfig);
+                setSimConfig(msg.appdata.simulationConfig);
+
+                // Now need to update object position
+
+                junctionObjectRefs.current.forEach(obj => {
+                    const found = msg.appdata.exportedObjects.find(eobj => obj.userData.id === eobj.userData.id);
+                    
+                    const worldPosition = new THREE.Vector3();
+                    const worldQuaternion = new THREE.Quaternion();
+
+                    if (found && found.position) {
+                        found.getWorldPosition(worldPosition);
+                        found.getWorldQuaternion(worldQuaternion);
+                        obj.position.copy(worldPosition);
+                        obj.quaternion.copy(worldQuaternion);
+                    }
+                });
+
             }
 
             if (msg.type === "START") {
@@ -71,7 +95,7 @@ import { NetMessage, SharedState, usePeer } from "../context/PeerContext";
             }
 
         });
-    }, [connections, isHost, setJunction])
+    }, [connections, isHost])
 
 
     useEffect(() => {
@@ -86,24 +110,36 @@ import { NetMessage, SharedState, usePeer } from "../context/PeerContext";
             }
 
             conn.on("open", () => {
+                const sharedState: SharedState = {
+                    exportedObjects: junctionObjectRefs.current,
+                    junctionConfig: junction,
+                    simulationConfig: simConfig,
+                };
+                
                 conn.send({
                     type: "INIT_CONFIG",
-                    appdata: {
-                        junction,
-                        simConfig
-                    }
+                    appdata: sharedState
                 });
                 (conn as any)._initSent = true;
             });
         });
-    }, [connections, isHost, junction, simConfig])
+    }, [connections, isHost])
 
     useEffect(() => {
         if (!isHost) return;
-        send({ type: 'INIT_CONFIG', appdata: { 
-            junction,
-            simConfig 
-        }});
+
+        // Construct the shared state
+        const sharedState: SharedState = {
+            exportedObjects: junctionObjectRefs.current,
+            junctionConfig: junction,
+            simulationConfig: simConfig,
+        };
+
+        // Send to all peers
+        send({
+            type: 'INIT_CONFIG',
+            appdata: sharedState,
+        });
     }, [junction, simConfig]);
 
     return  (

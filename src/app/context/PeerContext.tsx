@@ -2,28 +2,8 @@ import Peer, { DataConnection } from "peerjs";
 import { createContext, useContext, useRef, useState } from 'react';
 import { JunctionConfig } from "../includes/types/types";
 import { SimConfig } from "../includes/types/simulation";
+import { NetMessage, PeerContextType } from "../includes/types/peer";
 
-export type NetMessage = { type: "INIT_CONFIG"; appdata: { junction: JunctionConfig, simConfig: SimConfig } } 
-    | { type: "START" } 
-    | { type: "PAUSE" }
-    | { type: "RESUME" }
-    | { type: "HALT" };
-
-type PeerContextType = {
-    isHost: boolean;
-    hostId?: string;
-    connections: DataConnection[];
-    createHost: () => void;
-    joinHost: (id: string) => void;
-    send: (msg: NetMessage) => void;
-};
-
-export type SharedState = {
-    globalconfig: {
-        junctionConfig: JunctionConfig,
-        simConfig: SimConfig
-    }
-}
 
 const PeerContext = createContext<PeerContextType>(null!);
 
