@@ -11,6 +11,19 @@ import { applyIntersectionStopLineColours, loadCarModels } from "../includes/jun
 import { JunctionStatsLabels } from "./JunctionStatsLabels";
 import { SpawnRateLabels } from "./SpawnRateLabels";
 
+/**
+ * Fixed simulation timestep in seconds.
+ * Every device advances the simulation by exactly this amount per tick,
+ * guaranteeing identical results regardless of display frame rate.
+ */
+export const FIXED_DT = 1 / 60;
+
+/**
+ * Maximum ticks to drain per rendered frame.
+ * Prevents the "spiral of death" on slow devices while keeping the sim
+ * from desynchronising when a few frames are expensive (e.g. GC pauses).
+ */
+const MAX_TICKS_PER_FRAME = 5;
 
 /**
  * Traffic Simulation Component
@@ -27,9 +40,14 @@ export const TrafficSimulation = () => {
     const lastStatsRef = useRef<SimulationStats | null>(null);
     const statsRef = useRef<SimulationStats | null>(null);
     const raycasterRef = useRef(new THREE.Raycaster());
-    const simAccumulatorRef = useRef(0);
 
-    
+    /**
+     * Fixed-step accumulator.
+     * Real elapsed time is added each rendered frame; we drain it in
+     * FIXED_DT chunks so the simulation always advances by the same
+     * increment regardless of display frame rate or micro-lag.
+     */
+    const fixedAccRef = useRef(0);
 
     const carModelsRef = useRef<THREE.Group[]>([]);
     const [routes, setRoutes] = useState<Route[]>([]);
@@ -133,6 +151,9 @@ export const TrafficSimulation = () => {
 
             vehicleManagerRef.current = new VehicleManager(scene, carModelsRef.current, generatedRoutes, junction, simConfig);
 
+            // Reset the fixed-step accumulator so the new simulation starts cleanly
+            fixedAccRef.current = 0;
+
             // Create debug route visualization if enabled
             if (showDebugRoutes) {
                 createDebugRoutes();
@@ -193,6 +214,9 @@ export const TrafficSimulation = () => {
 
         vehicleManagerRef.current?.reset();
         vehicleManagerRef.current = null;
+
+        // Reset the accumulator so stale time doesn't bleed into the next run
+        fixedAccRef.current = 0;
 
         setRoutes([]);
         setisInitialised(false);
@@ -322,82 +346,88 @@ export const TrafficSimulation = () => {
     }, [simIsRunning, setFollowedVehicleId]);
 
     /**
-     * Main update loop - runs every frame
+     * Main update loop — runs every rendered frame.
+     *
+     * DETERMINISM NOTE:
+     * The simulation is advanced in fixed-size FIXED_DT ticks rather than
+     * using the raw frame delta. This means two devices with different frame
+     * rates (e.g. 60 Hz vs 144 Hz) process exactly the same sequence of
+     * numerical updates and produce identical simulation state.
+     *
+     * Only the camera-follow and display-side work (stop-line colours,
+     * stats sampling) remain frame-rate dependent — they are purely visual
+     * and do not influence simulation state.
      */
     useFrame((_, delta) => {
         if (!simIsRunning || !isInitialised) return;
         const vm = vehicleManagerRef.current;
         if (!vm) return;
+
+        // ── Camera follow (visual only, not part of sim state) ─────────────
         if (followedVehicleId !== null) {
             const vehicle = vm.getVehicleById(followedVehicleId);
             if (vehicle) {
-                // Position camera on roof of car, slightly forward
                 const carPos = vehicle.model.position.clone();
                 const carRotation = vehicle.model.rotation.y;
                 
-                // Camera height above car (roof level)
                 const cameraHeight = 1.1;
-                
-                // Forward offset on the car (positive = toward front, negative = toward back)
                 const forwardOffset = -0.4;
-                
-                // Horizontal offset (positive = right, negative = left)
                 const horizontalOffset = 0;
-                
-                // Look ahead distance
                 const lookAheadDistance = 15;
                 
-                // Calculate forward direction based on car's rotation
                 const forward = new THREE.Vector3(
                     Math.sin(carRotation),
                     0,
                     Math.cos(carRotation)
                 );
                 
-                // Calculate right direction (perpendicular to forward)
                 const right = new THREE.Vector3(
                     Math.cos(carRotation),
                     0,
                     -Math.sin(carRotation)
                 );
                 
-                // Set camera position on top of car, offset forward and horizontally
                 camera.position.set(
                     carPos.x + forward.x * forwardOffset + right.x * horizontalOffset,
                     carPos.y + cameraHeight,
                     carPos.z + forward.z * forwardOffset + right.z * horizontalOffset
                 );
                 
-                // Look ahead in the direction the car is facing
                 const lookAt = carPos.clone().add(forward.multiplyScalar(lookAheadDistance));
-                lookAt.y = carPos.y + 1; // Look slightly ahead and level
+                lookAt.y = carPos.y + 1;
                 camera.lookAt(lookAt);
             } else {
-                // Vehicle no longer exists, exit follow mode
                 setFollowedVehicleId(null);
             }
         }
-        
+
         if (simIsPausedRef.current) return;
 
-        // 1) advance sim + controller state (variable timestep, clamped for stability)
-        const maxDelta = 0.05;
-        const clamped = Math.min(delta, maxDelta);
+        // ── Fixed-step simulation advance ───────────────────────────────────
+        // Accumulate real elapsed time, then drain it in exact FIXED_DT steps.
+        // Both a 60 Hz and a 144 Hz device will execute the same integer number
+        // of ticks over any given simulated time period, producing bit-identical
+        // vehicle positions, controller states, and spawn sequences.
+        fixedAccRef.current += delta;
 
-        vm.update(clamped, junctionObjectRefs);
+        let ticks = 0;
+        while (fixedAccRef.current >= FIXED_DT && ticks < MAX_TICKS_PER_FRAME) {
+            vm.update(FIXED_DT, junctionObjectRefs);
+            fixedAccRef.current -= FIXED_DT;
+            ticks++;
+        }
 
-        // 2) push controller colours into stop lines (visual sync)
+        // ── Visual-only updates (after all ticks for this frame) ────────────
+        // Colouring stop lines is purely cosmetic — done once per rendered
+        // frame rather than once per sim tick for performance.
         applyIntersectionStopLineColours(junctionObjectRefs.current, vm);
 
-        
-
-        // 4) stats (throttled, stored in ref)
+        // Stats throttle (display only, does not affect sim state)
         statsAccumRef.current += delta;
         if (statsAccumRef.current >= 0.1) {
             statsAccumRef.current = 0;
             const s = vm.getStats();
 
-            // optional: avoid updating ref if nothing changed
             const prev = lastStatsRef.current;
             if (
                 !prev ||
@@ -412,7 +442,6 @@ export const TrafficSimulation = () => {
                 statsRef.current = s;
             }
         }
-
     });
 
     // Sync stats to React state outside the render loop

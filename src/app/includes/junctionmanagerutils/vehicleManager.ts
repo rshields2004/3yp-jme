@@ -163,12 +163,22 @@ export class VehicleManager {
         return null;
     }
 
+
     /**
-     * Get the ID from a group, trying flat userData.id first then nested structures.
+     * Extract the structure ID from a junction group, handling both the legacy
+     * flat format (group.userData.id) and the current nested format
+     * (group.userData.roundaboutStructure.id / group.userData.intersectionStructure.id).
      */
     private getGroupId(group: THREE.Group): string | null {
-        if (group.userData?.id) return group.userData.id as string;
-        return this.getStructureData(group)?.id ?? null;
+        // New nested format — checked via getStructureData which already handles both types
+        const data = this.getStructureData(group);
+        if (data) return data.id;
+
+        // Legacy flat format fallback
+        const legacyId = group.userData?.id;
+        if (typeof legacyId === "string" && legacyId.length > 0) return legacyId;
+
+        return null;
     }
 
     /**
@@ -2427,21 +2437,18 @@ export class VehicleManager {
             );
             const distance = otherPos.distanceTo(laneEntryPos);
             if (distance < clearanceGap) {
-                if (this.elapsedTime < 30)
                 return false;
             }
 
             // Check 2: distance to the inner entry point
             const distToInnerEntry = otherPos.distanceTo(innerEntryPos);
             if (distToInnerEntry < clearanceGap) {
-                if (this.elapsedTime < 30) 
                 return false;
             }
 
             // Check 3: distance to the outer entry point
             const distToOuterEntry = otherPos.distanceTo(outerEntryPos);
             if (distToOuterEntry < clearanceGap) {
-                if (this.elapsedTime < 30) 
                 return false;
             }
 

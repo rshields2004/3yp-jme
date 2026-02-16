@@ -72,7 +72,6 @@ export const SpawnRateLabels = ({ junctionGroups, stats, positionsCache, routes,
                         positionsCache.set(entryKey, pos);
 
                         const queuedVehicles = stats.spawnQueueByEntry?.[entryKey] ?? 0;
-                        console.log("Spawn label position", pos);
                         return (
                             <group key={entryKey} position={pos}>
                                 <Billboard follow lockX={false} lockY={false} lockZ={false}>
