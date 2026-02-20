@@ -4,20 +4,21 @@ import { useThree, useFrame } from "@react-three/fiber";
 import { useRef, useState, useEffect, useCallback, startTransition } from "react";
 import { useJModellerContext } from "../context/JModellerContext";
 import * as THREE from "three";
-import { generateAllRoutes, getRoutePoints } from "../includes/junctionmanagerutils/carRouting";
 import { VehicleManager } from "../includes/junctionmanagerutils/vehicleManager";
 import { Route, SimulationStats, Tuple3 } from "../includes/types/simulation";
 import { applyIntersectionStopLineColours } from "../includes/junctionmanagerutils/helpers/simulationHelpers";
 import { JunctionStatsLabels } from "./JunctionStatsLabels";
 import { SpawnRateLabels } from "./SpawnRateLabels";
 import { loadCarModels } from "../includes/junctionmanagerutils/helpers/carModelLoaders";
+import { getRoutePoints } from "../includes/junctionmanagerutils/routing/routeUtils";
+import { generateAllRoutes } from "../includes/junctionmanagerutils/routing/routeGeneration";
 
 /**
  * Fixed simulation timestep in seconds.
  * Every device advances the simulation by exactly this amount per tick,
  * guaranteeing identical results regardless of display frame rate.
  */
-export const FIXED_DT = 1 / 60;
+export const FIXED_DT = 1 / 144;
 
 /**
  * Maximum ticks to drain per rendered frame.

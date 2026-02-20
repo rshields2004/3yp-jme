@@ -4,8 +4,9 @@ import { useEffect, useRef } from "react";
 import { useThree, useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { useJModellerContext } from "../context/JModellerContext";
-import { generateAllRoutes, getRoutePoints } from "../includes/junctionmanagerutils/carRouting";
 import { Route, Tuple3 } from "../includes/types/simulation";
+import { generateAllRoutes } from "../includes/junctionmanagerutils/routing/routeGeneration";
+import { getRoutePoints } from "../includes/junctionmanagerutils/routing/routeUtils";
 
 function colorForIndex(i: number): THREE.Color {
     const c = new THREE.Color();
