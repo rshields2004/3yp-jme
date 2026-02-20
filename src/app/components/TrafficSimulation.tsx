@@ -7,9 +7,10 @@ import * as THREE from "three";
 import { generateAllRoutes, getRoutePoints } from "../includes/junctionmanagerutils/carRouting";
 import { VehicleManager } from "../includes/junctionmanagerutils/vehicleManager";
 import { Route, SimulationStats, Tuple3 } from "../includes/types/simulation";
-import { applyIntersectionStopLineColours, loadCarModels } from "../includes/junctionmanagerutils/helpers/simulationHelpers";
+import { applyIntersectionStopLineColours } from "../includes/junctionmanagerutils/helpers/simulationHelpers";
 import { JunctionStatsLabels } from "./JunctionStatsLabels";
 import { SpawnRateLabels } from "./SpawnRateLabels";
+import { loadCarModels } from "../includes/junctionmanagerutils/helpers/carModelLoaders";
 
 /**
  * Fixed simulation timestep in seconds.
