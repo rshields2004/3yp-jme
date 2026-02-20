@@ -10,8 +10,8 @@ import { nodeKeyOf, segmentId, segmentLen, laneKeyForSegment } from "./helpers/s
 import { computeIdmAccel } from "./physics/idm";
 import { buildLaneBases } from "./routing/laneCoordinates";
 import { isRoundaboutLaneKey, roundaboutIdFromLaneKey } from "./helpers/roundaboutUtils";
-import { SeededRNG, rngForEntry, CarClass, bodyTypeForModelIndex, hashString } from "../types/carTypes";
 import { defaultSimConfig } from "../defaults";
+import { SpawnState, createSpawnState, resetSpawnState, spawnTick } from "./vehicleSpawner";
 import { RoundaboutStructure } from "../types/roundabout";
 
 
@@ -41,23 +41,7 @@ export class VehicleManager {
 
     // SPAWNING SYSTEM
 
-    private spawned = 0; // Keeps track of total vehicles spawned
-
-    private spawnRatesPerEntry = new Map<string, number>(); // Stores spawn rate for each entry point
-
-    private spawnDemandPerEntry = new Map<string, number>(); // Accumualtes fractional demand for spawning for determinism of simulation
-    
-    private routesByEntry = new Map<string, Route[]>(); // An optimisation map that groups routes via starting point
-
-    private spawnAccumulator = 0; // Accumulates frame deltas to trigger spawn logic at a fixed time step for determinism
-
-    private entryRNGs = new Map<string, SeededRNG>(); // Random Number Generators specific to each entry point, ensures same seed sims have same exit numbers
-
-    private entryRngKeys = new Map<string, string>(); // Maps used to create stable, reproducible keys for the RNGs so that simulation behaviour doesnt change because internal UUIDs change
-
-    private junctionStableKeys = new Map<string, string>(); // Helper to generate stable keys
-
-    private junctionStableKeysBuilt = false; // Flag to ensure stable keys only initialised once
+    private spawnState!: SpawnState; // Mutable spawning state managed by vehicleSpawner functions
 
 
     // SPATIAL & ROUTING CACHES
@@ -111,12 +95,12 @@ export class VehicleManager {
         this.scene = scene;
         this.carModels = carModels;
         this.routes = routes;
-        this.junction = junction
-
-        // Build routes by entry point
-        this.buildRoutesByEntry();
+        this.junction = junction;
 
         this.cfg = { ...defaultSimConfig, ...cfg };
+
+        // Build spawn state — must come after cfg is set
+        this.spawnState = createSpawnState(this.routes);
     }
 
     
@@ -131,7 +115,7 @@ export class VehicleManager {
         
         // Reset per-entry RNGs when the seed changes so the next run is reproducible
         if (cfg.simSeed !== undefined && cfg.simSeed !== oldSeed) {
-            this.entryRNGs.clear();
+            this.spawnState.entryRNGs.clear();
         }
     }
 
@@ -362,15 +346,7 @@ export class VehicleManager {
         this.nextId = 0;
 
         // SPAWNING SYSTEM
-        this.spawned = 0;
-        this.spawnRatesPerEntry.clear();
-        this.spawnDemandPerEntry.clear();
-        this.routesByEntry.clear();
-        this.spawnAccumulator = 0;
-        this.entryRNGs.clear();
-        this.entryRngKeys.clear();
-        this.junctionStableKeys.clear();
-        this.junctionStableKeysBuilt = false;
+        resetSpawnState(this.spawnState, this.routes);
 
         // SPATIAL & ROUTING CACHES
         this.routePointsCache.clear();
@@ -415,7 +391,6 @@ export class VehicleManager {
         }
 
         this.buildControllersIfNeeded(junctionObjectRefs);
-        this.buildJunctionStableKeys(junctionObjectRefs);
         for (const c of this.intersectionControllers.values()) {
             c.update(dt);
         }
@@ -424,66 +399,18 @@ export class VehicleManager {
             c.update(dt);
         }
 
-        // Update spawn rates since last update
-        this.updateSpawnRatesFromJunctions(junctionObjectRefs);
-
-        // Calculate per-entry max spawn queue (global divided by number of spawn points)
-        const numSpawnPoints = this.routesByEntry.size;
-        const maxQueuePerEntry = numSpawnPoints > 0 ? this.cfg.spawning.maxSpawnQueue / numSpawnPoints : this.cfg.spawning.maxSpawnQueue;
-
-        // Accumulate demand at each spawn point
-        const SPAWN_TICK = 1 / 60;
-        this.spawnAccumulator = (this.spawnAccumulator ?? 0) + dt;
-        const spawnTicks = Math.floor(this.spawnAccumulator / SPAWN_TICK);
-        this.spawnAccumulator -= spawnTicks * SPAWN_TICK;
-
-        for (const [entryKey, rate] of this.spawnRatesPerEntry.entries()) {
-            const currentDemand = this.spawnDemandPerEntry.get(entryKey) || 0;
-            const newDemand = currentDemand + rate * (spawnTicks * SPAWN_TICK);
-            
-            // Cap demand at the per-entry maximum
-            this.spawnDemandPerEntry.set(entryKey, Math.min(newDemand, maxQueuePerEntry));
-        }
-
-        // Try to spawn from each entry (sorted by stable key for determinism)
-        const sortedEntries = Array.from(this.spawnDemandPerEntry.entries()).sort((a, b) => {
-                const ka = this.entryRngKeys.get(a[0]) ?? a[0];
-                const kb = this.entryRngKeys.get(b[0]) ?? b[0];
-                return ka < kb ? -1 : ka > kb ? 1 : 0;
-            }
+        // Run the spawning system (rate updates, demand accumulation, vehicle creation)
+        spawnTick(
+            this.spawnState, dt, junctionObjectRefs,
+            this.cfg, this.vehicles, this.carModels, this.scene, this.junction,
+            this.roundaboutControllers,
+            () => this.nextId++,
+            (r) => this.getRoutePointsCached(r),
+            (gs, id) => this.findGroupById(gs, id),
+            (g) => this.getStructureData(g),
+            (g) => this.getGroupId(g),
+            (v) => this.updateVehicleSegment(v),
         );
-
-        let totalAttempts = 0;
-        for (const [entryKey, demand] of sortedEntries) {
-            const vehiclesToSpawn = Math.floor(demand);
-            
-            // If theres space and vehicles to spawn, attempt to do it
-            if (vehiclesToSpawn > 0 && this.vehicles.length < this.cfg.spawning.maxVehicles) {
-                let spawned = 0;
-                let attempts = 0;
-                
-                while (
-                    spawned < vehiclesToSpawn &&
-                    this.vehicles.length < this.cfg.spawning.maxVehicles &&
-                    attempts < this.cfg.spawning.maxSpawnAttemptsPerFrame &&
-                    totalAttempts < this.cfg.spawning.maxSpawnAttemptsPerFrame * 3
-                ) {
-                    // Keep trying until maxAttemtps
-                    attempts++;
-                    totalAttempts++;
-                    const ok = this.trySpawnFromEntry(entryKey);
-                    if (ok) {
-                        spawned++;
-                        
-                        // Subtract the spawned vehicle from demand
-                        this.spawnDemandPerEntry.set(entryKey, demand - spawned);
-                    } 
-                    else {
-                        break; // Can't spawn from this entry right now
-                    }
-                }
-            }
-        }
 
 
         // Refresh segment/laneKey before lane logic
@@ -1491,329 +1418,6 @@ export class VehicleManager {
     }
 
     // -----------------------
-    // Helper methods for per-entry spawning
-    // -----------------------
-
-    /** Build a map of routes grouped by entry point (structureID-exitIndex) */
-    private buildRoutesByEntry(): void {
-        this.routesByEntry.clear();
-        // Don't clear entryRngKeys here — they are rebuilt by
-        // buildJunctionStableKeys() once junction groups are available.
-
-        for (const route of this.routes) {
-            const firstSeg = route.segments?.[0];
-            if (!firstSeg) continue;
-
-            const entryKey = `${firstSeg.from.structureID}-${firstSeg.from.exitIndex}`;
-
-            if (!this.routesByEntry.has(entryKey)) {
-                this.routesByEntry.set(entryKey, []);
-            }
-            this.routesByEntry.get(entryKey)!.push(route);
-        }
-    }
-
-    /**
-     * Build stable, config-hash-based keys for every entry point.
-     * The key encodes the junction TYPE + CONFIG (excluding the random UUID)
-     * so that two browser tabs with the same layout always produce the
-     * same RNG sequences, even when the underlying structureIDs differ.
-     *
-     * To disambiguate identical junctions (same type + config), junctions
-     * with the same config hash are sub-indexed by their world-position
-     * sort order (x then z).  This relative ordering is robust even if
-     * positions have small floating-point differences between tabs.
-     */
-    private buildJunctionStableKeys(
-        junctionObjectRefs: React.RefObject<THREE.Group<THREE.Object3DEventMap>[]>
-    ): void {
-        if (this.junctionStableKeysBuilt) return;
-
-        const groups = junctionObjectRefs.current;
-        if (!groups || groups.length === 0) return;
-
-        // Collect unique structureIDs referenced by routes
-        const structureIDs = new Set<string>();
-        for (const r of this.routes) {
-            for (const seg of r.segments ?? []) {
-                structureIDs.add(seg.from.structureID);
-                structureIDs.add(seg.to.structureID);
-            }
-        }
-
-        // For each structureID, compute a config hash from the junction group userData
-        const idToHash = new Map<string, string>();
-        const idToPos = new Map<string, { x: number; z: number }>();
-
-        for (const sid of structureIDs) {
-            const g = this.findGroupById(groups, sid);
-            if (!g) continue;
-
-            // Get type and exitConfig from the junction config (not userData)
-            const jObj = this.junction.junctionObjects.find(o => o.id === sid);
-            const configObj: Record<string, unknown> = {
-                type: jObj?.type ?? this.getStructureData(g)?.type ?? "unknown",
-                exitConfig: jObj?.config?.exitConfig ?? [],
-            };
-            const configHash = hashString(JSON.stringify(configObj)).toString(36);
-            idToHash.set(sid, configHash);
-
-            // World position for sub-index tiebreaker
-            const wp = new THREE.Vector3();
-            g.getWorldPosition(wp);
-            idToPos.set(sid, { x: wp.x, z: wp.z });
-        }
-
-        // Group structureIDs by their config hash
-        const hashGroups = new Map<string, string[]>();
-        for (const [sid, ch] of idToHash.entries()) {
-            const arr = hashGroups.get(ch) ?? [];
-            arr.push(sid);
-            hashGroups.set(ch, arr);
-        }
-
-        // Within each group, sort by world position (x then z) → assign sub-index
-        for (const [ch, sids] of hashGroups.entries()) {
-            sids.sort((a, b) => {
-                const pa = idToPos.get(a)!;
-                const pb = idToPos.get(b)!;
-                // Round to 0 dp — only the RELATIVE order matters, not the exact value
-                const ax = Math.round(pa.x), az = Math.round(pa.z);
-                const bx = Math.round(pb.x), bz = Math.round(pb.z);
-                return ax !== bx ? ax - bx : az - bz;
-            });
-            for (let i = 0; i < sids.length; i++) {
-                this.junctionStableKeys.set(sids[i], `${ch}:${i}`);
-            }
-        }
-
-        // Rebuild entryRngKeys from junctionStableKeys
-        this.entryRngKeys.clear();
-        this.entryRNGs.clear(); // force re-creation with new keys
-
-        for (const [entryKey] of this.routesByEntry.entries()) {
-            // entryKey format: "structureID-exitIndex"
-            const dashIdx = entryKey.lastIndexOf("-");
-            const sid = entryKey.substring(0, dashIdx);
-            const exitIdx = entryKey.substring(dashIdx + 1);
-
-            const jStable = this.junctionStableKeys.get(sid);
-            if (jStable) {
-                this.entryRngKeys.set(entryKey, `cfg:${jStable}:${exitIdx}`);
-            } else {
-                // Fallback — shouldn't happen, but keeps things working
-                this.entryRngKeys.set(entryKey, `entry:${entryKey}`);
-            }
-        }
-
-        this.junctionStableKeysBuilt = true;
-    }
-
-    /** Update spawn rates per entry from junction object configs */
-    private updateSpawnRatesFromJunctions(junctionObjectRefs: React.RefObject<THREE.Group<THREE.Object3DEventMap>[]>): void {
-        if (!junctionObjectRefs.current) return;
-
-        // Clear existing rates (but NOT demand - demand accumulates)
-        this.spawnRatesPerEntry.clear();
-
-        // Track valid entry points (those with routes)
-        const validEntries = new Set<string>();
-
-        for (const group of junctionObjectRefs.current) {
-            const structureID = this.getGroupId(group);
-            if (!structureID) continue;
-            
-            // Get exitConfig from the junction config (authoritative source)
-            const jObj = this.junction.junctionObjects.find(o => o.id === structureID);
-            const exitConfig = jObj?.config?.exitConfig ?? group.userData.exitConfig;
-            
-            if (!exitConfig || !Array.isArray(exitConfig)) continue;
-            
-            // Set spawn rate for each exit of this junction
-            exitConfig.forEach((config: { spawnRate?: number }, exitIndex: number) => {
-                const entryKey = `${structureID}-${exitIndex}`;
-                
-                // Only set spawn rate if this exit has routes starting from it (is a spawn point)
-                // Connected exits won't have routes in routesByEntry
-                if (!this.routesByEntry.has(entryKey)) {
-                    return; // Skip this exit - it's connected to another junction
-                }
-                
-                validEntries.add(entryKey);
-                
-                // Per-exit override takes priority, otherwise fall back to global SimConfig rate
-                const rate = config.spawnRate ?? this.cfg.spawning.spawnRate;
-                this.spawnRatesPerEntry.set(entryKey, rate);
-                
-                // Initialize demand to 0 if this is a new entry
-                if (!this.spawnDemandPerEntry.has(entryKey)) {
-                    this.spawnDemandPerEntry.set(entryKey, 0);
-                }
-            });
-        }
-        
-        // Clear demand for entries that are no longer valid spawn points (e.g., now connected)
-        for (const entryKey of this.spawnDemandPerEntry.keys()) {
-            if (!validEntries.has(entryKey)) {
-                this.spawnDemandPerEntry.delete(entryKey);
-            }
-        }
-    }
-
-    // -----------------------
-    // Spawning
-    // -----------------------
-
-    /**
-     * Try to spawn a vehicle from a specific entry point.
-     *
-     * IMPORTANT FOR SEED REPRODUCIBILITY:
-     * The seeded RNG is always advanced by the same number of values per
-     * spawn attempt, regardless of whether `hasSpawnSpace` allows the
-     * spawn.  This guarantees the Nth spawn attempt at a given entry
-     * always produces the same vehicle type / colour / stats, even when
-     * earlier attempts were blocked at different times due to frame-rate
-     * differences.
-     */
-    private trySpawnFromEntry(entryKey: string): boolean {
-        const routesForEntry = this.routesByEntry.get(entryKey);
-        if (!routesForEntry || routesForEntry.length === 0 || !this.carModels.length) return false;
-
-        // Get or create seeded RNG for this entry point
-        let rng = this.entryRNGs.get(entryKey);
-        if (!rng) {
-            // Use position-based stable key instead of UUID-based entryKey
-            const stableKey = this.entryRngKeys.get(entryKey) ?? entryKey;
-            rng = rngForEntry(this.cfg.simSeed, stableKey);
-            this.entryRNGs.set(entryKey, rng);
-        }
-
-        // ── Consume a fixed number of RNG values per attempt ──────────
-        // Even if the spawn fails (no space), these values are consumed
-        // so the sequence stays aligned.
-        const rRouteIdx   = rng.nextInt(routesForEntry.length);   // 1
-        const rCarClass   = rng.pickCarClass(this.cfg.rendering.enabledCarClasses); // 2 (internally consumes 1)
-        const rColourIdx  = rng.next();                           // 3
-        const rVariation0 = rng.next();                           // 4
-        const rVariation1 = rng.next();                           // 5
-        const rVariation2 = rng.next();                           // 6
-        const rReaction   = rng.next();                           // 7
-        const rHeadway    = rng.next();                           // 8
-
-        // ── Resolve route ─────────────────────────────────────────────
-        const route = routesForEntry[rRouteIdx];
-        const points = this.getRoutePointsCached(route);
-        if (!points || points.length < 2) return false;
-
-        const carClass: CarClass = rCarClass;
-        const length = carClass.length;
-
-        // ── Space check (does NOT touch RNG) ─────────────────────────
-        if (!this.hasSpawnSpace(route, length)) return false;
-
-        // ── Resolve model (colour variant) ───────────────────────────
-        const matchingModels: number[] = [];
-        for (let i = 0; i < this.carModels.length; i++) {
-            const carFileIdx = this.carModels[i].userData?.carFileIndex as number | undefined;
-            if (carFileIdx !== undefined) {
-                const bt = bodyTypeForModelIndex(carFileIdx);
-                if (bt === carClass.bodyType) matchingModels.push(i);
-            }
-        }
-        // Sort by carFileIndex for deterministic colour order
-        matchingModels.sort((a, b) => {
-            const ai = (this.carModels[a].userData?.carFileIndex as number) ?? 0;
-            const bi = (this.carModels[b].userData?.carFileIndex as number) ?? 0;
-            return ai - bi;
-        });
-
-        let loadedIndex: number;
-        if (matchingModels.length > 0) {
-            loadedIndex = matchingModels[Math.floor(rColourIdx * matchingModels.length)];
-        } else {
-            loadedIndex = Math.floor(rColourIdx * this.carModels.length);
-        }
-        const template = this.carModels[loadedIndex];
-        if (!template) return false;
-        const model = template.clone(true);
-
-        // ── Place ────────────────────────────────────────────────────
-        const p0 = points[0];
-        const p1 = points[1];
-
-        const pos0 = new THREE.Vector3(p0[0], p0[1] + this.cfg.rendering.yOffset, p0[2]);
-        const pos1 = new THREE.Vector3(p1[0], p1[1] + this.cfg.rendering.yOffset, p1[2]);
-
-        model.position.copy(pos0);
-
-        const dir = pos1.clone().sub(pos0);
-        if (dir.lengthSq() > 1e-6) {
-            dir.normalize();
-            const yaw = Math.atan2(dir.x, dir.z);
-            model.rotation.set(0, yaw, 0);
-        }
-
-        this.scene.add(model);
-
-        const v = new Vehicle(this.nextId++, model, route, length, this.cfg.motion.initialSpeed);
-
-        // Apply car-class-specific characteristics from pre-drawn RNG values
-        v.maxAccel      = this.cfg.motion.maxAccel  * carClass.accelFactor * (0.9 + rVariation0 * 0.2);
-        v.maxDecel      = this.cfg.motion.maxDecel  * carClass.decelFactor * (0.9 + rVariation1 * 0.2);
-        v.preferredSpeed = this.cfg.motion.preferredSpeed * carClass.speedFactor * (0.9 + rVariation2 * 0.2);
-        v.reactionTime  = 0.15 + rReaction * 0.25;
-        v.timeHeadway   = this.cfg.spacing.timeHeadway * (0.8 + rHeadway * 0.4);
-
-        v.s = 0;
-        v.segmentIndex = 0;
-        v.currentSegment = route.segments?.length ? route.segments[0] : null;
-        this.updateVehicleSegment(v);
-
-        v.spawnKey = this.spawnKeyForRoute(route);
-
-        this.vehicles.push(v);
-        this.spawned += 1;
-
-        return true;
-    }
-
-    private spawnKeyForRoute(route: Route): string {
-        const firstSeg = route.segments?.[0];
-        const lk = firstSeg ? laneKeyForSegment(firstSeg, this.roundaboutControllers) : "";
-        if (lk) return `spawn:${lk}`;
-
-        const points = this.getRoutePointsCached(route);
-        const p0 = points[0];
-        return `spawnPoint:${p0[0].toFixed(3)},${p0[1].toFixed(3)},${p0[2].toFixed(3)}`;
-    }
-
-    private hasSpawnSpace(route: Route, newLen: number): boolean {
-        const spawnKey = this.spawnKeyForRoute(route);
-
-        let nearest: Vehicle | null = null;
-        let nearestS = Infinity;
-
-        for (const v of this.vehicles) {
-            if (v.spawnKey !== spawnKey) continue;
-
-            if (v.s < nearestS) {
-                nearestS = v.s;
-                nearest = v;
-            }
-        }
-
-        if (!nearest) return true;
-
-        const brakingDistance = (this.cfg.motion.initialSpeed * this.cfg.motion.initialSpeed) / (2 * this.cfg.motion.maxDecel);
-        const timeHeadwayBuffer = this.cfg.motion.initialSpeed * this.cfg.spacing.timeHeadway;
-
-        const safetyBuffer = Math.max(brakingDistance, timeHeadwayBuffer);
-        const required = newLen + this.cfg.spacing.minBumperGap + safetyBuffer;
-
-        return nearestS >= required;
-    }
-
-    // -----------------------
     // Segment / laneKey tracking
     // laneKeyForSegment removed — now using shared implementation from helpers/segmentHelpers.ts
     // Call site: laneKeyForSegment(seg, this.roundaboutControllers)
@@ -2196,7 +1800,7 @@ export class VehicleManager {
         const radius = rData.structure.avgRadius;
 
         const canEnter = controller.canEnterSafely(entryAngle, radius, entryKey);
-        const physicalClear = this.isRoundaboutEntryClear(v, junctionKey, entryKey, 0, lanes);
+        const physicalClear = this.isRoundaboutEntryClear(v, junctionKey, entryKey, lanes);
 
         if (canEnter && physicalClear) {
             // Gap is available.
@@ -2239,7 +1843,6 @@ export class VehicleManager {
         v: Vehicle,
         junctionKey: string,
         entryKey: string,
-        entryLaneIndex: number,
         lanes: Map<string, LaneOcc[]>
     ): boolean {
         const rData = this.getRoundaboutData(junctionKey);
@@ -2424,7 +2027,7 @@ export class VehicleManager {
                     const radius = rData.structure.avgRadius;
                     
                     const canEnter = controller.canEnterSafely(entryAngle, radius, entryKey);
-                    const physicalClear = this.isRoundaboutEntryClear(v, junctionKey, entryKey, 0, lanes);
+                    const physicalClear = this.isRoundaboutEntryClear(v, junctionKey, entryKey, lanes);
                     
                     return { stoplineS, shouldStop: !(canEnter && physicalClear) };
                 }
@@ -2707,7 +2310,7 @@ export class VehicleManager {
         // Calculate total spawn queue from all entry demands
         let totalSpawnQueue = 0;
         const spawnQueueByEntry: Record<string, number> = {};
-        for (const [entryKey, demand] of this.spawnDemandPerEntry.entries()) {
+        for (const [entryKey, demand] of this.spawnState.spawnDemandPerEntry.entries()) {
             const queue = Math.floor(demand);
             totalSpawnQueue += queue;
             spawnQueueByEntry[entryKey] = queue;
@@ -2715,7 +2318,7 @@ export class VehicleManager {
         
         const snapshot: SimulationStats = {
             active: this.vehicles.length,
-            spawned: this.spawned,
+            spawned: this.spawnState.spawned,
             completed: this.completed,
             spawnQueue: totalSpawnQueue,
             spawnQueueByEntry,
