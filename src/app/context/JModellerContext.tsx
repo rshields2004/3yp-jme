@@ -150,6 +150,31 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
             draggedGroup.parent.worldToLocal(newWorldPos);
         }
         draggedGroup.position.copy(newWorldPos);
+
+        // Persist the final snapped position into the junction React state so
+        // it is always the source of truth (P2P peers read it from here).
+        const id = draggedData.id as string;
+        if (id) {
+            const wq = new THREE.Quaternion();
+            draggedGroup.updateWorldMatrix(true, false);
+            draggedGroup.getWorldQuaternion(wq);
+            // newWorldPos is already in local space after worldToLocal above,
+            // but we stored the world position before that conversion.
+            // Use the group's current world position for the stored value.
+            const finalWorld = new THREE.Vector3();
+            draggedGroup.getWorldPosition(finalWorld);
+            setJunction(prev => ({
+                ...prev,
+                junctionObjects: prev.junctionObjects.map(obj =>
+                    obj.id === id
+                        ? { ...obj, transform: {
+                            position: { x: finalWorld.x, y: finalWorld.y, z: finalWorld.z },
+                            quaternion: { x: wq.x, y: wq.y, z: wq.z, w: wq.w },
+                        }}
+                        : obj
+                ),
+            }));
+        }
     };
 
     const removeObject = (objID: string) => {

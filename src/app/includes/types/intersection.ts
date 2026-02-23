@@ -1,4 +1,4 @@
-import { ExitConfig, LaneStructure } from "./types";
+import { ExitConfig, LaneStructure, ObjectTransform } from "./types";
 import * as THREE from "three";
 
 export type ExitStructure = {
@@ -24,6 +24,8 @@ export type IntersectionConfig = {
 export type IntersectionObject = {
     id: string;
     name: string;
-    type: "intersection"
+    type: "intersection";
     config: IntersectionConfig;
+    /** World transform set by the host and consumed by the client on mount. */
+    transform?: ObjectTransform;
 };

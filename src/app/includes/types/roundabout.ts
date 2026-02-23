@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { ExitConfig, LaneLineProperties, LaneStructure } from "./types";
+import { ExitConfig, LaneLineProperties, LaneStructure, ObjectTransform } from "./types";
 import { Tuple3 } from "./simulation";
 
 
@@ -40,4 +40,6 @@ export type RoundaboutObject = {
     name: string;
     type: "roundabout";
     config: RoundaboutConfig;
+    /** World transform set by the host and consumed by the client on mount. */
+    transform?: ObjectTransform;
 };

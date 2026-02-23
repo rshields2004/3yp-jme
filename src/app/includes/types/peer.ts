@@ -3,9 +3,19 @@ import { IntersectionObject, IntersectionStructure } from "./intersection";
 import { RoundaboutStructure } from "./roundabout";
 import { SimConfig } from "./simulation";
 import { JunctionConfig, JunctionObject } from "./types"
-import * as THREE from "three";
 
 export type ExportedObject = IntersectionStructure | RoundaboutStructure;
+
+/**
+ * Plain-serializable representation of a THREE.Group's world transform.
+ * Used in NetMessages instead of the raw THREE.Group to avoid circular
+ * reference errors when PeerJS JSON-serialises the payload.
+ */
+export type SerializedGroupTransform = {
+    id: string;
+    position: { x: number; y: number; z: number };
+    quaternion: { x: number; y: number; z: number; w: number };
+};
 
 export type NetMessage = { type: "INIT_CONFIG"; appdata: SharedState } 
     | { type: "START" } 
@@ -23,7 +33,6 @@ export type PeerContextType = {
 };
 
 export type SharedState = {
-    exportedObjects: THREE.Group[];
     junctionConfig: JunctionConfig;
     simulationConfig: SimConfig;
 };

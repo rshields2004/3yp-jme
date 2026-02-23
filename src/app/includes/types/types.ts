@@ -23,6 +23,16 @@ export type ExitConfig = {
     spawnRate?: number; // optional per-exit override (vehicles per second)
 };
 
+/**
+ * Plain-serializable world transform for a junction object.
+ * Embedded in JunctionObject so clients reconstruct positions
+ * without any cross-renderer effect timing dependency.
+ */
+export type ObjectTransform = {
+    position: { x: number; y: number; z: number };
+    quaternion: { x: number; y: number; z: number; w: number };
+};
+
 
 export type JunctionObject = IntersectionObject | RoundaboutObject; // Later on a | would go here with the other types of object
 

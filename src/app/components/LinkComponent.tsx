@@ -219,6 +219,7 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
 
         const linkStructure: LinkStructure = { id: link.id, laneCurves };
 
+        groupRef.current.userData.id = link.id;
         groupRef.current.userData.linkStructure = linkStructure;
         registerJunctionObject(groupRef.current);
     });

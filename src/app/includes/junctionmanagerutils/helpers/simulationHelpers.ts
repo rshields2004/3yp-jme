@@ -22,7 +22,7 @@ export function applyIntersectionStopLineColours(
         }
 
         // Ensure only intersections are targeted
-        if (group.userData.type !== "intersection") {
+        if (!group.userData.intersectionStructure) {
             continue;
         }
 

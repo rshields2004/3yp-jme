@@ -1,12 +1,9 @@
  "use client";
  
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useJModellerContext } from "../context/JModellerContext";
 import { usePeer } from "../context/PeerContext";
-import { ExportedObject, NetMessage, SharedState } from "../includes/types/peer";
-import { getStructureData } from "../includes/utils";
-import { IntersectionStructure } from "../includes/types/intersection";
-import * as THREE from "three"; 
+import { NetMessage, SharedState } from "../includes/types/peer";
 
 export default function SimControlPanel() {
     const { 
@@ -25,7 +22,6 @@ export default function SimControlPanel() {
         setJunction,
         simConfig,
         setSimConfig,
-        junctionObjectRefs
     } = useJModellerContext();
  
     const {
@@ -40,61 +36,39 @@ export default function SimControlPanel() {
 
     const [joinCode, setJoinCode] = useState('');
 
-    // Client message handler
-
-    useEffect(() => {
-        if (isHost) {
-            return;
+    // Always-fresh ref so the bound data handler never closes over stale functions.
+    const clientHandlerRef = useRef<(data: unknown) => void>(null!);
+    clientHandlerRef.current = (data: unknown) => {
+        const msg = data as NetMessage;
+        if (msg.type === "INIT_CONFIG") {
+            setJunction(msg.appdata.junctionConfig);
+            setSimConfig(msg.appdata.simulationConfig);
         }
+        if (msg.type === "START")  { startSim(); }
+        if (msg.type === "PAUSE")  { pauseSim(); }
+        if (msg.type === "RESUME") { resumeSim(); }
+        if (msg.type === "HALT")   { haltSim(); }
+    };
+
+    const buildSharedState = (): SharedState => ({
+        junctionConfig: junction,
+        simulationConfig: simConfig,
+    });
+
+    // Client message handler
+    useEffect(() => {
+        if (isHost) return;
 
         const conn = connections[0];
+        if (!conn) return;
 
-        if (!conn) {
-            return;
-        }
+        // Stable wrapper that always delegates to the latest clientHandlerRef.
+        const handler = (data: unknown) => clientHandlerRef.current(data);
+        conn.on("data", handler);
 
-        conn.on("data", (data: unknown) => {
-            const msg = data as NetMessage;
-            if (msg.type === "INIT_CONFIG") {
-                
-                setJunction(msg.appdata.junctionConfig);
-                setSimConfig(msg.appdata.simulationConfig);
-
-                // Now need to update object position
-
-                junctionObjectRefs.current.forEach(obj => {
-                    const found = msg.appdata.exportedObjects.find(eobj => obj.userData.id === eobj.userData.id);
-                    
-                    const worldPosition = new THREE.Vector3();
-                    const worldQuaternion = new THREE.Quaternion();
-
-                    if (found && found.position) {
-                        found.getWorldPosition(worldPosition);
-                        found.getWorldQuaternion(worldQuaternion);
-                        obj.position.copy(worldPosition);
-                        obj.quaternion.copy(worldQuaternion);
-                    }
-                });
-
-            }
-
-            if (msg.type === "START") {
-                startSim();
-            }
-
-            if (msg.type === "PAUSE") {
-                pauseSim();
-            }
-
-            if (msg.type === "RESUME") {
-                resumeSim();
-            }
-
-            if (msg.type === "HALT") {
-                haltSim();
-            }
-
-        });
+        return () => {
+            conn.off("data", handler);
+        };
     }, [connections, isHost])
 
 
@@ -109,37 +83,25 @@ export default function SimControlPanel() {
                 return;
             }
 
-            conn.on("open", () => {
-                const sharedState: SharedState = {
-                    exportedObjects: junctionObjectRefs.current,
-                    junctionConfig: junction,
-                    simulationConfig: simConfig,
-                };
-                
+            const sendInit = () => {
                 conn.send({
                     type: "INIT_CONFIG",
-                    appdata: sharedState
+                    appdata: buildSharedState(),
                 });
                 (conn as any)._initSent = true;
-            });
+            };
+
+            if (conn.open) {
+                sendInit();
+            } else {
+                conn.on("open", sendInit);
+            }
         });
     }, [connections, isHost])
 
     useEffect(() => {
         if (!isHost) return;
-
-        // Construct the shared state
-        const sharedState: SharedState = {
-            exportedObjects: junctionObjectRefs.current,
-            junctionConfig: junction,
-            simulationConfig: simConfig,
-        };
-
-        // Send to all peers
-        send({
-            type: 'INIT_CONFIG',
-            appdata: sharedState,
-        });
+        send({ type: 'INIT_CONFIG', appdata: buildSharedState() });
     }, [junction, simConfig]);
 
     return  (

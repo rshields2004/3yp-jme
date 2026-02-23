@@ -12,14 +12,18 @@ import { ThreeEvent } from "@react-three/fiber";
 import { group } from "node:console";
 
 
+import { ObjectTransform } from "../includes/types/types";
+
 type IntersectionProps = {
     id: string;
     name: string;
     intersectionConfig: IntersectionConfig;
     index: number;
+    /** When provided (P2P client), position is applied directly instead of snapToValidPosition. */
+    initialTransform?: ObjectTransform;
 };
 
-export const IntersectionComponent = ({ id, intersectionConfig, name }: IntersectionProps) => {
+export const IntersectionComponent = ({ id, intersectionConfig, name, initialTransform }: IntersectionProps) => {
     const groupRef = useRef<THREE.Group>(null);
     const {
         junction,
@@ -67,11 +71,28 @@ export const IntersectionComponent = ({ id, intersectionConfig, name }: Intersec
         if (!group) {
             return;
         }
+        group.userData.id = id;
         group.userData.intersectionStructure = intersectionMemo;
 
         // Registration only works if intersection doesnt exist before, contains a check for ID
         registerJunctionObject(group);
-        snapToValidPosition(group);
+
+        if (initialTransform) {
+            // P2P client path: apply the host's world transform directly.
+            group.position.set(
+                initialTransform.position.x,
+                initialTransform.position.y,
+                initialTransform.position.z
+            );
+            group.quaternion.set(
+                initialTransform.quaternion.x,
+                initialTransform.quaternion.y,
+                initialTransform.quaternion.z,
+                initialTransform.quaternion.w
+            );
+        } else {
+            snapToValidPosition(group);
+        }
     }, [intersectionMemo]);
 
 

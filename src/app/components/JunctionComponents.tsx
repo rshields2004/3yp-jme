@@ -101,6 +101,7 @@ export const JunctionComponents = () => {
                     name={junctionObject.name}
                     intersectionConfig={junctionObject.config}
                     index={i}
+                    initialTransform={junctionObject.transform}
                 />
             ))}
 
@@ -111,6 +112,7 @@ export const JunctionComponents = () => {
                     name={junctionObject.name}
                     roundaboutConfig={junctionObject.config}
                     index={i}
+                    initialTransform={junctionObject.transform}
                 />
             ))}
 

@@ -12,15 +12,19 @@ import { ThreeEvent } from "@react-three/fiber";
 
 
 
+import { ObjectTransform } from "../includes/types/types";
+
 type RoundaboutProps = {
     id: string;
     name: string;
     roundaboutConfig: RoundaboutConfig;
     index: number;
+    /** When provided (P2P client), position is applied directly instead of snapToValidPosition. */
+    initialTransform?: ObjectTransform;
 };
 
 
-export const RoundaboutComponent = ({ id, roundaboutConfig, name }: RoundaboutProps) => {
+export const RoundaboutComponent = ({ id, roundaboutConfig, name, initialTransform }: RoundaboutProps) => {
 
     const groupRef = useRef<THREE.Group>(null);
     
@@ -92,11 +96,28 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, name }: RoundaboutPr
         if (!group) { 
             return;
         }
+        group.userData.id = id;
         group.userData.roundaboutStructure = roundaboutMemo;
         
         // Registration only works if intersection doesnt exist before, contains a check for ID
         registerJunctionObject(group);
-        snapToValidPosition(group);
+
+        if (initialTransform) {
+            // P2P client path: apply the host's world transform directly.
+            group.position.set(
+                initialTransform.position.x,
+                initialTransform.position.y,
+                initialTransform.position.z
+            );
+            group.quaternion.set(
+                initialTransform.quaternion.x,
+                initialTransform.quaternion.y,
+                initialTransform.quaternion.z,
+                initialTransform.quaternion.w
+            );
+        } else {
+            snapToValidPosition(group);
+        }
     }, [roundaboutMemo]);
 
     const isSelected = groupRef.current ? (() => {
