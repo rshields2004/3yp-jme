@@ -401,7 +401,6 @@ export function generateRingLines(
             }
         });
     }
-    console.log(ringLines.length); 
     return ringLines;
 }
 

@@ -141,6 +141,16 @@ export type SimConfig = {
 
 
 
+export type FollowedVehicleStats = {
+    id: number;
+    speed: number;
+    preferredSpeed: number;
+    accel: number;
+    phase: string;
+    bodyType: string;
+    segment: string;
+};
+
 export type LaneOcc = {
     vehicle: Vehicle;
     /** lane coordinate (used for sorting); for "reservation" occupants we pin this to start-of-lane */

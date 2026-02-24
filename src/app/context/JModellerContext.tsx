@@ -5,6 +5,7 @@ import { ExitRef, JModellerState, JunctionConfig, JunctionObjectTypes } from "..
 import { defaultJunctionConfig, defaultSimConfig } from "../includes/defaults";
 import * as THREE from "three";
 import { SimulationStats } from "../includes/types/simulation";
+import { FollowedVehicleStats } from "../includes/types/simulation";
 import { IntersectionStructure } from "../includes/types/intersection";
 import { RoundaboutStructure } from "../includes/types/roundabout";
 import { getStructureData } from "../includes/utils";
@@ -22,6 +23,7 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
     const [simIsPaused, setSimIsPaused] = useState<boolean>(false);
     const [carsReady, setCarsReady] = useState<boolean>(false);
     const [followedVehicleId, setFollowedVehicleId] = useState<number | null>(null);
+    const [followedVehicleStats, setFollowedVehicleStats] = useState<FollowedVehicleStats | null>(null);
     const [isConfigConfirmed, setIsConfigConfirmed] = useState<boolean>(false);
     const [simConfig, setSimConfig] = useState(defaultSimConfig);
     const [objectCounter, setObjectCounter] = useState(0);
@@ -264,6 +266,8 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
             setCarsReady,
             followedVehicleId,
             setFollowedVehicleId,
+            followedVehicleStats,
+            setFollowedVehicleStats,
             isConfigConfirmed,
             confirmConfig,
             resetConfig,

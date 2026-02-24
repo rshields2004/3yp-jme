@@ -1,33 +1,44 @@
 "use client";
 
 import { Canvas } from "@react-three/fiber";
-import DebugPanel from "./components/DebugPanel";
-import SimConfigPanel from "./components/SimConfigPanel";
+import SelectionPanel from "./components/SelectionPanel";
+import AppHeader from "./components/AppHeader";
 import Scene from "./components/Scene";
 import { JModellerProvider } from "./context/JModellerContext";
 import { PeerProvider } from "./context/PeerContext";
-import SimControlPanel from "./components/SimControlPanel";
+import { useState } from "react";
+import CoverPage from "./components/CoverPage";
 
 export default function Page() {
+
+    const [entered, setEntered] = useState(false);
 
     return (
         <PeerProvider>
             <JModellerProvider>
                 <div 
-                    style={{ width: "100vw", height: "100vh", position: "relative" }}
+                    style={{ width: "100vw", height: "100vh", position: "relative", overflow: "hidden" }}
                     onContextMenu={(e) => e.preventDefault()}
                 >
-                    <Canvas
-                        camera={{ position: [5, 5, 5], fov: 60 }}
-                        style={{ background: "#0a0a0a", width: "100vw", height: "100vh" }}
-                        onContextMenu={(e) => e.preventDefault()}
-                    >
-                        <Scene />
-                        
-                    </Canvas>
-                    <DebugPanel />
-                    <SimConfigPanel />
-                    <SimControlPanel />
+                    {!entered && (
+                        <CoverPage onContinueAction={() => setEntered(true)} />
+                    )}
+
+                    {entered && (
+                        <>
+                            <AppHeader />
+                            <Canvas
+                                camera={{ position: [5, 5, 5], fov: 60 }}
+                                style={{ background: "#0a0a0a", position: "absolute", inset: 0, width: "100%", height: "100%" }}
+                                onContextMenu={(e) => e.preventDefault()}
+                            >
+                                <Scene />
+                            </Canvas>
+                            <SelectionPanel />
+                        </>
+                    )}
+
+                    
                     
                 </div>
             </JModellerProvider>

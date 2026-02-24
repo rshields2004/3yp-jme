@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { IntersectionObject } from "./intersection";
 import { RoundaboutObject } from "./roundabout";
-import { SimulationStats, SimConfig, Tuple3 } from "./simulation";
+import { SimulationStats, SimConfig, Tuple3, FollowedVehicleStats } from "./simulation";
 
 
 export type LaneLineProperties = {
@@ -88,6 +88,8 @@ export type JModellerState = {
 
     followedVehicleId: number | null;
     setFollowedVehicleId: React.Dispatch<React.SetStateAction<number | null>>;
+    followedVehicleStats: FollowedVehicleStats | null;
+    setFollowedVehicleStats: React.Dispatch<React.SetStateAction<FollowedVehicleStats | null>>;
     
     isConfigConfirmed: boolean;
     confirmConfig: () => void;

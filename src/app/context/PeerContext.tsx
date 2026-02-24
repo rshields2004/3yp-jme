@@ -1,5 +1,5 @@
 import Peer, { DataConnection } from "peerjs";
-import { createContext, useContext, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { JunctionConfig } from "../includes/types/types";
 import { SimConfig } from "../includes/types/simulation";
 import { NetMessage, PeerContextType } from "../includes/types/peer";
@@ -10,11 +10,20 @@ const PeerContext = createContext<PeerContextType>(null!);
 export const PeerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
     const peerRef = useRef<Peer>(undefined);
+    const lastPingRef = useRef<Map<string, number>>(new Map());
     const [connections, setConnections] = useState<DataConnection[]>([]);
     const [connectionError, setConnectionError] = useState<string | null>(null);
     const [isConnecting, setIsConnecting] = useState(false);
+    const [connectedPeerIds, setConnectedPeerIds] = useState<string[]>([]);
     const [isHost, setIsHost] = useState(false);
     const [hostId, setHostId] = useState<string>();
+
+    const removePeer = (peerId: string) => {
+        setConnections(prev => prev.filter(c => c.peer !== peerId));
+        setConnectedPeerIds(prev => prev.filter(id => id !== peerId));
+        lastPingRef.current.delete(peerId);
+    };
+
 
     const createHost = () => {
         const peer = new Peer();
@@ -23,11 +32,30 @@ export const PeerProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         peer.on('open', id => {
             setHostId(id);
-            console.log('Host ID:', id);
         });
 
         peer.on('connection', conn => {
-            setConnections(prev => [...prev, conn]);
+            conn.on('open', () => {
+                setConnections(prev => [...prev, conn]);
+                setConnectedPeerIds(prev => [...prev, conn.peer]);
+                lastPingRef.current.set(conn.peer, Date.now());
+            });
+
+            conn.on("data", (data) => {
+                const msg = data as NetMessage;
+                if (msg.type === "PING") {
+                    lastPingRef.current.set(conn.peer, Date.now());
+                    return;
+                }
+            });
+
+            conn.on('close', () => {
+               removePeer(conn.peer)
+            });
+
+            conn.on('error', () => {
+                removePeer(conn.peer)
+            });
         });
     };
 
@@ -58,11 +86,21 @@ export const PeerProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 setConnections([conn]);
             }); 
 
+            conn.on("close", () => {
+                setConnections([]);
+                setConnectionError("Host Disconnected.");
+            })
+
             conn.on("error", (error) => {
                 clearTimeout(timeout);
                 setIsConnecting(false);
                 setConnectionError(`Connection failed: ${error}`);
             });
+        });
+
+        peer.on("disconnected", () => {
+            setConnections([]);
+            setConnectionError("Lost connection to host.");
         });
 
         peer.on("error", (error) => {
@@ -79,6 +117,22 @@ export const PeerProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
     };
 
+    useEffect(() => {
+        if (!isHost) return;
+
+        const interval = setInterval(() => {
+            const now = Date.now();
+            lastPingRef.current.forEach((lastSeen, peerId) => {
+                if (now - lastSeen > 8000) {  // missed 2 pings
+                    removePeer(peerId);
+                    lastPingRef.current.delete(peerId);
+                }
+            });
+        }, 5000);
+
+        return () => clearInterval(interval);
+    }, [isHost]);
+
     return (
         <PeerContext.Provider
             value={{ 
@@ -89,7 +143,8 @@ export const PeerProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 joinHost,
                 send,
                 connectionError,
-                isConnecting
+                isConnecting,
+                connectedPeerIds
             }}
         >
             { children }

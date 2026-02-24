@@ -32,7 +32,8 @@ export default function SimControlPanel() {
         joinHost,
         send,
         isConnecting,
-        connectionError
+        connectionError,
+        connectedPeerIds
     } = usePeer();
 
 
@@ -106,6 +107,17 @@ export default function SimControlPanel() {
         send({ type: 'INIT_CONFIG', appdata: buildSharedState() });
     }, [junction, simConfig]);
 
+
+    useEffect(() => {
+        if (isHost || connections.length === 0) return;
+
+        const interval = setInterval(() => {
+            send({ type: "PING" });
+        }, 3000);
+
+        return () => clearInterval(interval);
+    }, [isHost, connections.length, send]);
+
     return  (
         <div
             style={{
@@ -137,7 +149,60 @@ export default function SimControlPanel() {
             </div>
             <div style={{ marginBottom: 10 }}>
                 {isHost && (
-                    <p><strong>Share this code:</strong><br />{hostId}</p>
+                    <div style={{ marginBottom: 10 }}>
+                        <p style={{ margin: "0 0 6px 0" }}>
+                            <strong>Share this code:</strong><br />
+                            <span style={{ 
+                                fontFamily: "monospace", 
+                                fontSize: 13,
+                                background: "rgba(255,255,255,0.1)",
+                                padding: "2px 6px",
+                                borderRadius: 4
+                            }}>
+                                {hostId}
+                            </span>
+                        </p>
+
+                        <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 4 }}>
+                            {connectedPeerIds.length === 0 
+                                ? "No peers connected" 
+                                : `${connectedPeerIds.length} peer${connectedPeerIds.length > 1 ? "s" : ""} connected`
+                            }
+                        </div>
+
+                        {connectedPeerIds.length > 0 && (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                                {connectedPeerIds.map((peerId, i) => (
+                                    <div key={peerId} style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: 6,
+                                        fontSize: 11,
+                                        background: "rgba(255,255,255,0.08)",
+                                        borderRadius: 4,
+                                        padding: "3px 7px",
+                                    }}>
+                                        <div style={{
+                                            width: 7,
+                                            height: 7,
+                                            borderRadius: "50%",
+                                            background: "#4CAF50",
+                                            flexShrink: 0
+                                        }} />
+                                        <span style={{ opacity: 0.6 }}>Peer {i + 1}</span>
+                                        <span style={{ 
+                                            marginLeft: "auto", 
+                                            opacity: 0.35,
+                                            fontFamily: "monospace",
+                                            fontSize: 10
+                                        }}>
+                                            {peerId.slice(0, 8)}...
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 )}
                 {!isHost && connections.length > 0 && (
                     <p>Connected to host</p>

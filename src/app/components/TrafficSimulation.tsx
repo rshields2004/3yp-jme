@@ -5,13 +5,36 @@ import { useRef, useState, useEffect, useCallback, startTransition } from "react
 import { useJModellerContext } from "../context/JModellerContext";
 import * as THREE from "three";
 import { VehicleManager } from "../includes/junctionmanagerutils/vehicleManager";
-import { Route, SimulationStats, Tuple3 } from "../includes/types/simulation";
+import { Route, SimulationStats, Tuple3, FollowedVehicleStats, RouteSegment } from "../includes/types/simulation";
+import { bodyTypeForModelIndex } from "../includes/types/carTypes";
 import { applyIntersectionStopLineColours } from "../includes/junctionmanagerutils/helpers/simulationHelpers";
 import { JunctionStatsLabels } from "./JunctionStatsLabels";
 import { SpawnRateLabels } from "./SpawnRateLabels";
 import { loadCarModels } from "../includes/junctionmanagerutils/helpers/carModelLoaders";
 import { getRoutePoints } from "../includes/junctionmanagerutils/routing/routeUtils";
 import { generateAllRoutes } from "../includes/junctionmanagerutils/routing/routeGeneration";
+
+function buildSegmentLabel(
+    seg: RouteSegment,
+    junctionObjects: { id: string; name: string; type: string }[]
+): string {
+    const findName = (id: string) => {
+        const obj = junctionObjects.find(o => o.id === id);
+        return obj ? `${obj.type} ${obj.name}` : id.slice(0, 8);
+    };
+    switch (seg.phase) {
+        case "approach":
+            return `approaching ${findName(seg.to.structureID)} exit ${seg.to.exitIndex + 1}`;
+        case "inside":
+            return `inside ${findName(seg.from.structureID)}`;
+        case "exit":
+            return `exiting ${findName(seg.from.structureID)} exit ${seg.to.exitIndex + 1}`;
+        case "link":
+            return `link ${findName(seg.from.structureID)} exit ${seg.from.exitIndex + 1} to ${findName(seg.to.structureID)} exit ${seg.to.exitIndex + 1}`;
+        default:
+            return seg.phase;
+    }
+}
 
 /**
  * Fixed simulation timestep in seconds.
@@ -32,7 +55,7 @@ const MAX_TICKS_PER_FRAME = 5;
  * Drop this into your Scene component to enable traffic simulation
  */
 export const TrafficSimulation = () => {
-    const { junction, junctionObjectRefs, simIsRunning, stats, setStats, carsReady, setCarsReady, followedVehicleId, setFollowedVehicleId, simIsPaused, simConfig } = useJModellerContext();
+    const { junction, junctionObjectRefs, simIsRunning, stats, setStats, carsReady, setCarsReady, followedVehicleId, setFollowedVehicleId, setFollowedVehicleStats, simIsPaused, simConfig } = useJModellerContext();
     const { scene, camera, gl } = useThree();
     const simIsPausedRef = useRef(simIsPaused);
     const [isInitialised, setisInitialised] = useState(false);
@@ -41,6 +64,9 @@ export const TrafficSimulation = () => {
     const statsAccumRef = useRef(0);
     const lastStatsRef = useRef<SimulationStats | null>(null);
     const statsRef = useRef<SimulationStats | null>(null);
+    const vehicleStatsRef = useRef<FollowedVehicleStats | null>(null);
+    const prevSpeedRef = useRef(0);
+    const prevDtRef = useRef(FIXED_DT);
     const raycasterRef = useRef(new THREE.Raycaster());
 
     /**
@@ -344,6 +370,7 @@ export const TrafficSimulation = () => {
     useEffect(() => {
         if (!simIsRunning) {
             setFollowedVehicleId(null);
+            vehicleStatsRef.current = null;
         }
     }, [simIsRunning, setFollowedVehicleId]);
 
@@ -398,7 +425,27 @@ export const TrafficSimulation = () => {
                 const lookAt = carPos.clone().add(forward.multiplyScalar(lookAheadDistance));
                 lookAt.y = carPos.y + 1;
                 camera.lookAt(lookAt);
+
+                // Sample vehicle telemetry (throttled with main stats sampler)
+                const accel = delta > 0 ? (vehicle.speed - prevSpeedRef.current) / delta : 0;
+                prevSpeedRef.current = vehicle.speed;
+                prevDtRef.current = delta;
+                const phaseRaw = (vehicle.currentSegment as { phase?: string } | null)?.phase ?? "—";
+                const rawIdx: number = vehicle.model.userData?.carFileIndex ?? 0;
+                const segLabel = vehicle.currentSegment
+                    ? buildSegmentLabel(vehicle.currentSegment, junction.junctionObjects)
+                    : "—";
+                vehicleStatsRef.current = {
+                    id: vehicle.id,
+                    speed: vehicle.speed,
+                    preferredSpeed: vehicle.preferredSpeed,
+                    accel,
+                    phase: phaseRaw,
+                    bodyType: bodyTypeForModelIndex(rawIdx),
+                    segment: segLabel,
+                };
             } else {
+                vehicleStatsRef.current = null;
                 setFollowedVehicleId(null);
             }
         }
@@ -458,6 +505,17 @@ export const TrafficSimulation = () => {
 
         return () => window.clearInterval(id);
     }, [setStats]);
+
+    // Sync followed vehicle stats to React state outside the render loop
+    useEffect(() => {
+        const id = window.setInterval(() => {
+            startTransition(() => {
+                setFollowedVehicleStats(vehicleStatsRef.current);
+            });
+        }, 100);
+
+        return () => window.clearInterval(id);
+    }, [setFollowedVehicleStats]);
 
 
 

@@ -9,7 +9,6 @@ import { generateEdgeTubes, generateExitMesh, generateFloorMesh, generateLaneLin
 import { Text } from "@react-three/drei";
 import React from "react";
 import { ThreeEvent } from "@react-three/fiber";
-import { group } from "node:console";
 
 
 import { ObjectTransform } from "../includes/types/types";
@@ -208,7 +207,6 @@ export const IntersectionComponent = ({ id, intersectionConfig, name, initialTra
                 return [filteredPrev[1], { structureID: data.id, exitIndex }];
             }
         });
-        console.log(selectedExits.toString());
     };
 
 

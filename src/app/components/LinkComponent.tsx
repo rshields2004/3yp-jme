@@ -139,10 +139,6 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
             return;
         }
 
-
-
-        console.log("resaw");
-
         const dA = pA.clone().sub(getExitWorldPosition(groupA, exitInfoA, "start")).setY(0).normalize();
         const dB = pB.clone().sub(getExitWorldPosition(groupB, exitInfoB, "start")).setY(0).normalize();
 

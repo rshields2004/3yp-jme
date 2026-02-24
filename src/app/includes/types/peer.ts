@@ -21,7 +21,8 @@ export type NetMessage = { type: "INIT_CONFIG"; appdata: SharedState }
     | { type: "START" } 
     | { type: "PAUSE" }
     | { type: "RESUME" }
-    | { type: "HALT" };
+    | { type: "HALT" }
+    | { type: "PING" };
 
 export type PeerContextType = {
     isHost: boolean;
@@ -32,6 +33,7 @@ export type PeerContextType = {
     send: (msg: NetMessage) => void;
     connectionError: string | null;
     isConnecting: boolean;
+    connectedPeerIds: string[];
 };
 
 export type SharedState = {
