@@ -31,6 +31,8 @@ export default function SimControlPanel() {
         createHost,
         joinHost,
         send,
+        isConnecting,
+        connectionError
     } = usePeer();
 
 
@@ -135,13 +137,56 @@ export default function SimControlPanel() {
             </div>
             <div style={{ marginBottom: 10 }}>
                 {isHost && (
-
-                    <p><strong>Share this code:</strong><br></br>{hostId}</p>
-
+                    <p><strong>Share this code:</strong><br />{hostId}</p>
                 )}
                 {!isHost && connections.length > 0 && (
                     <p>Connected to host</p>
                 )}
+
+                {(() => {
+                    let label = "No connection";
+                    let barColor = "rgba(255,255,255,0.2)";
+                    let barWidth = "100%";
+                    let animated = false;
+
+                    if (connectionError) {
+                        label = connectionError;
+                        barColor = "#e53935";
+                    } 
+                    else if (isConnecting) {
+                        label = "Connecting...";
+                        barColor = "#4CAF50";
+                        animated = true;
+                    } 
+                    else if (connections.length > 0) {
+                        label = "Connected";
+                        barColor = "#4CAF50";
+                    }
+
+                    return (
+                        <>
+                            <div style={{ fontSize: 12, marginBottom: 4, opacity: 0.8, color: connectionError ? "#ef9a9a" : "inherit" }}>
+                                {label}
+                            </div>
+                            <div style={{
+                                width: "100%",
+                                height: 6,
+                                background: "rgba(255,255,255,0.1)",
+                                borderRadius: 3,
+                                overflow: "hidden"
+                            }}>
+                                <div style={{
+                                    width: barWidth,
+                                    height: "100%",
+                                    background: barColor,
+                                    borderRadius: 3,
+                                    transition: "background 0.3s ease",
+                                    animation: animated ? "loadingPulse 1.5s ease-in-out infinite" : "none"
+                                }} />
+                            </div>
+                        </>
+                    );
+                })()}
             </div>
             <h1 style={{ margin: "0 0 8px 0", fontSize: 18 }}>Simulation Control</h1>
 

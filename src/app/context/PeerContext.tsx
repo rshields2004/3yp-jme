@@ -11,6 +11,8 @@ export const PeerProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const peerRef = useRef<Peer>(undefined);
     const [connections, setConnections] = useState<DataConnection[]>([]);
+    const [connectionError, setConnectionError] = useState<string | null>(null);
+    const [isConnecting, setIsConnecting] = useState(false);
     const [isHost, setIsHost] = useState(false);
     const [hostId, setHostId] = useState<string>();
 
@@ -30,12 +32,42 @@ export const PeerProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const joinHost = (id: string) => {
+        if (!id.trim()) {
+            return;
+        }
+        setConnectionError(null);
+        setIsConnecting(true);
+        
         const peer = new Peer();
         peerRef.current = peer;
 
         peer.on('open', () => {
-            const conn = peer.connect(id);
-            setConnections([conn]);
+            const conn = peer.connect(id.trim());
+
+            const timeout = setTimeout(() => {
+                if (!conn.open) {
+                    setConnectionError("Timed out. Check code and try again");
+                    setIsConnecting(false);
+                    conn.close();
+                }
+            }, 8000);
+
+            conn.on("open", () => {
+                clearTimeout(timeout);
+                setIsConnecting(false);
+                setConnections([conn]);
+            }); 
+
+            conn.on("error", (error) => {
+                clearTimeout(timeout);
+                setIsConnecting(false);
+                setConnectionError(`Connection failed: ${error}`);
+            });
+        });
+
+        peer.on("error", (error) => {
+            setIsConnecting(false);
+            setConnectionError(`Could not connect: ${error.message ?? error}`);
         });
     };
 
@@ -56,6 +88,8 @@ export const PeerProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 createHost,
                 joinHost,
                 send,
+                connectionError,
+                isConnecting
             }}
         >
             { children }
