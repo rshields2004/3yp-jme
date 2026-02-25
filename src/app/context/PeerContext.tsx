@@ -29,7 +29,23 @@ export const PeerProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const createHost = () => {
         const code = Math.floor(100000 + Math.random() * 900000).toString();
-        const peer = new Peer(code);
+        const peer = new Peer(code, {
+            host: "rshields.xyz",
+            port: 443,
+            path: "/peerjs",
+            secure: true,
+            debug: 3,
+            config: {
+                iceServers: [
+                    { urls: "stun:stun.l.google.com:19302" },
+                    {
+                        urls: "turn:rshields.xyz:3478",
+                        username: "peeruser",
+                        credential: "strongpassword123"
+                    }
+                ]
+            }
+        });
         peerRef.current = peer;
         setIsHost(true);
 
@@ -78,11 +94,11 @@ export const PeerProvider: React.FC<{ children: React.ReactNode }> = ({ children
             config: {
                 iceServers: [
                 { urls: "stun:stun.l.google.com:19302" },
-                {
-                    urls: "turn:rshields.xyz:3478",
-                    username: "peeruser",
-                    credential: "strongpassword123"
-                }
+                    {
+                        urls: "turn:rshields.xyz:3478",
+                        username: "peeruser",
+                        credential: "strongpassword123"
+                    }
                 ]
             }
         });
