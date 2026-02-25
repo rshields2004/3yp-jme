@@ -79,7 +79,7 @@ export const PeerProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 iceServers: [
                 { urls: "stun:stun.l.google.com:19302" },
                 {
-                    urls: "turn:rshields.xyz.com:3478",
+                    urls: "turn:rshields.xyz:3478",
                     username: "peeruser",
                     credential: "strongpassword123"
                 }
