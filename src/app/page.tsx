@@ -28,7 +28,7 @@ export default function Page() {
                         <>
                             <AppHeader />
                             <Canvas
-                                camera={{ position: [5, 5, 5], fov: 60 }}
+                                camera={{ position: [20, 20, 20], fov: 60 }}
                                 style={{ background: "#0a0a0a", position: "absolute", inset: 0, width: "100%", height: "100%" }}
                                 onContextMenu={(e) => e.preventDefault()}
                             >
@@ -37,9 +37,6 @@ export default function Page() {
                             <SelectionPanel />
                         </>
                     )}
-
-                    
-                    
                 </div>
             </JModellerProvider>
         </PeerProvider>

@@ -78,22 +78,43 @@ export const SpawnRateLabels = ({ junctionGroups, stats, positionsCache, routes,
                                     <Html center sprite distanceFactor={10} transform>
                                         <div
                                             style={{
-                                                background: "rgba(0, 0, 0, 0.75)",
-                                                color: "white",
-                                                padding: "4px 6px",
-                                                borderRadius: 6,
-                                                fontSize: 11,
-                                                lineHeight: 1.2,
+                                                background: "rgba(9,9,11,0.93)",
+                                                border: "1px solid rgba(161,161,170,0.15)",
+                                                borderRadius: 7,
+                                                padding: "6px 10px",
+                                                fontFamily: "var(--font-mono), 'Courier New', monospace",
                                                 whiteSpace: "nowrap",
-                                                fontFamily: "system-ui, sans-serif",
-                                                border: "1px solid rgba(0, 0, 0, 0.5)"
+                                                boxShadow: "0 4px 20px rgba(0,0,0,0.6)",
+                                                backdropFilter: "blur(8px)",
+                                                minWidth: 110,
                                             }}
                                         >
-                                            <div style={{ fontWeight: 600 }}>
-                                                {structureData.id.slice(0, 6)} Ex{exitIndex}
+                                            <div style={{
+                                                fontSize: 10, fontWeight: 700, letterSpacing: "0.1em",
+                                                color: "rgba(255,255,255,0.9)", textTransform: "uppercase",
+                                                marginBottom: 5, paddingBottom: 4,
+                                                borderBottom: "1px solid rgba(161,161,170,0.12)",
+                                            }}>
+                                                {(() => {
+                                                    const obj = junction.junctionObjects.find(o => o.id === structureData.id);
+                                                    return obj ? `${obj.type} ${obj.name}` : structureData.id.slice(0, 8);
+                                                })()} — Exit {exitIndex + 1}
                                             </div>
-                                            <div>{spawnRate.toFixed(1)} veh/s</div>
-                                            <div style={{ fontSize: 10, opacity: 0.9 }}>Queue: {queuedVehicles}</div>
+                                            <div style={{
+                                                display: "flex", justifyContent: "space-between",
+                                                gap: 12, fontSize: 11, padding: "2px 0",
+                                                borderBottom: "1px solid rgba(161,161,170,0.07)",
+                                            }}>
+                                                <span style={{ color: "rgba(225,225,230,0.85)" }}>Spawn</span>
+                                                <span style={{ color: "rgba(255,255,255,0.95)", fontVariantNumeric: "tabular-nums" }}>{spawnRate.toFixed(2)} v/s</span>
+                                            </div>
+                                            <div style={{
+                                                display: "flex", justifyContent: "space-between",
+                                                gap: 12, fontSize: 11, paddingTop: 2,
+                                            }}>
+                                                <span style={{ color: "rgba(225,225,230,0.85)" }}>Queue</span>
+                                                <span style={{ color: queuedVehicles > 0 ? "rgba(255,255,255,0.95)" : "rgba(225,225,230,0.5)", fontVariantNumeric: "tabular-nums" }}>{queuedVehicles}</span>
+                                            </div>
                                         </div>
                                     </Html>
                                 </Billboard>

@@ -226,7 +226,7 @@ export default function AppHeader() {
             ...prev,
             junctionObjects: [
                 ...prev.junctionObjects,
-                { id: crypto.randomUUID(), name: numberToExcelColumn(objectCounter), type: "intersection", config: defaultIntersectionConfig },
+                { id: String(objectCounter + 1), name: numberToExcelColumn(objectCounter), type: "intersection", config: defaultIntersectionConfig },
             ],
         }));
     };
@@ -237,7 +237,7 @@ export default function AppHeader() {
             ...prev,
             junctionObjects: [
                 ...prev.junctionObjects,
-                { id: crypto.randomUUID(), name: numberToExcelColumn(objectCounter), type: "roundabout", config: defaultRoundaboutConfig },
+                { id: String(objectCounter + 1), name: numberToExcelColumn(objectCounter), type: "roundabout", config: defaultRoundaboutConfig },
             ],
         }));
     };
@@ -262,9 +262,10 @@ export default function AppHeader() {
             const nInA = cfgA.exitConfig[a.exitIndex].numLanesIn;
             const nInB = cfgB.exitConfig[b.exitIndex].numLanesIn;
             if (lcA === lcB && nInA === (lcA - nInB)) {
+                setObjectCounter(prev => prev + 1);
                 setJunction(prev => ({
                     ...prev,
-                    junctionLinks: [...prev.junctionLinks, { id: crypto.randomUUID(), objectPair: [a, b] }],
+                    junctionLinks: [...prev.junctionLinks, { id: String(objectCounter + 1), objectPair: [a, b] }],
                 }));
                 setSelectedExits([]);
             } else {
@@ -337,10 +338,12 @@ export default function AppHeader() {
             }}>
                 {/* left: logo + menus */}
                 <div style={{ display: "flex", alignItems: "center", gap: 0 }}>
-                    <span style={{
-                        fontSize: 15, fontWeight: 700, letterSpacing: "0.05em",
-                        color: "rgba(255,255,255,0.95)", marginRight: 16, userSelect: "none",
-                    }}>JME</span>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                        src="/logo.png"
+                        alt="JME"
+                        style={{ height: 26, width: "auto", marginRight: 16, userSelect: "none", display: "block" }}
+                    />
 
                     {(["junction", "session", "config"] as MenuId[]).map(id => {
                         const label = id!.charAt(0).toUpperCase() + id!.slice(1);

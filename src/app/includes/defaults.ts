@@ -83,5 +83,5 @@ export const defaultJunctionConfig: JunctionConfig = {
     laneWidth: 1.5,
 };
 
-export const FLOOR_Y = 0;
+export const FLOOR_Y = 0.1;
 

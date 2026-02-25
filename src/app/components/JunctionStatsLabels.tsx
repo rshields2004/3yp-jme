@@ -44,23 +44,61 @@ export const JunctionStatsLabels = ({ junctionGroups, stats, positionsCache}: Ju
                             <Html center sprite distanceFactor={12} transform>
                                 <div
                                     style={{
-                                        background: "rgba(0,0,0,0.65)",
-                                        color: "white",
-                                        padding: "6px 8px",
+                                        background: "rgba(9,9,11,0.93)",
+                                        border: "1px solid rgba(161,161,170,0.15)",
                                         borderRadius: 8,
-                                        fontSize: 12,
-                                        lineHeight: 1.2,
+                                        padding: "8px 12px",
+                                        fontFamily: "var(--font-mono), 'Courier New', monospace",
                                         whiteSpace: "nowrap",
-                                        fontFamily: "system-ui, sans-serif"
+                                        boxShadow: "0 4px 24px rgba(0,0,0,0.65)",
+                                        minWidth: 150,
+                                        backdropFilter: "blur(8px)",
                                     }}
                                 >
-                                    <div style={{ fontWeight: 700 }}>
+                                    <div style={{
+                                        fontSize: 11, fontWeight: 700, letterSpacing: "0.1em",
+                                        color: "rgba(255,255,255,0.95)", textTransform: "uppercase",
+                                        marginBottom: 6, paddingBottom: 5,
+                                        borderBottom: "1px solid rgba(161,161,170,0.12)",
+                                    }}>
                                         {js.type === "roundabout" ? "Roundabout" : "Intersection"} {junctionObject?.name}
                                     </div>
-                                    <div>Approaching:{js.approaching} W:{js.waiting} I:{js.inside} X:{js.exiting}</div>
-                                    <div>in:{js.entered} out:{js.exited}</div>
-                                    <div>Avg Wait: {js.avgWaitTime.toFixed(1)}s</div>
-                                    {js.state && <div>sig:{js.state}</div>}
+                                    {([
+                                        ["Approaching", js.approaching],
+                                        ["Waiting",     js.waiting],
+                                        ["Inside",      js.inside],
+                                        ["Exiting",     js.exiting],
+                                        ["Entered",     js.entered],
+                                        ["Exited",      js.exited],
+                                    ] as [string, number][]).map(([label, value]) => (
+                                        <div key={label} style={{
+                                            display: "flex", justifyContent: "space-between",
+                                            gap: 16, fontSize: 11,
+                                            padding: "2px 0",
+                                            borderBottom: "1px solid rgba(161,161,170,0.07)",
+                                        }}>
+                                            <span style={{ color: "rgba(225,225,230,0.85)" }}>{label}</span>
+                                            <span style={{ color: "rgba(255,255,255,0.95)", fontVariantNumeric: "tabular-nums" }}>{value}</span>
+                                        </div>
+                                    ))}
+                                    <div style={{
+                                        display: "flex", justifyContent: "space-between",
+                                        gap: 16, fontSize: 11, marginTop: 4,
+                                    }}>
+                                        <span style={{ color: "rgba(225,225,230,0.85)" }}>Avg Wait</span>
+                                        <span style={{ color: "rgba(255,255,255,0.95)", fontVariantNumeric: "tabular-nums" }}>{js.avgWaitTime.toFixed(1)}s</span>
+                                    </div>
+                                    {js.state && (
+                                        <div style={{
+                                            marginTop: 5, paddingTop: 5,
+                                            borderTop: "1px solid rgba(161,161,170,0.12)",
+                                            fontSize: 11,
+                                            display: "flex", justifyContent: "space-between", gap: 16,
+                                        }}>
+                                            <span style={{ color: "rgba(225,225,230,0.85)" }}>Signal</span>
+                                            <span style={{ color: "rgba(255,255,255,0.95)", letterSpacing: "0.05em" }}>{js.state}</span>
+                                        </div>
+                                    )}
                                 </div>
                             </Html>
                         </Billboard>
