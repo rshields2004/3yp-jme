@@ -165,9 +165,18 @@ export default function AppHeader() {
     const {
         isHost, hostId, connections, createHost, joinHost, send,
         isConnecting, connectionError, connectedPeerIds,
+        pendingInitConfig, clearPendingInitConfig,
     } = usePeer();
 
     // ── peer effects (moved from SimControlPanel) ─────────────────────────
+    // Consume any INIT_CONFIG that arrived while AppHeader was not mounted
+    useEffect(() => {
+        if (isHost || !pendingInitConfig) return;
+        setJunction(pendingInitConfig.junctionConfig);
+        setSimConfig(pendingInitConfig.simulationConfig);
+        clearPendingInitConfig();
+    }, []);
+
     const clientHandlerRef = useRef<(data: unknown) => void>(null!);
     clientHandlerRef.current = (data: unknown) => {
         const msg = data as NetMessage;

@@ -2,7 +2,7 @@ import Peer, { DataConnection } from "peerjs";
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { JunctionConfig } from "../includes/types/types";
 import { SimConfig } from "../includes/types/simulation";
-import { NetMessage, PeerContextType } from "../includes/types/peer";
+import { NetMessage, PeerContextType, SharedState } from "../includes/types/peer";
 
 
 const PeerContext = createContext<PeerContextType>(null!);
@@ -17,6 +17,8 @@ export const PeerProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [connectedPeerIds, setConnectedPeerIds] = useState<string[]>([]);
     const [isHost, setIsHost] = useState(false);
     const [hostId, setHostId] = useState<string>();
+    const [pendingInitConfig, setPendingInitConfig] = useState<SharedState | null>(null);
+    const clearPendingInitConfig = () => setPendingInitConfig(null);
 
     const removePeer = (peerId: string) => {
         setConnections(prev => prev.filter(c => c.peer !== peerId));
@@ -67,7 +69,21 @@ export const PeerProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setConnectionError(null);
         setIsConnecting(true);
         
-        const peer = new Peer();
+        const peer = new Peer({
+            host: "rshields.xyz",
+            port: 443,
+            secure: true,
+            config: {
+                iceServers: [
+                { urls: "stun:stun.l.google.com:19302" },
+                {
+                    urls: "turn:rshields.xyz.com:3478",
+                    username: "peeruser",
+                    credential: "strongpassword123"
+                }
+                ]
+            }
+        });
         peerRef.current = peer;
 
         peer.on('open', () => {
@@ -85,7 +101,14 @@ export const PeerProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 clearTimeout(timeout);
                 setIsConnecting(false);
                 setConnections([conn]);
-            }); 
+            });
+
+            conn.on("data", (data) => {
+                const msg = data as NetMessage;
+                if (msg.type === "INIT_CONFIG") {
+                    setPendingInitConfig(msg.appdata);
+                }
+            });
 
             conn.on("close", () => {
                 setConnections([]);
@@ -145,7 +168,9 @@ export const PeerProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 send,
                 connectionError,
                 isConnecting,
-                connectedPeerIds
+                connectedPeerIds,
+                pendingInitConfig,
+                clearPendingInitConfig,
             }}
         >
             { children }

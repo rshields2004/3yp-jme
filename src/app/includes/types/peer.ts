@@ -34,6 +34,8 @@ export type PeerContextType = {
     connectionError: string | null;
     isConnecting: boolean;
     connectedPeerIds: string[];
+    pendingInitConfig: SharedState | null;
+    clearPendingInitConfig: () => void;
 };
 
 export type SharedState = {
