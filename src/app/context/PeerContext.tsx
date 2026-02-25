@@ -72,6 +72,7 @@ export const PeerProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const peer = new Peer({
             host: "rshields.xyz",
             port: 443,
+            path: "/peerjs",
             secure: true,
             config: {
                 iceServers: [
