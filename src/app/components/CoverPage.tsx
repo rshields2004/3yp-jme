@@ -202,7 +202,7 @@ export default function CoverPage({ onContinueAction }: CoverPageProps) {
                             value={joinCode}
                             onChange={e => setJoinCode(e.target.value)}
                             onKeyDown={e => e.key === "Enter" && !isConnected && handleJoin()}
-                            placeholder="xxxx-xxxx-xxxx"
+                            placeholder="xxxxxx"
                             disabled={isConnecting || isConnected}
                             style={{
                                 width: "100%",

@@ -31,11 +31,10 @@ export type PeerContextType = {
     createHost: () => void;
     joinHost: (id: string) => void;
     send: (msg: NetMessage) => void;
+    disconnect: () => void;
     connectionError: string | null;
     isConnecting: boolean;
     connectedPeerIds: string[];
-    pendingInitConfig: SharedState | null;
-    clearPendingInitConfig: () => void;
 };
 
 export type SharedState = {

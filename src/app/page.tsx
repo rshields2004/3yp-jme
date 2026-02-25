@@ -26,7 +26,7 @@ export default function Page() {
 
                     {entered && (
                         <>
-                            <AppHeader />
+                            <AppHeader onExitAction={() => setEntered(false)} />
                             <Canvas
                                 camera={{ position: [20, 20, 20], fov: 60 }}
                                 style={{ background: "#0a0a0a", position: "absolute", inset: 0, width: "100%", height: "100%" }}

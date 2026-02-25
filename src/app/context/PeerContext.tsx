@@ -1,8 +1,6 @@
 import Peer, { DataConnection } from "peerjs";
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
-import { JunctionConfig } from "../includes/types/types";
-import { SimConfig } from "../includes/types/simulation";
-import { NetMessage, PeerContextType, SharedState } from "../includes/types/peer";
+import { NetMessage, PeerContextType } from "../includes/types/peer";
 
 
 const PeerContext = createContext<PeerContextType>(null!);
@@ -17,8 +15,6 @@ export const PeerProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [connectedPeerIds, setConnectedPeerIds] = useState<string[]>([]);
     const [isHost, setIsHost] = useState(false);
     const [hostId, setHostId] = useState<string>();
-    const [pendingInitConfig, setPendingInitConfig] = useState<SharedState | null>(null);
-    const clearPendingInitConfig = () => setPendingInitConfig(null);
 
     const removePeer = (peerId: string) => {
         setConnections(prev => prev.filter(c => c.peer !== peerId));
@@ -121,13 +117,6 @@ export const PeerProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 setConnections([conn]);
             });
 
-            conn.on("data", (data) => {
-                const msg = data as NetMessage;
-                if (msg.type === "INIT_CONFIG") {
-                    setPendingInitConfig(msg.appdata);
-                }
-            });
-
             conn.on("close", () => {
                 setConnections([]);
                 setConnectionError("Host Disconnected.");
@@ -149,6 +138,18 @@ export const PeerProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setIsConnecting(false);
             setConnectionError(`Could not connect: ${error.message ?? error}`);
         });
+    };
+
+    const disconnect = () => {
+        connections.forEach(conn => conn.close());
+        peerRef.current?.destroy();
+        peerRef.current = undefined;
+        setConnections([]);
+        setConnectedPeerIds([]);
+        setIsHost(false);
+        setHostId(undefined);
+        setConnectionError(null);
+        lastPingRef.current.clear();
     };
 
     const send = (msg: NetMessage) => {
@@ -184,11 +185,10 @@ export const PeerProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 createHost,
                 joinHost,
                 send,
+                disconnect,
                 connectionError,
                 isConnecting,
                 connectedPeerIds,
-                pendingInitConfig,
-                clearPendingInitConfig,
             }}
         >
             { children }

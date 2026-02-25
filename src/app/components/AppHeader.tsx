@@ -4,12 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import { useJModellerContext } from "../context/JModellerContext";
 import { usePeer } from "../context/PeerContext";
 import { NetMessage, SharedState } from "../includes/types/peer";
-import { defaultIntersectionConfig, defaultRoundaboutConfig } from "../includes/defaults";
+import { defaultIntersectionConfig, defaultRoundaboutConfig, defaultJunctionConfig, defaultSimConfig } from "../includes/defaults";
 import { numberToExcelColumn } from "../includes/utils";
 import { carClasses } from "../includes/types/carTypes";
 import {
     Play, Pause, Square, Check, RotateCcw,
-    ChevronDown, Link2, Trash2, PlusSquare, Copy
+    ChevronDown, Link2, Trash2, PlusSquare, Copy, LogOut
 } from "lucide-react";
 
 // ─── small reusable sub-components ──────────────────────────────────────────
@@ -147,7 +147,7 @@ const ActionBtn = ({
 
 type MenuId = "junction" | "session" | "config" | null;
 
-export default function AppHeader() {
+export default function AppHeader({ onExitAction }: { onExitAction?: () => void }) {
     const [openMenu, setOpenMenu] = useState<MenuId>(null);
     const [joinCode, setJoinCode] = useState("");
     const menuRefs = useRef<Record<string, HTMLButtonElement | null>>({});
@@ -163,20 +163,11 @@ export default function AppHeader() {
     } = useJModellerContext();
 
     const {
-        isHost, hostId, connections, createHost, joinHost, send,
+        isHost, hostId, connections, createHost, joinHost, send, disconnect,
         isConnecting, connectionError, connectedPeerIds,
-        pendingInitConfig, clearPendingInitConfig,
     } = usePeer();
 
     // ── peer effects (moved from SimControlPanel) ─────────────────────────
-    // Consume any INIT_CONFIG that arrived while AppHeader was not mounted
-    useEffect(() => {
-        if (isHost || !pendingInitConfig) return;
-        setJunction(pendingInitConfig.junctionConfig);
-        setSimConfig(pendingInitConfig.simulationConfig);
-        clearPendingInitConfig();
-    }, []);
-
     const clientHandlerRef = useRef<(data: unknown) => void>(null!);
     clientHandlerRef.current = (data: unknown) => {
         const msg = data as NetMessage;
@@ -300,6 +291,7 @@ export default function AppHeader() {
     // ── misc ──────────────────────────────────────────────────────────────
     const toggleMenu = (id: MenuId) => setOpenMenu(prev => prev === id ? null : id);
     const isConnected = connections.length > 0;
+    const isClientConnected = !isHost && isConnected; // connected as a viewer — actions locked
     const connStatus = connectionError ? "error" : isConnecting ? "connecting" : isConnected ? "connected" : "idle";
     const dotColor: Record<string, string> = {
         connected: "rgba(161,161,170,0.9)",
@@ -345,8 +337,34 @@ export default function AppHeader() {
                 padding: "0 12px",
                 fontFamily: "var(--font-mono), 'Courier New', monospace",
             }}>
-                {/* left: logo + menus */}
+                {/* left: exit + logo + menus */}
                 <div style={{ display: "flex", alignItems: "center", gap: 0 }}>
+                    <button
+                        title="Exit to menu"
+                        onClick={() => {
+                            if (simIsRunning) haltSim();
+                            setJunction(defaultJunctionConfig);
+                            setSimConfig(defaultSimConfig);
+                            disconnect();
+                            onExitAction?.();
+                        }}
+                        style={{
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            width: 32, height: 32,
+                            background: "transparent",
+                            border: "1px solid rgba(161,161,170,0.12)",
+                            borderRadius: 6,
+                            color: "rgba(161,161,170,0.7)",
+                            cursor: "pointer",
+                            marginRight: 10,
+                            transition: "all 0.12s",
+                            flexShrink: 0,
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.background = "rgba(239,68,68,0.1)"; e.currentTarget.style.color = "rgba(239,68,68,0.9)"; e.currentTarget.style.borderColor = "rgba(239,68,68,0.3)"; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "rgba(161,161,170,0.7)"; e.currentTarget.style.borderColor = "rgba(161,161,170,0.12)"; }}
+                    >
+                        <LogOut size={15} />
+                    </button>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                         src="/logo.png"
@@ -415,13 +433,13 @@ export default function AppHeader() {
                     {!isConfigConfirmed ? (
                         <IconBtn
                             title="Confirm Config"
-                            disabled={junction.junctionObjects.length === 0 || simIsRunning}
+                            disabled={junction.junctionObjects.length === 0 || simIsRunning || isClientConnected}
                             onClick={confirmConfig}
                         >
                             <Check size={17} />
                         </IconBtn>
                     ) : !simIsRunning ? (
-                        <IconBtn title="Back to Config" onClick={resetConfig}>
+                        <IconBtn title="Back to Config" disabled={isClientConnected} onClick={resetConfig}>
                             <RotateCcw size={17} />
                         </IconBtn>
                     ) : null}
@@ -432,7 +450,7 @@ export default function AppHeader() {
                     {/* start */}
                     <IconBtn
                         title="Start Simulation"
-                        disabled={simIsRunning || !carsReady || !isConfigConfirmed}
+                        disabled={simIsRunning || !carsReady || !isConfigConfirmed || isClientConnected}
                         active={simIsRunning && !simIsPaused}
                         onClick={() => { send({ type: "START" }); startSim(); }}
                     >
@@ -442,7 +460,7 @@ export default function AppHeader() {
                     {/* pause / resume */}
                     <IconBtn
                         title={simIsPaused ? "Resume" : "Pause"}
-                        disabled={!simIsRunning}
+                        disabled={!simIsRunning || isClientConnected}
                         onClick={() => {
                             if (simIsPaused) { send({ type: "RESUME" }); resumeSim(); }
                             else { send({ type: "PAUSE" }); pauseSim(); }
@@ -454,7 +472,7 @@ export default function AppHeader() {
                     {/* stop */}
                     <IconBtn
                         title="Stop Simulation"
-                        disabled={!simIsRunning}
+                        disabled={!simIsRunning || isClientConnected}
                         onClick={() => { send({ type: "HALT" }); haltSim(); }}
                     >
                         <Square size={17} />
@@ -470,15 +488,15 @@ export default function AppHeader() {
                         <div style={{ width: 220, flexShrink: 0, paddingRight: 24, borderRight: `1px solid rgba(161,161,170,0.12)` }}>
                             <SectionTitle>Add Junction</SectionTitle>
                             <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 }}>
-                                <ActionBtn onClick={addNewIntersection} disabled={isConfigConfirmed || simIsRunning}>
+                                <ActionBtn onClick={addNewIntersection} disabled={isConfigConfirmed || simIsRunning || isClientConnected}>
                                     <PlusSquare size={14} /> Intersection
                                 </ActionBtn>
-                                <ActionBtn onClick={addNewRoundabout} disabled={isConfigConfirmed || simIsRunning}>
+                                <ActionBtn onClick={addNewRoundabout} disabled={isConfigConfirmed || simIsRunning || isClientConnected}>
                                     <PlusSquare size={14} /> Roundabout
                                 </ActionBtn>
                             </div>
                             <SectionTitle>Exit Links</SectionTitle>
-                            <ActionBtn onClick={addNewLink} disabled={selectedExits.length !== 2 || isConfigConfirmed || simIsRunning}>
+                            <ActionBtn onClick={addNewLink} disabled={selectedExits.length !== 2 || isConfigConfirmed || simIsRunning || isClientConnected}>
                                 <Link2 size={14} /> Link Selected Exits{selectedExits.length === 2 ? "" : " (select 2)"}
                             </ActionBtn>
                         </div>
@@ -503,8 +521,8 @@ export default function AppHeader() {
                                                     <span style={{ opacity: 0.4, margin: "0 6px" }}>↔</span>
                                                     {objB?.name ?? "?"} Exit {link.objectPair[1].exitIndex}
                                                 </span>
-                                                <button onClick={() => removeLink(link.id)} disabled={isConfigConfirmed || simIsRunning}
-                                                    style={{ background: "none", border: "none", color: "rgba(239,68,68,0.5)", cursor: "pointer", padding: "0 2px", lineHeight: 0, opacity: isConfigConfirmed || simIsRunning ? 0.2 : 1 }}>
+                                                <button onClick={() => removeLink(link.id)} disabled={isConfigConfirmed || simIsRunning || isClientConnected}
+                                                    style={{ background: "none", border: "none", color: "rgba(239,68,68,0.5)", cursor: "pointer", padding: "0 2px", lineHeight: 0, opacity: isConfigConfirmed || simIsRunning || isClientConnected ? 0.2 : 1 }}>
                                                     <Trash2 size={13} />
                                                 </button>
                                             </div>
@@ -572,13 +590,34 @@ export default function AppHeader() {
                             <SectionTitle>Join Session</SectionTitle>
                             {!isConnected && !isHost && (
                                 <div style={{ display: "flex", gap: 6 }}>
-                                    <input placeholder="xxxx-xxxx-xxxx" value={joinCode} onChange={e => setJoinCode(e.target.value)} onKeyDown={e => e.key === "Enter" && joinHost(joinCode)}
+                                    <input placeholder="xxxxxx" value={joinCode} onChange={e => setJoinCode(e.target.value)} onKeyDown={e => e.key === "Enter" && joinHost(joinCode)}
                                         style={{ flex: 1, padding: "6px 10px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(161,161,170,0.2)", borderRadius: 4, color: "rgba(255,255,255,0.92)", fontSize: 12, fontFamily: "inherit", outline: "none" }}
                                     />
                                     <ActionBtn onClick={() => joinHost(joinCode)} disabled={!joinCode.trim() || isConnecting}>Join</ActionBtn>
                                 </div>
                             )}
-                            {(isConnected || isHost) && <p style={{ fontSize: 12, color: MUTED, margin: 0 }}>Already in a session.</p>}
+                            {isHost && <p style={{ fontSize: 12, color: MUTED, margin: 0 }}>Already in a session.</p>}
+                            {isClientConnected && (
+                                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                                    <p style={{ fontSize: 12, color: MUTED, margin: 0 }}>Already in a session.</p>
+                                    <button
+                                        onClick={() => { disconnect(); setOpenMenu(null); }}
+                                        style={{
+                                            display: "inline-flex", alignItems: "center", gap: 6,
+                                            padding: "6px 12px", fontSize: 12, fontFamily: "inherit",
+                                            background: "rgba(239,68,68,0.08)",
+                                            border: "1px solid rgba(239,68,68,0.25)",
+                                            borderRadius: 5, color: "rgba(239,68,68,0.85)",
+                                            cursor: "pointer", letterSpacing: "0.06em",
+                                            transition: "all 0.12s",
+                                        }}
+                                        onMouseEnter={e => { e.currentTarget.style.background = "rgba(239,68,68,0.15)"; e.currentTarget.style.borderColor = "rgba(239,68,68,0.45)"; }}
+                                        onMouseLeave={e => { e.currentTarget.style.background = "rgba(239,68,68,0.08)"; e.currentTarget.style.borderColor = "rgba(239,68,68,0.25)"; }}
+                                    >
+                                        <LogOut size={13} /> Disconnect
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </DropdownPanel>
@@ -587,7 +626,12 @@ export default function AppHeader() {
             {/* ── CONFIG dropdown ── */}
             {openMenu === "config" && isConfigConfirmed && !simIsRunning && (
                 <DropdownPanel>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "0 32px" }}>
+                    {isClientConnected && (
+                        <p style={{ fontSize: 12, color: "rgba(161,161,170,0.5)", margin: "0 0 12px", letterSpacing: "0.06em" }}>
+                            VIEW ONLY — config is controlled by the host
+                        </p>
+                    )}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "0 32px", pointerEvents: isClientConnected ? "none" : "auto", opacity: isClientConnected ? 0.55 : 1 }}>
                         {/* col 1: spawning */}
                         <div>
                             <SectionTitle>Spawning</SectionTitle>

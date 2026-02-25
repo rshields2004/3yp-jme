@@ -2098,12 +2098,12 @@ export class VehicleManager {
     
 
     private entryGroupKeyFromNodeKey(nodeKey: string): string {
+        // nodeKey format: "${structureID}-${exitIndex}-${direction}-${laneIndex}"
+        // entryGroupKey = "entry:${structureID}-${exitIndex}-${direction}"
+        // structureID may itself contain dashes (UUIDs), so we drop only the last component.
         const parts = nodeKey.split("-");
         if (parts.length < 4) return `entry:${nodeKey}`;
-        const uuid = parts.slice(0, 5).join("-");
-        const exit = parts[5];
-        const dir = parts[6];
-        return `entry:${uuid}-${exit}-${dir}`;
+        return `entry:${parts.slice(0, -1).join("-")}`;
     }
 
     /**

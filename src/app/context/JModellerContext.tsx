@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, ReactNode, useRef } from "react";
+import React, { createContext, useContext, useState, ReactNode, useRef, useEffect } from "react";
 import { ExitRef, JModellerState, JunctionConfig, JunctionObjectTypes } from "../includes/types/types";
 import { defaultJunctionConfig, defaultSimConfig } from "../includes/defaults";
 import * as THREE from "three";
@@ -9,6 +9,8 @@ import { FollowedVehicleStats } from "../includes/types/simulation";
 import { IntersectionStructure } from "../includes/types/intersection";
 import { RoundaboutStructure } from "../includes/types/roundabout";
 import { getStructureData } from "../includes/utils";
+import { usePeer } from "./PeerContext";
+import { NetMessage } from "../includes/types/peer";
 
 
 const JModellerContext = createContext<JModellerState | undefined>(undefined);
@@ -28,6 +30,22 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
     const [simConfig, setSimConfig] = useState(defaultSimConfig);
     const [objectCounter, setObjectCounter] = useState(0);
 
+    // ── P2P: receive config from host ─────────────────────────────────────
+    const { connections, isHost } = usePeer();
+    useEffect(() => {
+        if (isHost) return;
+        const conn = connections[0];
+        if (!conn) return;
+        const handler = (data: unknown) => {
+            const msg = data as NetMessage;
+            if (msg.type === "INIT_CONFIG") {
+                setJunction(msg.appdata.junctionConfig);
+                setSimConfig(msg.appdata.simulationConfig);
+            }
+        };
+        conn.on("data", handler);
+        return () => { conn.off("data", handler); };
+    }, [connections, isHost]);
 
     // Simulation
     const [stats, setStats] = useState<SimulationStats>({
