@@ -5,6 +5,7 @@ import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { useRef } from "react";
 import { Bloom, EffectComposer } from "@react-three/postprocessing";
 import { useJModellerContext } from "../context/JModellerContext";
+import { usePeer } from "../context/PeerContext";
 import { FLOOR_Y } from "../includes/defaults";
 import { JunctionComponents } from "./JunctionComponents";
 import { TrafficSimulation } from "./TrafficSimulation";
@@ -12,6 +13,8 @@ import { RouteDebug } from "./RouteDebug";
 
 export default function Scene() {
     const { selectedObjects, followedVehicleId, junction, simIsRunning, isConfigConfirmed } = useJModellerContext();
+    const { isHost, connections } = usePeer();
+    const isClientConnected = !isHost && connections.length > 0;
     const controlsRef = useRef<OrbitControlsImpl>(null);
     const isEmpty = junction.junctionObjects.length === 0 && !simIsRunning;
 
@@ -88,11 +91,13 @@ export default function Scene() {
                             }}>
                                 No objects placed
                             </div>
-                            <div style={{ fontSize: 12, color: "rgba(225,225,230,0.75)", lineHeight: 1.6 }}>
-                                Open{" "}
-                                <span style={{ color: "rgba(255,255,255,0.9)", fontWeight: 600 }}>Junction</span>
-                                {" "}to add a roundabout or intersection
-                            </div>
+                            {!isClientConnected && (
+                                <div style={{ fontSize: 12, color: "rgba(225,225,230,0.75)", lineHeight: 1.6 }}>
+                                    Open{" "}
+                                    <span style={{ color: "rgba(255,255,255,0.9)", fontWeight: 600 }}>Junction</span>
+                                    {" "}to add a roundabout or intersection
+                                </div>
+                            )}
                         </div>
                     </Html>
                 </>

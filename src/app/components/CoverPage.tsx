@@ -54,11 +54,11 @@ export default function CoverPage({ onContinueAction }: CoverPageProps) {
                 { bottom: 24, right: 24, borderBottom: "1px solid", borderRight: "1px solid" },
             ].map((style, i) => (
                 <div key={i} style={{
+                    ...style,
                     position: "absolute",
                     width: 32,
                     height: 32,
-                    borderColor: "rgba(161,161,170,0.2)",
-                    ...style,
+                    borderColor: "#f0f0f091",
                 }} />
             ))}
 
@@ -283,10 +283,10 @@ export default function CoverPage({ onContinueAction }: CoverPageProps) {
                                     style={{
                                         flex: 2,
                                         padding: "12px",
-                                        background: "rgba(161,161,170,0.12)",
-                                        border: "1px solid rgba(161,161,170,0.4)",
+                                        background: "rgba(34,197,94,0.12)",
+                                        border: "1px solid rgba(34,197,94,0.45)",
                                         borderRadius: 6,
-                                        color: "rgb(212,212,216)",
+                                        color: "rgb(134,239,172)",
                                         fontSize: 12,
                                         letterSpacing: "0.1em",
                                         textTransform: "uppercase",
