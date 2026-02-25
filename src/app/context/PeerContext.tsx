@@ -74,6 +74,7 @@ export const PeerProvider: React.FC<{ children: React.ReactNode }> = ({ children
             port: 443,
             path: "/peerjs",
             secure: true,
+            debug: 3,
             config: {
                 iceServers: [
                 { urls: "stun:stun.l.google.com:19302" },
