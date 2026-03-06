@@ -5,13 +5,14 @@ import { useJModellerContext } from "../context/JModellerContext";
 import { defaultExitConfig } from "../includes/defaults";
 import { ExitConfig, ExitRef } from "../includes/types/types";
 import { ChevronDown, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
+import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 
-const MUTED         = "rgba(225,225,230,0.92)";
-const BORDER        = "rgba(161,161,170,0.1)";
-const PANEL_BG      = "rgba(161,161,170,0.06)";
-const HEADER_H      = 44;
+const HEADER_H = 44;
 
-// ── tiny helpers ────────────────────────────────────────────────────────────
+// ── SliderRow ─────────────────────────────────────────────────────────────────
 
 const SliderRow = ({
     label, min, max, step, value, onChange, display,
@@ -19,15 +20,18 @@ const SliderRow = ({
     label: string; min: number; max: number; step: number;
     value: number; onChange: (v: number) => void; display: string;
 }) => (
-    <div style={{ marginBottom: 7 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 2, color: "rgba(235,235,240,0.95)" }}>
+    <div className="mb-1.5">
+        <div className="flex justify-between text-[13px] mb-1 text-white/95">
             <span>{label}</span>
-            <span style={{ fontVariantNumeric: "tabular-nums", color: "rgba(255,255,255,0.98)" }}>{display}</span>
+            <span className="tabular-nums text-white">{display}</span>
         </div>
-        <input
-            type="range" min={min} max={max} step={step} value={value}
-            onChange={e => onChange(Number(e.target.value))}
-            style={{ width: "100%", accentColor: "rgba(161,161,170,0.8)", cursor: "pointer" }}
+        <Slider
+            min={min}
+            max={max}
+            step={step}
+            value={[value]}
+            onValueChange={([v]) => onChange(v)}
+            className="w-full"
         />
     </div>
 );
@@ -188,49 +192,42 @@ function ObjectConfig({ objId }: { objId: string }) {
         .filter(({ index: j }) => !isConfigConfirmed || !isExitConnected(j));
 
     return (
-        <fieldset disabled={simIsRunning} style={{ border: "none", padding: 0, margin: 0 }}>
+        <fieldset disabled={simIsRunning} className="border-none p-0 m-0">
             {/* Header row */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+            <div className="flex items-center justify-between mb-3">
                 <div>
-                    <div style={{ fontSize: 12, letterSpacing: "0.15em", color: MUTED, textTransform: "uppercase", marginBottom: 2 }}>
+                    <div className="text-[12px] tracking-[0.15em] text-white/92 uppercase mb-0.5">
                         {obj.type}
                     </div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: "rgba(255,255,255,0.95)", letterSpacing: "0.04em" }}>
+                    <div className="text-[18px] font-bold text-white/95 tracking-wider">
                         {obj.name}
                     </div>
                 </div>
                 {!isConfigConfirmed && !simIsRunning && (
-                    <button
+                    <Button
+                        variant="outline"
+                        size="sm"
                         onClick={() => removeObject(obj.id)}
-                        title="Delete junction"
-                        style={{
-                            display: "flex", alignItems: "center", gap: 4,
-                            padding: "5px 9px",
-                            background: "rgba(239,68,68,0.07)",
-                            border: "1px solid rgba(239,68,68,0.2)",
-                            borderRadius: 5, color: "rgba(239,68,68,0.7)",
-                            fontSize: 12, cursor: "pointer", fontFamily: "inherit",
-                        }}
+                        className="gap-1 text-xs border-red-500/20 text-red-400/70 bg-red-500/[0.07] hover:bg-red-500/15 hover:text-red-400 hover:border-red-500/40"
                     >
                         <Trash2 size={13} /> Delete
-                    </button>
+                    </Button>
                 )}
             </div>
 
             {/* Exits count (pre-confirm only) */}
             {!isConfigConfirmed && (
-                <div style={{ marginBottom: 14 }}>
-                    <div style={{ fontSize: 12, letterSpacing: "0.12em", color: MUTED, textTransform: "uppercase", marginBottom: 6 }}>Exits</div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <input
-                            type="range"
+                <div className="mb-3.5">
+                    <div className="text-[12px] tracking-[0.12em] text-white/92 uppercase mb-1.5">Exits</div>
+                    <div className="flex items-center gap-2.5">
+                        <Slider
                             min={2}
                             max={obj.type === "roundabout" ? 6 : 10}
-                            value={obj.config.numExits}
-                            onChange={e => handleNumExits(Number(e.target.value))}
-                            style={{ flex: 1, accentColor: "rgba(161,161,170,0.8)", cursor: "pointer" }}
+                            value={[obj.config.numExits]}
+                            onValueChange={([v]) => handleNumExits(v)}
+                            className="flex-1"
                         />
-                        <span style={{ fontSize: 14, color: "rgba(255,255,255,0.95)", fontVariantNumeric: "tabular-nums", minWidth: 16, textAlign: "right" }}>
+                        <span className="text-[14px] text-white/95 tabular-nums min-w-[16px] text-right">
                             {obj.config.numExits}
                         </span>
                     </div>
@@ -239,14 +236,7 @@ function ObjectConfig({ objId }: { objId: string }) {
 
             {/* All-connected warning */}
             {allConnected && (
-                <div style={{
-                    padding: "8px 10px",
-                    background: "rgba(239,68,68,0.07)",
-                    border: "1px solid rgba(239,68,68,0.2)",
-                    borderRadius: 5, fontSize: 12,
-                    color: "rgba(239,68,68,0.9)",
-                    marginBottom: 10,
-                }}>
+                <div className="px-2.5 py-2 bg-red-500/[0.07] border border-red-500/20 rounded text-xs text-red-400/90 mb-2.5">
                     All exits are linked — no spawn points available.
                 </div>
             )}
@@ -287,36 +277,28 @@ function ExitRow({ j, exit, obj, isConfigConfirmed, globalSpawnRate, onLaneCount
 }) {
     const [open, setOpen] = useState(true);
     return (
-        <div style={{
-            marginBottom: 6,
-            border: `1px solid ${BORDER}`,
-            borderRadius: 6,
-            overflow: "hidden",
-        }}>
+        <div className="mb-1.5 border border-white/[0.08] rounded overflow-hidden">
             {/* exit header */}
             <button
                 onClick={() => setOpen(o => !o)}
-                style={{
-                    display: "flex", alignItems: "center", justifyContent: "space-between",
-                    width: "100%", padding: "7px 10px",
-                    background: PANEL_BG,
-                    border: "none", cursor: "pointer", fontFamily: "inherit",
-                    color: "rgba(255,255,255,0.88)",
-                }}
+                className="flex items-center justify-between w-full px-2.5 py-[7px] bg-white/[0.04] border-none cursor-pointer font-mono text-white/88 hover:bg-white/[0.07] transition-colors"
             >
-                <span style={{ fontSize: 13, letterSpacing: "0.08em" }}>
+                <span className="text-[13px] tracking-[0.08em]">
                     Exit {j}
                     {isConfigConfirmed && (
-                        <span style={{ fontSize: 11, color: MUTED, marginLeft: 6 }}>
+                        <span className="text-[11px] text-white/75 ml-1.5">
                             {obj.id.slice(0, 6)}-{j}
                         </span>
                     )}
                 </span>
-                <ChevronDown size={14} style={{ opacity: 0.55, transform: open ? "none" : "rotate(-90deg)", transition: "transform 0.15s" }} />
+                <ChevronDown
+                    size={14}
+                    className={cn("opacity-55 transition-transform duration-150", !open && "-rotate-90")}
+                />
             </button>
 
             {open && (
-                <div style={{ padding: "10px 10px 8px" }}>
+                <div className="px-2.5 pb-2 pt-2.5">
                     {!isConfigConfirmed && (
                         <>
                             <SliderRow label="Lanes" min={2} max={obj.config.numExits * 2} step={1} value={exit.laneCount} onChange={onLaneCount} display={String(exit.laneCount)} />
@@ -334,18 +316,14 @@ function ExitRow({ j, exit, obj, isConfigConfirmed, globalSpawnRate, onLaneCount
                                 display={exit.spawnRate != null ? exit.spawnRate.toFixed(1) : `${globalSpawnRate.toFixed(1)} (global)`}
                             />
                             {exit.spawnRate != null && (
-                                <button
+                                <Button
+                                    variant="outline"
+                                    size="sm"
                                     onClick={onClearSpawnRate}
-                                    style={{
-                                    fontSize: 11, padding: "3px 8px",
-                                        background: PANEL_BG,
-                                        border: `1px solid ${BORDER}`,
-                                        borderRadius: 4,
-                                        color: MUTED, cursor: "pointer", fontFamily: "inherit",
-                                    }}
+                                    className="text-[11px] h-auto py-1 px-2 bg-white/[0.04] border-white/[0.08] text-white/75 hover:bg-white/[0.08] hover:text-white"
                                 >
                                     Reset to global
-                                </button>
+                                </Button>
                             )}
                         </div>
                     )}
@@ -368,55 +346,38 @@ export default function SelectionPanel() {
     const twoSelected = ids.length === 2;
 
     return (
-        <div style={{
-            position: "fixed",
-            top: HEADER_H,
-            left: 0,
-            right: 0,
-            zIndex: 45,
-            maxHeight: "36vh",
-            display: "flex",
-            flexDirection: "column",
-            background: "rgba(9,9,11,0.97)",
-            borderBottom: `1px solid ${BORDER}`,
-            fontFamily: "var(--font-mono), 'Courier New', monospace",
-            color: "rgba(255,255,255,0.95)",
-            backdropFilter: "blur(12px)",
-            boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
-        }}>
+        <div
+            className="fixed left-0 right-0 flex flex-col bg-zinc-950/97 border-b border-white/[0.08] font-mono text-white/95 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
+            style={{ top: HEADER_H, zIndex: 45, maxHeight: "36vh" }}
+        >
             {/* ── title bar ── */}
-            <div style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "6px 24px",
-                borderBottom: `1px solid ${BORDER}`,
-                flexShrink: 0,
-            }}>
-                <span style={{ fontSize: 12, letterSpacing: "0.18em", color: MUTED, textTransform: "uppercase" }}>
+            <div className="flex items-center justify-between px-6 py-1.5 border-b border-white/[0.08] flex-shrink-0">
+                <span className="text-[12px] tracking-[0.18em] text-white/75 uppercase">
                     Selection{twoSelected ? " — 2 objects" : ""}
                 </span>
-                <button
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-6 text-white/75 hover:text-white hover:bg-white/[0.07]"
                     onClick={() => setCollapsed(c => !c)}
                     title={collapsed ? "Expand" : "Collapse"}
-                    style={{
-                        background: "none", border: "none",
-                        color: MUTED, cursor: "pointer", lineHeight: 0, padding: 2,
-                    }}
                 >
-                    <ChevronDown size={16} style={{ transform: collapsed ? "rotate(-90deg)" : "none", transition: "transform 0.15s" }} />
-                </button>
+                    <ChevronDown
+                        size={16}
+                        className={cn("transition-transform duration-150", collapsed && "-rotate-90")}
+                    />
+                </Button>
             </div>
 
             {!collapsed && (
-                <div style={{ overflowY: "auto", flex: 1, padding: "14px 24px" }}>
+                <div className="overflow-y-auto flex-1 px-6 py-3.5">
                     {twoSelected ? (
                         /* ── two objects side by side ── */
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 0", alignItems: "start" }}>
-                            <div style={{ paddingRight: 24, borderRight: `1px solid ${BORDER}`, minWidth: 0 }}>
+                        <div className="grid gap-0" style={{ gridTemplateColumns: "1fr 1fr", alignItems: "start" }}>
+                            <div className="pr-6 border-r border-white/[0.08] min-w-0">
                                 <ObjectConfig key={ids[0]} objId={ids[0]} />
                             </div>
-                            <div style={{ paddingLeft: 24, minWidth: 0 }}>
+                            <div className="pl-6 min-w-0">
                                 <ObjectConfig key={ids[1]} objId={ids[1]} />
                             </div>
                         </div>

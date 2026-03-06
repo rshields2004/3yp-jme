@@ -18,6 +18,7 @@ export type SerializedGroupTransform = {
 };
 
 export type NetMessage = { type: "INIT_CONFIG"; appdata: SharedState } 
+    | { type: "REQUEST_CONFIG" }
     | { type: "START" } 
     | { type: "PAUSE" }
     | { type: "RESUME" }

@@ -44,6 +44,12 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
             }
         };
         conn.on("data", handler);
+        // Request the current config now that our handler is registered.
+        // This avoids a race where the host sent INIT_CONFIG before this
+        // effect had a chance to attach the listener.
+        if (conn.open) {
+            conn.send({ type: "REQUEST_CONFIG" });
+        }
         return () => { conn.off("data", handler); };
     }, [connections, isHost]);
 

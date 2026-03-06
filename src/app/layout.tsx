@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 const jetbrainsMono = JetBrains_Mono({
     subsets: ["latin"],
@@ -21,7 +22,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <link rel="icon" href="/favicon.ico" sizes="any" />
             </head>
             <body className={jetbrainsMono.variable}>
-                {children}
+                <TooltipProvider delayDuration={300}>
+                    {children}
+                </TooltipProvider>
             </body>
         </html>
     );
