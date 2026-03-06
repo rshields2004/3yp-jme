@@ -6,12 +6,19 @@ import AppHeader from "./components/AppHeader";
 import Scene from "./components/Scene";
 import { JModellerProvider } from "./context/JModellerContext";
 import { PeerProvider } from "./context/PeerContext";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import CoverPage from "./components/CoverPage";
 
 export default function Page() {
 
     const [entered, setEntered] = useState(false);
+    const [sessionCode, setSessionCode] = useState("");
+
+    useEffect(() => {
+        const code = new URLSearchParams(window.location.search).get("s") ?? "";
+        setSessionCode(code);
+    }, []);
+
 
     return (
         <PeerProvider>
@@ -21,7 +28,10 @@ export default function Page() {
                     onContextMenu={(e) => e.preventDefault()}
                 >
                     {!entered && (
-                        <CoverPage onContinueAction={() => setEntered(true)} />
+                        <CoverPage 
+                            onContinueAction={() => setEntered(true)}
+                            initialSessionCode={sessionCode}
+                        />
                     )}
 
                     {entered && (

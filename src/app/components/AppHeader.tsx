@@ -9,7 +9,7 @@ import { numberToExcelColumn } from "../includes/utils";
 import { carClasses } from "../includes/types/carTypes";
 import {
     Play, Pause, Square, Check, RotateCcw,
-    ChevronDown, Link2, Trash2, PlusSquare, Copy, LogOut
+    ChevronDown, Link2, Trash2, PlusSquare, Copy, LogOut, Settings2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -200,6 +200,21 @@ export default function AppHeader({ onExitAction }: { onExitAction?: () => void 
         if (!isHost) return;
         send({ type: "INIT_CONFIG", appdata: buildSharedState() });
     }, [junction, simConfig]);
+
+    useEffect(() => {
+        if (isHost && hostId) {
+            const url = new URL(window.location.href);
+            url.searchParams.set("s", hostId);
+            window.history.replaceState(null, "", url.toString());
+        }
+
+        if (!isHost) {
+            const url = new URL(window.location.href);
+            url.searchParams.delete("s");
+            window.history.replaceState(null, "", url.toString());
+        }
+    }, [isHost, hostId])
+
 
     useEffect(() => {
         if (isHost || connections.length === 0) return;
@@ -497,14 +512,21 @@ export default function AppHeader({ onExitAction }: { onExitAction?: () => void 
                     <div className="grid gap-8" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
                         {/* col 1: connection + car models */}
                         <div>
-                            <SectionTitle>Connection</SectionTitle>
-                            <div className={cn("text-[13px] mb-1.5", connectionError ? "text-red-400" : isConnected ? "text-white" : "text-white/75")}>
-                                {connectionError ?? (isConnecting ? "Connecting…" : isConnected ? "Connected" : "Not connected")}
-                            </div>
-                            <Progress
-                                value={isConnected ? 100 : 40}
-                                className={cn("h-[3px] mb-3", isConnecting && !isConnected && "animate-pulse")}
-                            />
+                            
+                            {!isHost && (
+                                <>
+                                    <SectionTitle>Connection</SectionTitle>
+                                    <div className={cn("text-[13px] mb-1.5 flex items-center gap-2", connectionError ? "text-red-400" : isConnected ? "text-white" : "text-white/75")}>
+                                        {isConnecting && !isConnected && (
+                                            <Settings2
+                                                size={13}
+                                                className="animate-spin flex-shrink-0"
+                                            />
+                                        )}
+                                        {connectionError ?? (isConnecting ? "Connecting…" : isConnected ? "Connected" : "Not connected")}
+                                    </div>
+                                </>
+                            )}       
                             <SectionTitle>Car Models</SectionTitle>
                             <div className="flex items-center gap-2">
                                 <Progress value={carsReady ? 100 : 30} className={cn("h-[3px] flex-1", !carsReady && "animate-pulse")} />
@@ -527,6 +549,19 @@ export default function AppHeader({ onExitAction }: { onExitAction?: () => void 
                                             className="size-6 text-white/75 hover:text-white"
                                             onClick={() => navigator.clipboard.writeText(hostId ?? "")}
                                             title="Copy"
+                                        >
+                                            <Copy size={14} />
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="size-6 text-white/75 hover:text-white"
+                                            onClick={() => {
+                                                const url = new URL(window.location.href);
+                                                url.searchParams.set("s", hostId ?? "");
+                                                navigator.clipboard.writeText(url.toString());
+                                            }}
+                                            title="Copy invite link"
                                         >
                                             <Copy size={14} />
                                         </Button>

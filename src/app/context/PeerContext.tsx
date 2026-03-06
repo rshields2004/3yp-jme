@@ -24,6 +24,7 @@ export const PeerProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 
     const createHost = () => {
+        setConnectionError(null);
         const code = Math.floor(100000 + Math.random() * 900000).toString();
         const peer = new Peer(code, {
             host: "rshields.xyz",

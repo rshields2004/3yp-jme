@@ -1,28 +1,55 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePeer } from "../context/PeerContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
+import { Settings2 } from "lucide-react";
 
 type CoverPageProps = {
     onContinueAction: () => void;
+    initialSessionCode?: string;
 };
 
-export default function CoverPage({ onContinueAction }: CoverPageProps) {
-    const [joinCode, setJoinCode] = useState("");
-    const [mode, setMode] = useState<"idle" | "join">("idle");
+export default function CoverPage({ onContinueAction, initialSessionCode = "" }: CoverPageProps) {
+    const [joinCode, setJoinCode] = useState<string>(initialSessionCode);
+    const [mode, setMode] = useState<"idle" | "join">(initialSessionCode ? "join" : "idle");
     const { joinHost, isConnecting, connectionError, connections } = usePeer();
+
+
+    useEffect(() => {
+        if (initialSessionCode) {
+            setJoinCode(initialSessionCode);
+            setMode("join");
+            joinHost(initialSessionCode);
+        }
+    }, [initialSessionCode]);
+
+    
 
     const handleJoin = () => {
         if (!joinCode.trim()) return;
         joinHost(joinCode.trim());
     };
 
+    useEffect(() => {
+        if (connectionError) {
+            const url = new URL(window.location.href);
+            url.searchParams.delete("s");
+            window.history.replaceState(null, "", url.toString());
+        }
+    }, [connectionError]);
+
     const isConnected = connections.length > 0;
+
+    useEffect(() => {
+        if (isConnected) {
+            onContinueAction();
+        }
+    }, [isConnected]);
 
     return (
         <div className="fixed inset-0 bg-[#080808] flex flex-col items-center justify-center" style={{ zIndex: 100, fontFamily: "var(--font-mono), 'Courier New', monospace", overflow: "hidden" }}>
@@ -121,9 +148,14 @@ export default function CoverPage({ onContinueAction }: CoverPageProps) {
                         )}
 
                         {/* Loading bar while connecting */}
-                        {isConnecting && (
-                            <Progress value={40} className="h-[3px] animate-pulse" />
-                        )}
+                        <div className={cn("text-[13px] mb-1.5 flex items-center gap-2", connectionError ? "text-red-400" : isConnected ? "text-white" : "text-white/75")}>
+                            {isConnecting && !isConnected && (
+                                <Settings2
+                                    size={13}
+                                    className="animate-spin flex-shrink-0"
+                                />
+                            )}
+                        </div>
 
                         <div className="flex gap-2">
                             <Button
@@ -134,29 +166,23 @@ export default function CoverPage({ onContinueAction }: CoverPageProps) {
                                 Back
                             </Button>
 
-                            {!isConnected ? (
-                                <Button
-                                    onClick={handleJoin}
-                                    disabled={isConnecting || !joinCode.trim()}
-                                    variant="outline"
-                                    className={cn(
-                                        "flex-[2] text-xs tracking-[0.1em] uppercase transition-all duration-150",
-                                        joinCode.trim()
-                                            ? "bg-white/[0.08] border-white/25 text-zinc-200 hover:bg-white/[0.14] hover:border-white/50 hover:text-white"
-                                            : "bg-transparent border-white/[0.06] text-white/20"
-                                    )}
-                                >
-                                    {isConnecting ? "Connecting..." : "Connect"}
-                                </Button>
-                            ) : (
-                                <Button
-                                    onClick={onContinueAction}
-                                    className="flex-[2] text-xs tracking-[0.1em] uppercase bg-green-500/12 border border-green-500/45 text-green-300 hover:bg-green-500/20 hover:border-green-500/70"
-                                    variant="outline"
-                                >
-                                    Enter →
-                                </Button>
-                            )}
+                            
+                            <Button
+                                onClick={handleJoin}
+                                disabled={isConnecting || !joinCode.trim()}
+                                variant="outline"
+                                className={cn(
+                                    "flex-[2] text-xs tracking-[0.1em] uppercase transition-all duration-150",
+                                    joinCode.trim()
+                                        ? "bg-white/[0.08] border-white/25 text-zinc-200 hover:bg-white/[0.14] hover:border-white/50 hover:text-white"
+                                        : "bg-transparent border-white/[0.06] text-white/20"
+                                )}
+                            >
+                                {isConnecting ? "Connecting..." : "Connect"}
+                            </Button>
+  
+
+        
                         </div>
                     </div>
                 )}
