@@ -5,7 +5,7 @@ html, body, #__next {
     height: 100%;
     overflow: hidden;
     font-family: var(--font-mono), 'Courier New', monospace;
-    background: var(--slate-950);
+    background: #0a0a0a;
     color: var(--slate-100);
 }
 @import "tailwindcss";

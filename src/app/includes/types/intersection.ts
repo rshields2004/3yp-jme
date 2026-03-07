@@ -26,6 +26,5 @@ export type IntersectionObject = {
     name: string;
     type: "intersection";
     config: IntersectionConfig;
-    /** World transform set by the host and consumed by the client on mount. */
     transform?: ObjectTransform;
 };

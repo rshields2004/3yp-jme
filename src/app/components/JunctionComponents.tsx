@@ -1,10 +1,10 @@
 "use client";
 
-import {useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { DragControls } from "three/examples/jsm/controls/DragControls.js";
 import { useJModellerContext } from "../context/JModellerContext";
-import { FLOOR_Y } from "../includes/defaults";
+import { FLOOR_Y_OFFSET } from "../includes/defaults";
 import { useThree } from "@react-three/fiber";
 import { IntersectionComponent } from "./IntersectionComponent";
 import { RoundaboutComponent } from "./RoundaboutComponent";
@@ -14,11 +14,15 @@ import { getStructureData } from "../includes/utils";
 
 export const JunctionComponents = () => {
 
-    const { selectedObjects, junction, snapToValidPosition, setSelectedObjects, junctionObjectRefs, isConfigConfirmed } = useJModellerContext();
+    const { selectedObjects, junction, snapToValidPosition, setSelectedObjects, junctionObjectRefs, isConfigConfirmed, toolMode } = useJModellerContext();
 
     // We define our drag controls for all components
     const { camera, gl } = useThree();
     const controlRef = useRef<DragControls | null>(null);
+
+    // Keep a stable ref to snapToValidPosition so we don't recreate DragControls on every render
+    const snapRef = useRef(snapToValidPosition);
+    useEffect(() => { snapRef.current = snapToValidPosition; });
 
     useEffect(() => {
         if (!camera || !gl) return;
@@ -34,14 +38,14 @@ export const JunctionComponents = () => {
             if (!draggedGroup) {
                 return;
             }
-            if (draggedGroup.position.y != FLOOR_Y) {
-                draggedGroup.position.y = FLOOR_Y;
+            if (draggedGroup.position.y != FLOOR_Y_OFFSET) {
+                draggedGroup.position.y = FLOOR_Y_OFFSET;
             }
         };
 
         const onDragEnd = (event: { type: string; object: THREE.Object3D }) => {
             requestAnimationFrame(() => {
-                snapToValidPosition(event.object as THREE.Group);
+                snapRef.current(event.object as THREE.Group);
             });
         };
 
@@ -60,7 +64,7 @@ export const JunctionComponents = () => {
             controls.dispose();
             window.removeEventListener("keydown", onKeyPress);
         };
-    }, [camera, gl, setSelectedObjects, snapToValidPosition]);
+    }, [camera, gl, setSelectedObjects]);
     
     
 
@@ -79,17 +83,20 @@ export const JunctionComponents = () => {
         }
         
         controls.enabled = true;
-        // In the selectedObjects useEffect:
-        
-        const controlObjects = selectedObjects.map(id => junctionObjectRefs.current.find(g => {
-            const data = getStructureData(g);
-            return data && data.id === id;
-        })).filter((g): g is THREE.Group => !!g);
+
+        let controlObjects: THREE.Group[];
+        if (toolMode === "build") {
+            // Build mode: all junction objects are draggable
+            controlObjects = junctionObjectRefs.current.filter((g): g is THREE.Group => !!g);
+        } else {
+            // View/Select mode: no dragging
+            controlObjects = [];
+        }
 
         controls.objects = controlObjects;
 
 
-    }, [selectedObjects, setSelectedObjects, snapToValidPosition, junctionObjectRefs, isConfigConfirmed]);
+    }, [selectedObjects, isConfigConfirmed, junctionObjectRefs, toolMode, junction.junctionObjects]);
 
 
     return (

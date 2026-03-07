@@ -2,7 +2,7 @@
 
 import React, { forwardRef, useRef, useImperativeHandle, useEffect } from "react";
 import * as THREE from "three";
-import { useThree } from "@react-three/fiber";
+import { useThree, useFrame } from "@react-three/fiber";
 import { Line2 } from "three/addons/lines/Line2.js";
 import { LineGeometry } from "three/addons/lines/LineGeometry.js";
 import { LineMaterial } from "three/addons/lines/LineMaterial.js";
@@ -30,10 +30,21 @@ type ThickLineProps = {
 export const ThickLine = forwardRef<ThickLineHandle, ThickLineProps>(
     ({ points, colour, linewidth, dashed, worldUnits, dashSize = 0.5, gapSize = 0.5 }, ref) => {
         const groupRef = useRef<THREE.Group>(null);
-        const { size } = useThree();
+        const { gl } = useThree();
         const lineRef = useRef<Line2>(null);
         const geometryRef = useRef<LineGeometry>(null);
         const materialRef = useRef<LineMaterial>(null);
+
+        // Keep resolution in sync with the actual canvas size every frame
+        // (avoids stale values during CSS transitions).
+        useFrame(() => {
+            if (!materialRef.current) return;
+            const w = gl.domElement.clientWidth;
+            const h = gl.domElement.clientHeight;
+            if (materialRef.current.resolution.x !== w || materialRef.current.resolution.y !== h) {
+                materialRef.current.resolution.set(w, h);
+            }
+        });
 
         useImperativeHandle(ref, () => ({
             updatePoints(newPoints: Tuple3[]) {
@@ -115,9 +126,8 @@ export const ThickLine = forwardRef<ThickLineHandle, ThickLineProps>(
             materialRef.current.dashSize = dashSize;
             materialRef.current.gapSize = gapSize;
             materialRef.current.worldUnits = worldUnits ?? false;
-            materialRef.current.resolution.set(size.width, size.height);
             materialRef.current.needsUpdate = true;
-        }, [colour, linewidth, dashed, worldUnits, dashSize, gapSize, size.width, size.height]);
+        }, [colour, linewidth, dashed, worldUnits, dashSize, gapSize]);
 
 
         return <group ref={groupRef} />;

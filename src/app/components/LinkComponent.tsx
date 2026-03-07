@@ -225,7 +225,7 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
             ref={groupRef}
         >
             <mesh ref={roadRef}>
-                <meshStandardMaterial color="darkgrey" side={THREE.DoubleSide} />
+                <meshStandardMaterial color="darkgrey" side={THREE.DoubleSide} polygonOffset polygonOffsetFactor={2} polygonOffsetUnits={2} />
             </mesh>
 
             {laneRefs.slice(1, -1).map((refObj, i) => (

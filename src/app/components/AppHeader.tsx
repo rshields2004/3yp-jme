@@ -9,7 +9,8 @@ import { numberToExcelColumn } from "../includes/utils";
 import { carClasses } from "../includes/types/carTypes";
 import {
     Play, Pause, Square, Check, RotateCcw,
-    ChevronDown, Link2, Trash2, PlusSquare, Copy, LogOut, Settings2
+    ChevronDown, Link2, Trash2, PlusSquare, Copy, LogOut, Settings2,
+    MousePointer2, Eye, Hammer
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,7 +43,7 @@ function IconBtn({
                     onClick={onClick}
                     disabled={disabled}
                     className={cn(
-                        "size-9 border border-white/[0.08] text-white/90",
+                        "size-9 border border-white/[0.08] text-white/75",
                         active && "bg-white/[0.1] border-white/25",
                         !disabled && "hover:bg-white/[0.08] hover:border-white/20 hover:text-white"
                     )}
@@ -58,21 +59,24 @@ function IconBtn({
 function DropdownPanel({
     children,
     anchor = "top",
+    panelOpen = false,
 }: {
     children: React.ReactNode;
     anchor?: "top" | "bottom";
+    panelOpen?: boolean;
 }) {
     const isBottom = anchor === "bottom";
     return (
         <div
             className={cn(
-                "fixed left-0 right-0 bg-zinc-950/97 overflow-y-auto px-6 py-4",
-                "font-mono text-white/92",
+                "fixed right-0 bg-zinc-950/97 overflow-y-auto px-6 py-4",
+                "font-mono text-white/95 backdrop-blur-xl",
                 isBottom
                     ? "bottom-0 border-t border-white/[0.08] shadow-[0_-8px_32px_rgba(0,0,0,0.5)]"
                     : "top-[44px] border-b border-white/[0.08] shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
             )}
-            style={{ maxHeight: "36vh", zIndex: 49 }}
+            style={{ maxHeight: "22vh", zIndex: 49, left: panelOpen ? "25vw" : "0", transition: "left 0.3s cubic-bezier(0.4, 0, 0.2, 1)" }}
+            data-dropdown-panel
         >
             {children}
         </div>
@@ -135,9 +139,9 @@ function ActionBtn({
 
 // ─── main component ──────────────────────────────────────────────────────────
 
-type MenuId = "junction" | "session" | "config" | null;
+type MenuId = "junction" | "session" | "config" | "modes" | null;
 
-export default function AppHeader({ onExitAction }: { onExitAction?: () => void }) {
+export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeightChangeAction }: { onExitAction?: () => void; panelOpen?: boolean; onMenuHeightChangeAction?: (height: number) => void }) {
     const [openMenu, setOpenMenu] = useState<MenuId>(null);
     const [joinCode, setJoinCode] = useState("");
 
@@ -147,9 +151,31 @@ export default function AppHeader({ onExitAction }: { onExitAction?: () => void 
         pauseSim, resumeSim, haltSim, stats,
         setJunction, simConfig, setSimConfig,
         selectedExits, setSelectedExits,
+        selectedObjects, setSelectedObjects,
         objectCounter, setObjectCounter,
         followedVehicleId, followedVehicleStats,
+        toolMode, setToolMode,
     } = useJModellerContext();
+
+    useEffect(() => {
+        if (!openMenu) {
+            onMenuHeightChangeAction?.(0);
+            return;
+        }
+        const raf = requestAnimationFrame(() => {
+            const el = document.querySelector('[data-dropdown-panel]') as HTMLElement | null;
+            if (el) onMenuHeightChangeAction?.(el.getBoundingClientRect().height);
+        });
+        return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [openMenu, onMenuHeightChangeAction, selectedExits.length, toolMode]);
+
+    // Keep the Modes dropdown pinned open while in Build mode
+    useEffect(() => {
+        if (toolMode === "build") setOpenMenu("modes");
+    }, [toolMode]);
+
+    const isPanelOpen = panelOpen || selectedObjects.length > 0;
 
     const {
         isHost, hostId, connections, createHost, joinHost, send, disconnect,
@@ -314,8 +340,8 @@ export default function AppHeader({ onExitAction }: { onExitAction?: () => void 
                 }
             `}</style>
 
-            {/* backdrop to close menus */}
-            {openMenu && (
+            {/* backdrop to close menus (skip when modes is pinned open in build mode) */}
+            {openMenu && !(toolMode === "build" && openMenu === "modes") && (
                 <div
                     onClick={() => setOpenMenu(null)}
                     className="fixed inset-0"
@@ -325,8 +351,8 @@ export default function AppHeader({ onExitAction }: { onExitAction?: () => void 
 
             {/* ── header bar ── */}
             <div
-                className="fixed top-0 left-0 right-0 h-[44px] bg-zinc-950/95 border-b border-white/[0.08] flex items-center justify-between backdrop-blur-xl px-3 font-mono"
-                style={{ zIndex: 50 }}
+                className="fixed top-0 right-0 h-[44px] bg-zinc-950/97 border-b border-white/[0.08] flex items-center justify-between backdrop-blur-xl px-3 font-mono text-white/95"
+                style={{ zIndex: 50, left: panelOpen ? "25vw" : "0", transition: "left 0.3s cubic-bezier(0.4, 0, 0.2, 1)" }}
             >
                 {/* left: exit + logo + menus */}
                 <div className="flex items-center">
@@ -335,7 +361,7 @@ export default function AppHeader({ onExitAction }: { onExitAction?: () => void 
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                className="size-8 mr-2.5 border border-white/[0.08] text-zinc-400 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30 flex-shrink-0"
+                                className="size-8 mr-2.5 border border-white/[0.08] text-white/75 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30 flex-shrink-0"
                                 onClick={() => {
                                     if (simIsRunning) haltSim();
                                     setJunction(defaultJunctionConfig);
@@ -357,7 +383,7 @@ export default function AppHeader({ onExitAction }: { onExitAction?: () => void 
                         className="h-[26px] w-auto mr-4 select-none block"
                     />
 
-                    {(["junction", "session", "config"] as MenuId[]).map(id => {
+                    {(["junction", "session", "config", "modes"] as MenuId[]).map(id => {
                         const label = id!.charAt(0).toUpperCase() + id!.slice(1);
                         const isOpen = openMenu === id;
                         return (
@@ -367,8 +393,8 @@ export default function AppHeader({ onExitAction }: { onExitAction?: () => void 
                                 size="sm"
                                 onClick={() => toggleMenu(id)}
                                 className={cn(
-                                    "gap-1 px-2.5 text-[13px] tracking-wide text-white/82 hover:text-white hover:bg-white/[0.07] rounded",
-                                    isOpen && "bg-white/[0.1] text-white"
+                                    "gap-1 px-2.5 text-[12px] tracking-[0.15em] uppercase text-white/75 hover:text-white hover:bg-white/[0.07] rounded",
+                                    isOpen && "bg-white/[0.07] text-white"
                                 )}
                             >
                                 {label}
@@ -452,29 +478,12 @@ export default function AppHeader({ onExitAction }: { onExitAction?: () => void 
 
             {/* ── JUNCTION dropdown ── */}
             {openMenu === "junction" && (
-                <DropdownPanel>
+                <DropdownPanel panelOpen={isPanelOpen}>
                     <div className="flex items-start">
-                        {/* left col: add buttons */}
-                        <div className="w-[220px] flex-shrink-0 pr-6 border-r border-white/[0.08]">
-                            <SectionTitle>Add Junction</SectionTitle>
-                            <div className="flex flex-col gap-1.5 mb-2">
-                                <ActionBtn onClick={addNewIntersection} disabled={isConfigConfirmed || simIsRunning || isClientConnected}>
-                                    <PlusSquare size={14} /> Intersection
-                                </ActionBtn>
-                                <ActionBtn onClick={addNewRoundabout} disabled={isConfigConfirmed || simIsRunning || isClientConnected}>
-                                    <PlusSquare size={14} /> Roundabout
-                                </ActionBtn>
-                            </div>
-                            <SectionTitle>Exit Links</SectionTitle>
-                            <ActionBtn onClick={addNewLink} disabled={selectedExits.length !== 2 || isConfigConfirmed || simIsRunning || isClientConnected}>
-                                <Link2 size={14} /> Link Selected Exits{selectedExits.length === 2 ? "" : " (select 2)"}
-                            </ActionBtn>
-                        </div>
-                        {/* right col: existing links */}
-                        <div className="flex-1 pl-6 min-w-0">
+                        <div className="flex-1 min-w-0">
                             <SectionTitle>Current Links</SectionTitle>
                             {junction.junctionLinks.length === 0 ? (
-                                <p className="text-xs text-white/75 m-0">No links yet.</p>
+                                <p className="text-xs text-white/75 m-0">No links yet. Use <span className="text-white/90 font-semibold">Build</span> mode to add junctions and links.</p>
                             ) : (
                                 <div className="grid gap-1" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
                                     {junction.junctionLinks.map(link => {
@@ -508,7 +517,7 @@ export default function AppHeader({ onExitAction }: { onExitAction?: () => void 
 
             {/* ── SESSION dropdown ── */}
             {openMenu === "session" && (
-                <DropdownPanel>
+                <DropdownPanel panelOpen={isPanelOpen}>
                     <div className="grid gap-8" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
                         {/* col 1: connection + car models */}
                         <div>
@@ -614,7 +623,7 @@ export default function AppHeader({ onExitAction }: { onExitAction?: () => void 
 
             {/* ── CONFIG dropdown ── */}
             {openMenu === "config" && isConfigConfirmed && !simIsRunning && (
-                <DropdownPanel>
+                <DropdownPanel panelOpen={isPanelOpen}>
                     {isClientConnected && (
                         <p className="text-xs text-zinc-500 mb-3 tracking-wide">
                             VIEW ONLY — config is controlled by the host
@@ -707,7 +716,7 @@ export default function AppHeader({ onExitAction }: { onExitAction?: () => void 
                 </DropdownPanel>
             )}
             {openMenu === "config" && (!isConfigConfirmed || simIsRunning) && (
-                <DropdownPanel>
+                <DropdownPanel panelOpen={isPanelOpen}>
                     <p className="text-[13px] text-white/75 m-0">
                         {simIsRunning
                             ? "Config is locked while the simulation is running."
@@ -718,7 +727,7 @@ export default function AppHeader({ onExitAction }: { onExitAction?: () => void 
 
             {/* ── VEHICLE HUD ── */}
             {simIsRunning && followedVehicleId !== null && (
-                <DropdownPanel anchor="bottom">
+                <DropdownPanel anchor="bottom" panelOpen={isPanelOpen}>
                     <div className="flex flex-col items-center gap-3">
                         <div className="flex gap-10 items-end flex-wrap justify-center">
                             {[
@@ -750,7 +759,7 @@ export default function AppHeader({ onExitAction }: { onExitAction?: () => void 
 
             {/* ── STATS panel ── */}
             {simIsRunning && followedVehicleId === null && (
-                <DropdownPanel anchor="bottom">
+                <DropdownPanel anchor="bottom" panelOpen={isPanelOpen}>
                     <div className="grid gap-x-8 gap-y-0.5 text-[13px] mb-2.5" style={{ gridTemplateColumns: "1fr 1fr 1fr 1fr" }}>
                         {[
                             ["Active", stats.active],
@@ -807,6 +816,82 @@ export default function AppHeader({ onExitAction }: { onExitAction?: () => void 
                         <span className="text-white/75">Avg Wait Time</span>
                         <span className="text-white">{stats.junctions.global.avgWaitTime.toFixed(1)}s</span>
                     </div>
+                </DropdownPanel>
+            )}
+
+            {/* ── MODES dropdown ── */}
+            {openMenu === "modes" && (
+                <DropdownPanel panelOpen={isPanelOpen}>
+                    <SectionTitle>Mode</SectionTitle>
+                    <div className="flex gap-2 mb-3">
+                        <button
+                            onClick={() => { setToolMode("view"); setSelectedObjects([]); setSelectedExits([]); setOpenMenu(null); }}
+                            className={cn(
+                                "flex items-center gap-2 px-4 py-2.5 rounded border text-[12px] tracking-[0.12em] uppercase transition-colors",
+                                toolMode === "view"
+                                    ? "bg-white/[0.12] border-white/30 text-white"
+                                    : "bg-white/[0.03] border-white/[0.08] text-white/60 hover:bg-white/[0.07] hover:text-white/90",
+                            )}
+                        >
+                            <Eye size={14} />
+                            View
+                        </button>
+                        <button
+                            onClick={() => { setToolMode("build"); setSelectedObjects([]); setSelectedExits([]); }}
+                            disabled={simIsRunning || isConfigConfirmed}
+                            className={cn(
+                                "flex items-center gap-2 px-4 py-2.5 rounded border text-[12px] tracking-[0.12em] uppercase transition-colors",
+                                toolMode === "build"
+                                    ? "bg-white/[0.12] border-white/30 text-white"
+                                    : "bg-white/[0.03] border-white/[0.08] text-white/60 hover:bg-white/[0.07] hover:text-white/90",
+                                (simIsRunning || isConfigConfirmed) && "opacity-40 cursor-not-allowed"
+                            )}
+                        >
+                            <Hammer size={14} />
+                            Build
+                        </button>
+                        <button
+                            onClick={() => { setToolMode("select"); setSelectedObjects([]); setSelectedExits([]); setOpenMenu(null); }}
+                            disabled={simIsRunning}
+                            className={cn(
+                                "flex items-center gap-2 px-4 py-2.5 rounded border text-[12px] tracking-[0.12em] uppercase transition-colors",
+                                toolMode === "select"
+                                    ? "bg-white/[0.12] border-white/30 text-white"
+                                    : "bg-white/[0.03] border-white/[0.08] text-white/60 hover:bg-white/[0.07] hover:text-white/90",
+                                simIsRunning && "opacity-40 cursor-not-allowed"
+                            )}
+                        >
+                            <MousePointer2 size={14} />
+                            Select
+                        </button>
+                    </div>
+                    <p className="text-[11px] text-white/50 leading-relaxed mb-3">
+                        {toolMode === "view"
+                            ? "Orbit camera freely. Double-click a junction to centre on it."
+                            : toolMode === "build"
+                            ? "Top-down view. Place junctions, drag to reposition, and link exits."
+                            : "Top-down view. Right-click a junction to zoom in and edit its config."}
+                    </p>
+
+                    {/* ── Build-mode inline tools ── */}
+                    {toolMode === "build" && !simIsRunning && !isConfigConfirmed && (
+                        <>
+                            <SectionTitle>Build Tools</SectionTitle>
+                            <div className="flex gap-1.5 mb-3 flex-wrap">
+                                <ActionBtn onClick={() => addNewIntersection()} disabled={isClientConnected}>
+                                    <PlusSquare size={14} /> Intersection
+                                </ActionBtn>
+                                <ActionBtn onClick={() => addNewRoundabout()} disabled={isClientConnected}>
+                                    <PlusSquare size={14} /> Roundabout
+                                </ActionBtn>
+                                {selectedExits.length === 2 && (
+                                    <ActionBtn onClick={() => addNewLink()} disabled={isClientConnected}>
+                                        <Link2 size={14} /> Link Exits ({selectedExits.map(e => `exit ${e.exitIndex}`).join(" ↔ ")})
+                                    </ActionBtn>
+                                )}
+                            </div>
+                        </>
+                    )}
                 </DropdownPanel>
             )}
         </>

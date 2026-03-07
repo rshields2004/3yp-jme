@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, ReactNode, useRef, useEffect } from "react";
 import { ExitRef, JModellerState, JunctionConfig, JunctionObjectTypes } from "../includes/types/types";
-import { defaultJunctionConfig, defaultSimConfig } from "../includes/defaults";
+import { defaultJunctionConfig, defaultSimConfig, FLOOR_Y_OFFSET } from "../includes/defaults";
 import * as THREE from "three";
 import { SimulationStats } from "../includes/types/simulation";
 import { FollowedVehicleStats } from "../includes/types/simulation";
@@ -29,6 +29,7 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
     const [isConfigConfirmed, setIsConfigConfirmed] = useState<boolean>(false);
     const [simConfig, setSimConfig] = useState(defaultSimConfig);
     const [objectCounter, setObjectCounter] = useState(0);
+    const [toolMode, setToolMode] = useState<"view" | "build" | "select">("view");
 
     // ── P2P: receive config from host ─────────────────────────────────────
     const { connections, isHost } = usePeer();
@@ -176,6 +177,7 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
             draggedGroup.parent.worldToLocal(newWorldPos);
         }
         draggedGroup.position.copy(newWorldPos);
+        draggedGroup.position.y = FLOOR_Y_OFFSET;
 
         // Persist the final snapped position into the junction React state so
         // it is always the source of truth (P2P peers read it from here).
@@ -232,6 +234,7 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
         }
         setSelectedObjects([]);
         setSelectedExits([]);
+        setToolMode("view");
         setSimIsRunning(true);
     };
 
@@ -296,7 +299,9 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
             confirmConfig,
             resetConfig,
             simConfig,
-            setSimConfig
+            setSimConfig,
+            toolMode,
+            setToolMode,
         }}>
             {children}
         </JModellerContext.Provider>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useJModellerContext } from "../context/JModellerContext";
 import { defaultExitConfig } from "../includes/defaults";
 import { ExitConfig, ExitRef } from "../includes/types/types";
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
+import { usePeer } from "../context/PeerContext";
 
 const HEADER_H = 44;
 
@@ -336,55 +337,58 @@ function ExitRow({ j, exit, obj, isConfigConfirmed, globalSpawnRate, onLaneCount
 // ── main panel ───────────────────────────────────────────────────────────────
 
 export default function SelectionPanel() {
-    const { selectedObjects } = useJModellerContext();
+    const {
+        selectedObjects, junction, setJunction, setSelectedObjects,
+        isConfigConfirmed, simIsRunning,
+    } = useJModellerContext();
+    const { isHost, connections } = usePeer();
+    const isClientConnected = !isHost && connections.length > 0;
     const [collapsed, setCollapsed] = useState(false);
+    const isOpen = selectedObjects.length > 0;
 
-    if (selectedObjects.length === 0) return null;
+    useEffect(() => {
+        if (isOpen) setCollapsed(false);
+    }, [isOpen]);
 
-    // Most-recently selected first, max 2
-    const ids = [...selectedObjects].reverse().slice(0, 2);
-    const twoSelected = ids.length === 2;
+    const objId = selectedObjects[0];
 
     return (
         <div
-            className="fixed left-0 right-0 flex flex-col bg-zinc-950/97 border-b border-white/[0.08] font-mono text-white/95 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
-            style={{ top: HEADER_H, zIndex: 45, maxHeight: "36vh" }}
+            className="fixed left-0 flex flex-col overflow-hidden bg-zinc-950/97 border-r border-white/[0.08] font-mono text-white/95 backdrop-blur-xl shadow-[8px_0_32px_rgba(0,0,0,0.5)]"
+            style={{
+                top: HEADER_H,
+                bottom: 0,
+                width: "25vw",
+                zIndex: 45,
+                transform: isOpen ? "translateX(0)" : "translateX(-100%)",
+                transition: "transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                pointerEvents: isOpen ? "auto" : "none",
+            }}
         >
             {/* ── title bar ── */}
             <div className="flex items-center justify-between px-6 py-1.5 border-b border-white/[0.08] flex-shrink-0">
                 <span className="text-[12px] tracking-[0.18em] text-white/75 uppercase">
-                    Selection{twoSelected ? " — 2 objects" : ""}
+                    Selection
                 </span>
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-6 text-white/75 hover:text-white hover:bg-white/[0.07]"
-                    onClick={() => setCollapsed(c => !c)}
-                    title={collapsed ? "Expand" : "Collapse"}
-                >
-                    <ChevronDown
-                        size={16}
-                        className={cn("transition-transform duration-150", collapsed && "-rotate-90")}
-                    />
-                </Button>
+                <div className="flex items-center gap-1">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-6 text-white/75 hover:text-white hover:bg-white/[0.07]"
+                        onClick={() => setCollapsed(c => !c)}
+                        title={collapsed ? "Expand" : "Collapse"}
+                    >
+                        <ChevronDown
+                            size={16}
+                            className={cn("transition-transform duration-150", collapsed && "-rotate-90")}
+                        />
+                    </Button>
+                </div>
             </div>
 
-            {!collapsed && (
+            {!collapsed && objId && (
                 <div className="overflow-y-auto flex-1 px-6 py-3.5">
-                    {twoSelected ? (
-                        /* ── two objects side by side ── */
-                        <div className="grid gap-0" style={{ gridTemplateColumns: "1fr 1fr", alignItems: "start" }}>
-                            <div className="pr-6 border-r border-white/[0.08] min-w-0">
-                                <ObjectConfig key={ids[0]} objId={ids[0]} />
-                            </div>
-                            <div className="pl-6 min-w-0">
-                                <ObjectConfig key={ids[1]} objId={ids[1]} />
-                            </div>
-                        </div>
-                    ) : (
-                        /* ── single object ── */
-                        <ObjectConfig key={ids[0]} objId={ids[0]} />
-                    )}
+                    <ObjectConfig key={objId} objId={objId} />
                 </div>
             )}
         </div>

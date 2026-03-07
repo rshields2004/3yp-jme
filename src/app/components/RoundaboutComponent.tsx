@@ -32,11 +32,10 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, name, initialTransfo
         registerJunctionObject,
         snapToValidPosition,
         selectedObjects,
-        setSelectedObjects,
         setSelectedExits,
         selectedExits,
         junction,
-        simIsRunning
+        toolMode
     } = useJModellerContext();
 
     const roundaboutMemo: RoundaboutStructure = useMemo(() => {
@@ -126,39 +125,16 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, name, initialTransfo
     })() : false;
 
     const handleRoundaboutClick = (event: ThreeEvent<PointerEvent>) => {
-        if (event.button !== 2) {
-            return;
-        }
-        if (simIsRunning) {
-            return;
-        }
-        event.stopPropagation();
-        const group = groupRef.current;
-        if (!group) {
-            return;
-        }
-
-        const data = getStructureData(group);
-        if (!data) {
-            return;
-        }
-
-
-        setSelectedObjects(prev => {
-            if (prev.includes(data.id)) {
-                return prev.filter(id => id !== data.id);
-            }
-            if (prev.length >= 2) {
-                return [prev[1], data.id];
-            }
-            return [...prev, data.id];
-        });
+        // Right-click selection is now handled by Scene.tsx for select mode
+        // No click action needed on the roundabout floor itself
     };
 
     const handleExitClick = (event: ThreeEvent<PointerEvent>, exitIndex: number) => {
         if (event.button !== 0) {
             return;
         }
+        // Exit clicks only work in build mode (for linking)
+        if (toolMode !== "build") return;
 
         const group = groupRef.current;
         if (!group) {
@@ -214,20 +190,6 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, name, initialTransfo
                 Roundabout {name}
             </Text>
 
-            {/* Selection ring */}
-            {isSelected && (
-                <mesh 
-                    key={`r-${id}-select`}
-                    rotation={[-Math.PI / 2, 0, 0]} 
-                    position={[0, 0, 0]}
-                >
-                    <torusGeometry 
-                        args={[roundaboutMemo.maxDistanceToStopLine + 0.25, 0.25, 16, 64 ]} 
-                    />
-                    <meshBasicMaterial color="black" side={THREE.DoubleSide} />
-                </mesh>
-            )}
-
             {/* Roundabout circular floor */}
             <mesh
                 key={`r-${id}-cfloor`}
@@ -235,7 +197,7 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, name, initialTransfo
                 rotation={[-Math.PI / 2, 0, 0]}
                 onPointerDown={(event) => handleRoundaboutClick(event)}
             >
-                <meshStandardMaterial color={"darkgrey"} side={THREE.DoubleSide} />
+                <meshStandardMaterial color={"darkgrey"} side={THREE.DoubleSide} polygonOffset polygonOffsetFactor={2} polygonOffsetUnits={2} />
             </mesh>
 
             {/* Roundabout floor */}
@@ -245,7 +207,7 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, name, initialTransfo
                 rotation={[-Math.PI / 2, Math.PI, Math.PI]}
                 onPointerDown={(event) => handleRoundaboutClick(event)}
             >
-                <meshStandardMaterial color="darkgrey" side={THREE.DoubleSide} />
+                <meshStandardMaterial color="darkgrey" side={THREE.DoubleSide} polygonOffset polygonOffsetFactor={2} polygonOffsetUnits={2} />
             </mesh>
 
             {/* Edge tubes */}
@@ -259,6 +221,18 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, name, initialTransfo
                 </mesh>
             ))}
 
+            {/* Bounding ring — visible in build mode */}
+            {toolMode === "build" && (
+                <mesh
+                    key={`r-${id}-bounding`}
+                    rotation={[-Math.PI / 2, 0, 0]}
+                    position={[0, 0.005, 0]}
+                >
+                    <ringGeometry args={[roundaboutMemo.maxDistanceToStopLine - 0.15, roundaboutMemo.maxDistanceToStopLine, 64]} />
+                    <meshBasicMaterial color="white" transparent opacity={0.35} side={THREE.DoubleSide} />
+                </mesh>
+            )}
+
             {/* Roundabout island */}
             <mesh
                 key={`r-${id}-island`}
@@ -266,7 +240,7 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, name, initialTransfo
                 rotation={[-Math.PI / 2, 0, 0]}
                 position={[0, 0.01, 0]}
             >
-                <meshStandardMaterial color={"white"} side={THREE.DoubleSide} />
+                <meshStandardMaterial color={"white"} side={THREE.DoubleSide} polygonOffset polygonOffsetFactor={2} polygonOffsetUnits={2} />
             </mesh>
 
             {/* Roundabout lane lines */}
@@ -346,13 +320,14 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, name, initialTransfo
                             position={[0, 0.01, 0]}
                             onPointerDown={(event) => {
                                 event.stopPropagation();
+                                if (toolMode === "build") event.nativeEvent.stopImmediatePropagation();
                                 handleExitClick(event, exitIndex);
                             }}
                         >
                             <meshBasicMaterial
                                 color={inALink ? "green" : (isSelectedExit ? "red" :  "blue")}
                                 transparent
-                                opacity={(isSelected || inALink ) ? 0.5 : 0} // keep visible if junction is selected
+                                opacity={(toolMode === "build" || isSelected || inALink) ? 0.5 : 0}
                                 side={THREE.DoubleSide}
                             />
                         </mesh>

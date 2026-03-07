@@ -27,12 +27,11 @@ export const IntersectionComponent = ({ id, intersectionConfig, name, initialTra
     const {
         junction,
         selectedObjects,
-        setSelectedObjects,
         registerJunctionObject,
         selectedExits,
         setSelectedExits,
         snapToValidPosition,
-        simIsRunning
+        toolMode
     } = useJModellerContext();
 
 
@@ -141,38 +140,16 @@ export const IntersectionComponent = ({ id, intersectionConfig, name, initialTra
     })() : false;
 
     const handleIntersectionClick = (event: ThreeEvent<PointerEvent>) => {
-        if (event.button !== 2) {
-            return;
-        }
-        if (simIsRunning) {
-            return;
-        }
-        event.stopPropagation();
-        const group = groupRef.current;
-        if (!group) {
-            return;
-        }
-
-        const data = getStructureData(group);
-        if (!data) {
-            return;
-        }
-
-        setSelectedObjects(prev => {
-            if (prev.includes(data.id)) {
-                return prev.filter(id => id !== data.id);
-            }
-            if (prev.length >= 2) {
-                return [prev[1], data.id];
-            }
-            return [...prev, data.id];
-        });
+        // Right-click selection is now handled by Scene.tsx for select mode
+        // No click action needed on the intersection floor itself
     };
 
     const handleExitClick = (event: ThreeEvent<PointerEvent>, exitIndex: number) => {
         if (event.button !== 0) {
             return;
         }
+        // Exit clicks only work in build mode (for linking)
+        if (toolMode !== "build") return;
 
         const group = groupRef.current;
         if (!group) {
@@ -231,20 +208,6 @@ export const IntersectionComponent = ({ id, intersectionConfig, name, initialTra
                 Intersection {name}
             </Text>
 
-            {/* Selection ring */}
-            {isSelected && (
-                <mesh
-                    key={`i-select-${id}`}
-                    rotation={[-Math.PI / 2, 0, 0]}
-                    position={[0, 0, 0]}
-                >
-                    <torusGeometry
-                        args={[intersectionMemo.maxDistanceToStopLine + 0.25, 0.25, 16, 64]}
-                    />
-                    <meshBasicMaterial color="black" side={THREE.DoubleSide} />
-                </mesh>
-            )}
-
             {/* Floor */}
             <mesh
                 key={`i-floor-${id}`}
@@ -253,7 +216,7 @@ export const IntersectionComponent = ({ id, intersectionConfig, name, initialTra
                 position={[0, 0, 0]}
                 onPointerDown={(event) => handleIntersectionClick(event)}
             >
-                <meshStandardMaterial color="darkgrey" side={THREE.DoubleSide} />
+                <meshStandardMaterial color="darkgrey" side={THREE.DoubleSide} polygonOffset polygonOffsetFactor={2} polygonOffsetUnits={2} />
             </mesh>
 
 
@@ -268,6 +231,18 @@ export const IntersectionComponent = ({ id, intersectionConfig, name, initialTra
                     <meshStandardMaterial color="grey" emissive="black" emissiveIntensity={0.3} />
                 </mesh>
             ))}
+
+            {/* Bounding ring — visible in build mode */}
+            {toolMode === "build" && (
+                <mesh
+                    key={`i-${id}-bounding`}
+                    rotation={[-Math.PI / 2, 0, 0]}
+                    position={[0, 0.005, 0]}
+                >
+                    <ringGeometry args={[intersectionMemo.maxDistanceToStopLine - 0.15, intersectionMemo.maxDistanceToStopLine, 64]} />
+                    <meshBasicMaterial color="white" transparent opacity={0.35} side={THREE.DoubleSide} />
+                </mesh>
+            )}
 
             {/* Invisible exit mesh for exit selection */}
             {intersectionMemo.exitInfo.map((exit, exitIndex) => {
@@ -337,13 +312,14 @@ export const IntersectionComponent = ({ id, intersectionConfig, name, initialTra
                             position={[0, 0.01, 0]}
                             onPointerDown={(event) => {
                                 event.stopPropagation();
+                                if (toolMode === "build") event.nativeEvent.stopImmediatePropagation();
                                 handleExitClick(event, exitIndex);
                             }}
                         >
                             <meshBasicMaterial
                                 color={inALink ? "green" : (isSelectedExit ? "red" : "blue")}
                                 transparent
-                                opacity={(isSelected || inALink) ? 0.5 : 0} // keep visible if junction is selected
+                                opacity={(toolMode === "build" || isSelected || inALink) ? 0.5 : 0}
                                 side={THREE.DoubleSide}
                             />
                         </mesh>
