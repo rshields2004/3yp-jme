@@ -60,66 +60,50 @@ const Scene = forwardRef<SceneHandle>(function Scene(_, ref) {
         return radius / Math.tan(fittingHalfFov);
     };
 
-    // Helper: restore from top-down to isometric view
+    // Helper: restore from top-down to isometric view.
+    // If junction objects exist, focus on the first one; otherwise use origin.
     const restoreIsometric = () => {
         if (isTopDownRef.current) {
             isTopDownRef.current = false;
             camera.up.set(0, 1, 0);
         }
-        lerpTargetRef.current = new THREE.Vector3(0, 0, 0);
-        lerpCamRef.current = new THREE.Vector3(20, 35, 20);
+        const focusTarget = new THREE.Vector3(0, 0, 0);
+        const first = junctionObjectRefs.current.find(
+            g => g.userData.intersectionStructure || g.userData.roundaboutStructure
+        );
+        if (first) first.getWorldPosition(focusTarget);
+        lerpTargetRef.current = focusTarget;
+        lerpCamRef.current = focusTarget.clone().add(ISO_OFFSET);
         isLerpingRef.current = true;
     };
 
     // Pending top-down target: set by the selection effect, consumed by useFrame
     // once the canvas has finished resizing after the panel transition.
     const pendingTopDownRef = useRef<{ id: string } | null>(null);
-    const pendingCanvasWidth = useRef<number>(0);
     const pendingFrameCount = useRef<number>(0);
 
-    // ── Select mode: top-down view when an object is selected,
-    //    restore isometric when deselected.
+    // ── Build mode: top-down view centered on origin (or selected object).
+    //    When an object is selected via right-click, zoom to it;
+    //    when deselected, return to top-down overview.
     useEffect(() => {
-        if (toolMode !== "select") return;
+        if (toolMode !== "build") return;
 
-        if (selectedObjects.length === 0) {
+        if (controlsRef.current) controlsRef.current.enabled = false;
+
+        if (selectedObjects.length > 0) {
+            pendingFrameCount.current = 0;
+            pendingTopDownRef.current = { id: selectedObjects[0] };
+        } else {
             pendingTopDownRef.current = null;
-            // When deselecting in select mode, go back to top-down overview (not isometric)
-            if (controlsRef.current) controlsRef.current.enabled = false;
             const height = getTopDownHeight(80);
             camera.up.set(0, 0, -1);
             isTopDownRef.current = true;
             lerpTargetRef.current = new THREE.Vector3(0, 0, 0);
             lerpCamRef.current = new THREE.Vector3(0.001, height, 0);
             isLerpingRef.current = true;
-            return;
         }
-
-        if (controlsRef.current) controlsRef.current.enabled = false;
-
-        // Record the current canvas width so useFrame knows to wait for it to change
-        pendingCanvasWidth.current = gl.domElement.clientWidth;
-        pendingFrameCount.current = 0;
-        pendingTopDownRef.current = { id: selectedObjects[0] };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedObjects, toolMode]);
-
-    // ── Build mode: top-down view centered on origin, zoom+pan allowed.
-    useEffect(() => {
-        if (toolMode !== "build") return;
-
-        if (controlsRef.current) controlsRef.current.enabled = false;
-
-        const height = getTopDownHeight(80);
-
-        camera.up.set(0, 0, -1);
-        isTopDownRef.current = true;
-
-        lerpTargetRef.current = new THREE.Vector3(0, 0, 0);
-        lerpCamRef.current = new THREE.Vector3(0.001, height, 0);
-        isLerpingRef.current = true;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [toolMode]);
 
     // ── View mode: restore isometric orbit view
     useEffect(() => {
@@ -184,11 +168,12 @@ const Scene = forwardRef<SceneHandle>(function Scene(_, ref) {
         };
     }, [camera, gl, junctionObjectRefs, toolMode]);
 
-    // ── Select mode: right-click on an object to select it (camera zoom handled by selection effect)
+    // ── Build mode: right-click on an object to select it (camera zoom handled by selection effect)
     useEffect(() => {
         const handleContextMenu = (e: MouseEvent) => {
-            if (toolMode !== "select") return;
+            if (toolMode !== "build") return;
             if (simIsRunning) return;
+            if (isConfigConfirmed) return;
 
             const rect = gl.domElement.getBoundingClientRect();
             const mouse = new THREE.Vector2(
@@ -230,19 +215,17 @@ const Scene = forwardRef<SceneHandle>(function Scene(_, ref) {
         return () => {
             gl.domElement.removeEventListener("contextmenu", handleContextMenu);
         };
-    }, [camera, gl, junctionObjectRefs, toolMode, simIsRunning, setSelectedObjects]);
+    }, [camera, gl, junctionObjectRefs, toolMode, simIsRunning, isConfigConfirmed, setSelectedObjects]);
 
 
     useFrame((_, delta) => {
-        // ── Pending top-down: wait for the canvas to resize (panel transition)
-        //    or fall back after ~20 frames if the width doesn't change (panel already open).
+        // ── Pending top-down: wait for the CSS panel transition to finish
+        //    before computing camera position (transition is 300ms).
         if (pendingTopDownRef.current) {
             pendingFrameCount.current++;
-            const currentWidth = gl.domElement.clientWidth;
-            const widthChanged = currentWidth !== pendingCanvasWidth.current;
-            const timedOut = pendingFrameCount.current > 20; // ~333ms at 60fps
+            const ready = pendingFrameCount.current > 30; // ~500ms at 60fps, exceeds 300ms transition
 
-            if (widthChanged || timedOut) {
+            if (ready) {
                 // Canvas has resized — now compute the camera position
                 const pending = pendingTopDownRef.current;
                 pendingTopDownRef.current = null;
@@ -287,10 +270,10 @@ const Scene = forwardRef<SceneHandle>(function Scene(_, ref) {
         const targetDone = controls.target.distanceTo(lerpTargetRef.current) < 0.05;
         const camDone = camera.position.distanceTo(lerpCamRef.current) < 0.05;
 
-        if (targetDone && camDone) {
+        if (targetDone && camDone) {                                            
             controls.target.copy(lerpTargetRef.current);
             camera.position.copy(lerpCamRef.current);
-            if (isTopDownRef.current && (toolMode === "build" || toolMode === "select")) {
+            if (isTopDownRef.current && toolMode === "build") {
                 // In top-down build/select: enable controls for zoom + pan only
                 controls.enableRotate = false;
                 controls.enableZoom = true;
@@ -339,7 +322,7 @@ const Scene = forwardRef<SceneHandle>(function Scene(_, ref) {
                 <>
                     <Grid
                         position={[0, 0, 0]}
-                        args={[200, 200]}
+                        args={[1000, 1000]}
                         cellSize={1}
                         cellThickness={0.6}
                         cellColor="#27272a"

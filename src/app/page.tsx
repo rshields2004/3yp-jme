@@ -30,7 +30,7 @@ function AppContent({ onExit }: { onExit: () => void }) {
     const panelOpen = selectedObjects.length > 0;
     const [navDropdownHeight, setNavDropdownHeight] = useState(0);
     const HEADER_H = 44;
-    const canvasTop = navDropdownHeight > 0 ? `${HEADER_H + navDropdownHeight}px` : "0";
+    const canvasTop = `${HEADER_H + navDropdownHeight}px`;
     const sceneRef = useRef<SceneHandle>(null);
     return (
         <>

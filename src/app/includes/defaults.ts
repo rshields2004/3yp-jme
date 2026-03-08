@@ -2,6 +2,7 @@ import { IntersectionConfig } from "./types/intersection";
 import { RoundaboutConfig } from "./types/roundabout";
 import { JunctionConfig, LaneLineProperties } from "./types/types";
 import { SimConfig } from "./types/simulation";
+import { defaultCarClassOverrides } from "./types/carTypes";
 
 export const defaultLaneProperties: LaneLineProperties = {
     pattern: "solid",
@@ -48,7 +49,9 @@ export const defaultSimConfig: SimConfig = {
             "minibus", "mpv", "normal", "pickup", "pickup-small", "station", "van"
         ],
         yOffset: 0.01,    
-    },   
+    },
+
+    carClassOverrides: defaultCarClassOverrides(),
     
     controllers: {
         roundabout: {

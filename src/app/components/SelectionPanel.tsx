@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useJModellerContext } from "../context/JModellerContext";
 import { defaultExitConfig } from "../includes/defaults";
 import { ExitConfig, ExitRef } from "../includes/types/types";
-import { ChevronDown, Trash2 } from "lucide-react";
+import { ChevronDown, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Separator } from "@/components/ui/separator";
@@ -47,12 +47,6 @@ function ObjectConfig({ objId }: { objId: string }) {
 
     const obj = junction.junctionObjects.find(o => o.id === objId);
     if (!obj) return null;
-
-    const isExitConnected = (exitIndex: number) =>
-        junction.junctionLinks.some(l =>
-            (l.objectPair[0].structureID === objId && l.objectPair[0].exitIndex === exitIndex) ||
-            (l.objectPair[1].structureID === objId && l.objectPair[1].exitIndex === exitIndex)
-        );
 
     // ── handlers ─────────────────────────────────────────────────────────
 
@@ -187,11 +181,6 @@ function ObjectConfig({ objId }: { objId: string }) {
 
     // ── render ────────────────────────────────────────────────────────────
 
-    const allConnected = isConfigConfirmed && obj.config.exitConfig.every((_, j) => isExitConnected(j));
-    const visibleExits = obj.config.exitConfig
-        .map((exit, j) => ({ exit, index: j }))
-        .filter(({ index: j }) => !isConfigConfirmed || !isExitConnected(j));
-
     return (
         <fieldset disabled={simIsRunning} className="border-none p-0 m-0">
             {/* Header row */}
@@ -236,20 +225,14 @@ function ObjectConfig({ objId }: { objId: string }) {
             )}
 
             {/* All-connected warning */}
-            {allConnected && (
-                <div className="px-2.5 py-2 bg-red-500/[0.07] border border-red-500/20 rounded text-xs text-red-400/90 mb-2.5">
-                    All exits are linked — no spawn points available.
-                </div>
-            )}
 
             {/* Per-exit config */}
-            {visibleExits.map(({ exit, index: j }) => (
+            {obj.config.exitConfig.map((exit, j) => (
                 <ExitRow
                     key={j}
                     j={j}
                     exit={exit}
                     obj={obj}
-                    isConfigConfirmed={isConfigConfirmed}
                     globalSpawnRate={simConfig.spawning.spawnRate}
                     onLaneCount={v => handleLaneCount(j, v)}
                     onExitLength={v => handleExitLength(j, v)}
@@ -264,11 +247,10 @@ function ObjectConfig({ objId }: { objId: string }) {
 
 // ── exit row ─────────────────────────────────────────────────────────────────
 
-function ExitRow({ j, exit, obj, isConfigConfirmed, globalSpawnRate, onLaneCount, onExitLength, onNumLanesIn, onSpawnRate, onClearSpawnRate }: {
+function ExitRow({ j, exit, obj, globalSpawnRate, onLaneCount, onExitLength, onNumLanesIn, onSpawnRate, onClearSpawnRate }: {
     j: number;
     exit: ExitConfig;
     obj: ReturnType<typeof useJModellerContext>["junction"]["junctionObjects"][number];
-    isConfigConfirmed: boolean;
     globalSpawnRate: number;
     onLaneCount: (v: number) => void;
     onExitLength: (v: number) => void;
@@ -286,11 +268,6 @@ function ExitRow({ j, exit, obj, isConfigConfirmed, globalSpawnRate, onLaneCount
             >
                 <span className="text-[13px] tracking-[0.08em]">
                     Exit {j}
-                    {isConfigConfirmed && (
-                        <span className="text-[11px] text-white/75 ml-1.5">
-                            {obj.id.slice(0, 6)}-{j}
-                        </span>
-                    )}
                 </span>
                 <ChevronDown
                     size={14}
@@ -300,33 +277,25 @@ function ExitRow({ j, exit, obj, isConfigConfirmed, globalSpawnRate, onLaneCount
 
             {open && (
                 <div className="px-2.5 pb-2 pt-2.5">
-                    {!isConfigConfirmed && (
-                        <>
-                            <SliderRow label="Lanes" min={2} max={obj.config.numExits * 2} step={1} value={exit.laneCount} onChange={onLaneCount} display={String(exit.laneCount)} />
-                            <SliderRow label="Length" min={obj.type === "roundabout" ? 20 : 10} max={70} step={1} value={exit.exitLength} onChange={onExitLength} display={String(exit.exitLength)} />
-                            <SliderRow label="Lanes in" min={1} max={exit.laneCount - 1} step={1} value={exit.numLanesIn} onChange={onNumLanesIn} display={String(exit.numLanesIn)} />
-                        </>
-                    )}
-                    {isConfigConfirmed && (
-                        <div>
-                            <SliderRow
-                                label="Spawn Rate Override (veh/s)"
-                                min={0} max={10} step={0.1}
-                                value={exit.spawnRate ?? globalSpawnRate}
-                                onChange={onSpawnRate}
-                                display={exit.spawnRate != null ? exit.spawnRate.toFixed(1) : `${globalSpawnRate.toFixed(1)} (global)`}
-                            />
-                            {exit.spawnRate != null && (
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={onClearSpawnRate}
-                                    className="text-[11px] h-auto py-1 px-2 bg-white/[0.04] border-white/[0.08] text-white/75 hover:bg-white/[0.08] hover:text-white"
-                                >
-                                    Reset to global
-                                </Button>
-                            )}
-                        </div>
+                    <SliderRow label="Lanes" min={2} max={obj.config.numExits * 2} step={1} value={exit.laneCount} onChange={onLaneCount} display={String(exit.laneCount)} />
+                    <SliderRow label="Length" min={obj.type === "roundabout" ? 20 : 10} max={70} step={1} value={exit.exitLength} onChange={onExitLength} display={String(exit.exitLength)} />
+                    <SliderRow label="Lanes in" min={1} max={exit.laneCount - 1} step={1} value={exit.numLanesIn} onChange={onNumLanesIn} display={String(exit.numLanesIn)} />
+                    <SliderRow
+                        label="Spawn Rate (veh/s)"
+                        min={0} max={10} step={0.1}
+                        value={exit.spawnRate ?? globalSpawnRate}
+                        onChange={onSpawnRate}
+                        display={exit.spawnRate != null ? exit.spawnRate.toFixed(1) : `${globalSpawnRate.toFixed(1)} (global)`}
+                    />
+                    {exit.spawnRate != null && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={onClearSpawnRate}
+                            className="text-[11px] h-auto py-1 px-2 bg-white/[0.04] border-white/[0.08] text-white/75 hover:bg-white/[0.08] hover:text-white"
+                        >
+                            Reset to global
+                        </Button>
                     )}
                 </div>
             )}
@@ -382,6 +351,15 @@ export default function SelectionPanel() {
                             size={16}
                             className={cn("transition-transform duration-150", collapsed && "-rotate-90")}
                         />
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-6 text-white/75 hover:text-white hover:bg-white/[0.07]"
+                        onClick={() => setSelectedObjects([])}
+                        title="Deselect (Esc)"
+                    >
+                        <X size={16} />
                     </Button>
                 </div>
             </div>

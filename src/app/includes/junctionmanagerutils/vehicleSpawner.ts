@@ -4,7 +4,7 @@ import { Vehicle } from "./vehicle";
 import { JunctionConfig } from "../types/types";
 import { SimConfig, Route, Tuple3 } from "../types/simulation";
 import { RoundaboutController } from "./controllers/roundaboutController";
-import { SeededRNG, rngForEntry, CarClass, bodyTypeForModelIndex, hashString } from "../types/carTypes";
+import { SeededRNG, rngForEntry, CarClass, bodyTypeForModelIndex, hashString, getEffectiveCarClasses } from "../types/carTypes";
 import { laneKeyForSegment } from "./helpers/segmentHelpers";
 
 
@@ -329,7 +329,8 @@ function trySpawnFromEntry(
     // Even if the spawn fails (no space), these values are consumed
     // so the sequence stays aligned.
     const rRouteIdx   = rng.nextInt(routesForEntry.length);
-    const rCarClass   = rng.pickCarClass(cfg.rendering.enabledCarClasses);
+    const effectiveClasses = getEffectiveCarClasses(cfg.carClassOverrides);
+    const rCarClass   = rng.pickCarClass(cfg.rendering.enabledCarClasses, effectiveClasses);
     const rColourIdx  = rng.next();
     const rVariation0 = rng.next();
     const rVariation1 = rng.next();

@@ -16,6 +16,14 @@ export type CarClass = {
     weight: number;
 };
 
+/** Overridable per-class values stored in SimConfig. */
+export type CarClassOverride = {
+    speedFactor: number;
+    accelFactor: number;
+    decelFactor: number;
+    weight: number;
+};
+
 /**
  * Car classes indexed by body type.
  * Speed / accel / decel factors are *multipliers* applied to the
@@ -40,6 +48,23 @@ export const carClasses: CarClass[] = [
 const classByBodyType = new Map<string, CarClass>(
     carClasses.map(c => [c.bodyType, c])
 );
+
+/** Build default overrides from the static carClasses array. */
+export function defaultCarClassOverrides(): Record<string, CarClassOverride> {
+    const out: Record<string, CarClassOverride> = {};
+    for (const c of carClasses) {
+        out[c.bodyType] = { speedFactor: c.speedFactor, accelFactor: c.accelFactor, decelFactor: c.decelFactor, weight: c.weight };
+    }
+    return out;
+}
+
+/** Merge base carClasses with per-class overrides to produce effective classes. */
+export function getEffectiveCarClasses(overrides: Record<string, CarClassOverride>): CarClass[] {
+    return carClasses.map(c => {
+        const o = overrides[c.bodyType];
+        return o ? { ...c, ...o } : c;
+    });
+}
 
 /**
  * Derive the body type string from a model index into `carFiles`.
@@ -93,12 +118,14 @@ export class SeededRNG {
     /**
      * Pick a CarClass based on weights using this RNG,
      * filtered to only the enabled body types.
+     * Pass effectiveClasses to use config-overridden values.
      */
-    pickCarClass(enabledBodyTypes?: string[]): CarClass {
+    pickCarClass(enabledBodyTypes?: string[], effectiveClasses?: CarClass[]): CarClass {
+        const base = effectiveClasses ?? carClasses;
         const pool = enabledBodyTypes && enabledBodyTypes.length > 0
-            ? carClasses.filter(c => enabledBodyTypes.includes(c.bodyType))
-            : carClasses;
-        if (pool.length === 0) return carClasses[0]; // fallback
+            ? base.filter(c => enabledBodyTypes.includes(c.bodyType))
+            : base;
+        if (pool.length === 0) return base[0]; // fallback
         const totalWeight = pool.reduce((s, c) => s + c.weight, 0);
         let r = this.next() * totalWeight;
         for (const cc of pool) {

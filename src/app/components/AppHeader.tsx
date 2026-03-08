@@ -10,7 +10,7 @@ import { carClasses } from "../includes/types/carTypes";
 import {
     Play, Pause, Square, Check, RotateCcw,
     ChevronDown, Link2, Trash2, PlusSquare, Copy, LogOut, Settings2,
-    MousePointer2, Eye, Hammer
+    Eye, Hammer
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,10 +60,12 @@ function DropdownPanel({
     children,
     anchor = "top",
     panelOpen = false,
+    fullHeight = false,
 }: {
     children: React.ReactNode;
     anchor?: "top" | "bottom";
     panelOpen?: boolean;
+    fullHeight?: boolean;
 }) {
     const isBottom = anchor === "bottom";
     return (
@@ -75,7 +77,13 @@ function DropdownPanel({
                     ? "bottom-0 border-t border-white/[0.08] shadow-[0_-8px_32px_rgba(0,0,0,0.5)]"
                     : "top-[44px] border-b border-white/[0.08] shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
             )}
-            style={{ maxHeight: "22vh", zIndex: 49, left: panelOpen ? "25vw" : "0", transition: "left 0.3s cubic-bezier(0.4, 0, 0.2, 1)" }}
+            style={{
+                maxHeight: fullHeight ? "calc(100vh - 44px)" : "22vh",
+                ...(fullHeight && !isBottom ? { bottom: 0 } : {}),
+                zIndex: 49,
+                left: panelOpen ? "25vw" : "0",
+                transition: "left 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+            }}
             data-dropdown-panel
         >
             {children}
@@ -139,7 +147,7 @@ function ActionBtn({
 
 // ─── main component ──────────────────────────────────────────────────────────
 
-type MenuId = "junction" | "session" | "config" | "modes" | null;
+type MenuId = "session" | "config" | "modes" | null;
 
 export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeightChangeAction }: { onExitAction?: () => void; panelOpen?: boolean; onMenuHeightChangeAction?: (height: number) => void }) {
     const [openMenu, setOpenMenu] = useState<MenuId>(null);
@@ -168,7 +176,7 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
         });
         return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [openMenu, onMenuHeightChangeAction, selectedExits.length, toolMode]);
+    }, [openMenu, onMenuHeightChangeAction, selectedExits.length, toolMode, junction.junctionLinks.length]);
 
     // Keep the Modes dropdown pinned open while in Build mode
     useEffect(() => {
@@ -383,18 +391,21 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
                         className="h-[26px] w-auto mr-4 select-none block"
                     />
 
-                    {(["junction", "session", "config", "modes"] as MenuId[]).map(id => {
-                        const label = id!.charAt(0).toUpperCase() + id!.slice(1);
+                    {(["session", "config", "modes"] as MenuId[]).map(id => {
+                        const label = id === "config" ? "Sim Config" : id!.charAt(0).toUpperCase() + id!.slice(1);
                         const isOpen = openMenu === id;
+                        const disabled = id === "config" && !isConfigConfirmed;
                         return (
                             <Button
                                 key={id}
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => toggleMenu(id)}
+                                onClick={() => !disabled && toggleMenu(id)}
+                                disabled={disabled}
                                 className={cn(
                                     "gap-1 px-2.5 text-[12px] tracking-[0.15em] uppercase text-white/75 hover:text-white hover:bg-white/[0.07] rounded",
-                                    isOpen && "bg-white/[0.07] text-white"
+                                    isOpen && "bg-white/[0.07] text-white",
+                                    disabled && "opacity-40 cursor-not-allowed hover:bg-transparent hover:text-white/75"
                                 )}
                             >
                                 {label}
@@ -475,45 +486,6 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
                     </IconBtn>
                 </div>
             </div>
-
-            {/* ── JUNCTION dropdown ── */}
-            {openMenu === "junction" && (
-                <DropdownPanel panelOpen={isPanelOpen}>
-                    <div className="flex items-start">
-                        <div className="flex-1 min-w-0">
-                            <SectionTitle>Current Links</SectionTitle>
-                            {junction.junctionLinks.length === 0 ? (
-                                <p className="text-xs text-white/75 m-0">No links yet. Use <span className="text-white/90 font-semibold">Build</span> mode to add junctions and links.</p>
-                            ) : (
-                                <div className="grid gap-1" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
-                                    {junction.junctionLinks.map(link => {
-                                        const objA = junction.junctionObjects.find(o => o.id === link.objectPair[0].structureID);
-                                        const objB = junction.junctionObjects.find(o => o.id === link.objectPair[1].structureID);
-                                        return (
-                                            <div key={link.id} className="flex items-center justify-between px-2 py-1.5 bg-white/[0.04] border border-white/[0.08] rounded text-xs">
-                                                <span className="text-white/92">
-                                                    {objA?.name ?? "?"} Exit {link.objectPair[0].exitIndex}
-                                                    <span className="opacity-40 mx-1.5">↔</span>
-                                                    {objB?.name ?? "?"} Exit {link.objectPair[1].exitIndex}
-                                                </span>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="size-6 text-red-400/60 hover:text-red-400 hover:bg-red-500/10 ml-2"
-                                                    onClick={() => removeLink(link.id)}
-                                                    disabled={isConfigConfirmed || simIsRunning || isClientConnected}
-                                                >
-                                                    <Trash2 size={13} />
-                                                </Button>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </DropdownPanel>
-            )}
 
             {/* ── SESSION dropdown ── */}
             {openMenu === "session" && (
@@ -621,9 +593,9 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
                 </DropdownPanel>
             )}
 
-            {/* ── CONFIG dropdown ── */}
+            {/* ── SIM CONFIG dropdown ── */}
             {openMenu === "config" && isConfigConfirmed && !simIsRunning && (
-                <DropdownPanel panelOpen={isPanelOpen}>
+                <DropdownPanel panelOpen={isPanelOpen} fullHeight>
                     {isClientConnected && (
                         <p className="text-xs text-zinc-500 mb-3 tracking-wide">
                             VIEW ONLY — config is controlled by the host
@@ -663,31 +635,6 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
                             <SliderRowUi label="Stop Line Offset" min={0} max={2} step={0.01} value={simConfig.spacing.stopLineOffset} onChange={v => handleN(["spacing", "stopLineOffset"], v)} displayValue={simConfig.spacing.stopLineOffset.toFixed(2)} />
                             <SectionTitle>Rendering</SectionTitle>
                             <SliderRowUi label="Y Offset" min={0} max={1} step={0.01} value={simConfig.rendering.yOffset} onChange={v => handleN(["rendering", "yOffset"], v)} displayValue={simConfig.rendering.yOffset.toFixed(2)} />
-                            <SectionTitle>Car Classes</SectionTitle>
-                            <div className="grid gap-y-1.5" style={{ gridTemplateColumns: "1fr 1fr" }}>
-                                {carClasses.map(cc => {
-                                    const enabled = simConfig.rendering.enabledCarClasses.includes(cc.bodyType);
-                                    return (
-                                        <div key={cc.bodyType} className="flex items-center gap-1.5">
-                                            <Checkbox
-                                                id={`cc-${cc.bodyType}`}
-                                                checked={enabled}
-                                                onCheckedChange={() => {
-                                                    setSimConfig(prev => {
-                                                        const cur = prev.rendering.enabledCarClasses;
-                                                        const next = enabled ? cur.filter(b => b !== cc.bodyType) : [...cur, cc.bodyType];
-                                                        if (next.length === 0) return prev;
-                                                        return { ...prev, rendering: { ...prev.rendering, enabledCarClasses: next } };
-                                                    });
-                                                }}
-                                            />
-                                            <Label htmlFor={`cc-${cc.bodyType}`} className={cn("text-xs cursor-pointer", enabled ? "text-white/92" : "text-white/50")}>
-                                                {cc.bodyType}
-                                            </Label>
-                                        </div>
-                                    );
-                                })}
-                            </div>
                         </div>
                         {/* col 3: roundabout controller */}
                         <div>
@@ -713,14 +660,98 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
                             <SliderRowUi label="All-Red Time (s)" min={0.1} max={5} step={0.1} value={simConfig.controllers.intersection.intersectionAllRedTime} onChange={v => handleN(["controllers", "intersection", "intersectionAllRedTime"], v)} displayValue={simConfig.controllers.intersection.intersectionAllRedTime.toFixed(1)} />
                         </div>
                     </div>
+
+                    {/* ── Car Classes table ── */}
+                    <div className={cn("mt-6", isClientConnected && "pointer-events-none opacity-55")}>
+                        <SectionTitle>Car Classes</SectionTitle>
+                        <table className="w-full text-xs border-collapse">
+                            <thead>
+                                <tr className="text-white/60 border-b border-white/[0.08]">
+                                    <th className="text-left font-normal py-1.5 pr-3">Enabled</th>
+                                    <th className="text-left font-normal py-1.5 pr-3">Class</th>
+                                    <th className="text-left font-normal py-1.5 pr-3">Speed Factor</th>
+                                    <th className="text-left font-normal py-1.5 pr-3">Accel Factor</th>
+                                    <th className="text-left font-normal py-1.5 pr-3">Decel Factor</th>
+                                    <th className="text-left font-normal py-1.5">Weight</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {carClasses.map(cc => {
+                                    const enabled = simConfig.rendering.enabledCarClasses.includes(cc.bodyType);
+                                    const ovr = simConfig.carClassOverrides[cc.bodyType] ?? { speedFactor: cc.speedFactor, accelFactor: cc.accelFactor, decelFactor: cc.decelFactor, weight: cc.weight };
+                                    const setOvr = (field: string, value: number) =>
+                                        setSimConfig(prev => ({
+                                            ...prev,
+                                            carClassOverrides: {
+                                                ...prev.carClassOverrides,
+                                                [cc.bodyType]: { ...prev.carClassOverrides[cc.bodyType], [field]: value },
+                                            },
+                                        }));
+                                    return (
+                                        <tr key={cc.bodyType} className={cn("border-b border-white/[0.04]", !enabled && "opacity-40")}>
+                                            <td className="py-1.5 pr-3">
+                                                <Checkbox
+                                                    id={`cc-${cc.bodyType}`}
+                                                    checked={enabled}
+                                                    onCheckedChange={() => {
+                                                        setSimConfig(prev => {
+                                                            const cur = prev.rendering.enabledCarClasses;
+                                                            const next = enabled ? cur.filter(b => b !== cc.bodyType) : [...cur, cc.bodyType];
+                                                            if (next.length === 0) return prev;
+                                                            return { ...prev, rendering: { ...prev.rendering, enabledCarClasses: next } };
+                                                        });
+                                                    }}
+                                                />
+                                            </td>
+                                            <td className="py-1.5 pr-3">
+                                                <Label htmlFor={`cc-${cc.bodyType}`} className={cn("text-xs cursor-pointer", enabled ? "text-white/92" : "text-white/50")}>
+                                                    {cc.bodyType}
+                                                </Label>
+                                            </td>
+                                            <td className="py-1.5 pr-3">
+                                                <Input
+                                                    type="number" min={0.1} max={3} step={0.05}
+                                                    value={ovr.speedFactor}
+                                                    onChange={e => setOvr("speedFactor", parseFloat(e.target.value) || 0)}
+                                                    className="h-7 w-20 text-xs bg-white/[0.04] border-white/[0.12] text-white/92 tabular-nums"
+                                                />
+                                            </td>
+                                            <td className="py-1.5 pr-3">
+                                                <Input
+                                                    type="number" min={0.1} max={3} step={0.05}
+                                                    value={ovr.accelFactor}
+                                                    onChange={e => setOvr("accelFactor", parseFloat(e.target.value) || 0)}
+                                                    className="h-7 w-20 text-xs bg-white/[0.04] border-white/[0.12] text-white/92 tabular-nums"
+                                                />
+                                            </td>
+                                            <td className="py-1.5 pr-3">
+                                                <Input
+                                                    type="number" min={0.1} max={3} step={0.05}
+                                                    value={ovr.decelFactor}
+                                                    onChange={e => setOvr("decelFactor", parseFloat(e.target.value) || 0)}
+                                                    className="h-7 w-20 text-xs bg-white/[0.04] border-white/[0.12] text-white/92 tabular-nums"
+                                                />
+                                            </td>
+                                            <td className="py-1.5">
+                                                <Input
+                                                    type="number" min={0} max={100} step={1}
+                                                    value={ovr.weight}
+                                                    onChange={e => setOvr("weight", parseFloat(e.target.value) || 0)}
+                                                    className="h-7 w-20 text-xs bg-white/[0.04] border-white/[0.12] text-white/92 tabular-nums"
+                                                />
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
                 </DropdownPanel>
             )}
-            {openMenu === "config" && (!isConfigConfirmed || simIsRunning) && (
+            {openMenu === "config" && simIsRunning && (
                 <DropdownPanel panelOpen={isPanelOpen}>
                     <p className="text-[13px] text-white/75 m-0">
-                        {simIsRunning
-                            ? "Config is locked while the simulation is running."
-                            : "Confirm the junction config first to access simulation settings."}
+                        Config is locked while the simulation is running.
                     </p>
                 </DropdownPanel>
             )}
@@ -850,47 +881,63 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
                             <Hammer size={14} />
                             Build
                         </button>
-                        <button
-                            onClick={() => { setToolMode("select"); setSelectedObjects([]); setSelectedExits([]); setOpenMenu(null); }}
-                            disabled={simIsRunning}
-                            className={cn(
-                                "flex items-center gap-2 px-4 py-2.5 rounded border text-[12px] tracking-[0.12em] uppercase transition-colors",
-                                toolMode === "select"
-                                    ? "bg-white/[0.12] border-white/30 text-white"
-                                    : "bg-white/[0.03] border-white/[0.08] text-white/60 hover:bg-white/[0.07] hover:text-white/90",
-                                simIsRunning && "opacity-40 cursor-not-allowed"
-                            )}
-                        >
-                            <MousePointer2 size={14} />
-                            Select
-                        </button>
                     </div>
                     <p className="text-[11px] text-white/50 leading-relaxed mb-3">
                         {toolMode === "view"
                             ? "Orbit camera freely. Double-click a junction to centre on it."
-                            : toolMode === "build"
-                            ? "Top-down view. Place junctions, drag to reposition, and link exits."
-                            : "Top-down view. Right-click a junction to zoom in and edit its config."}
+                            : "Top-down view. Place junctions, drag to reposition, link exits, and right-click to edit config."}
                     </p>
 
                     {/* ── Build-mode inline tools ── */}
                     {toolMode === "build" && !simIsRunning && !isConfigConfirmed && (
-                        <>
-                            <SectionTitle>Build Tools</SectionTitle>
-                            <div className="flex gap-1.5 mb-3 flex-wrap">
-                                <ActionBtn onClick={() => addNewIntersection()} disabled={isClientConnected}>
-                                    <PlusSquare size={14} /> Intersection
-                                </ActionBtn>
-                                <ActionBtn onClick={() => addNewRoundabout()} disabled={isClientConnected}>
-                                    <PlusSquare size={14} /> Roundabout
-                                </ActionBtn>
-                                {selectedExits.length === 2 && (
-                                    <ActionBtn onClick={() => addNewLink()} disabled={isClientConnected}>
-                                        <Link2 size={14} /> Link Exits ({selectedExits.map(e => `exit ${e.exitIndex}`).join(" ↔ ")})
+                        <div className="flex gap-6">
+                            <div className="flex-1 min-w-0">
+                                <SectionTitle>Build Tools</SectionTitle>
+                                <div className="flex gap-1.5 mb-3 flex-wrap">
+                                    <ActionBtn onClick={() => addNewIntersection()} disabled={isClientConnected}>
+                                        <PlusSquare size={14} /> Intersection
                                     </ActionBtn>
-                                )}
+                                    <ActionBtn onClick={() => addNewRoundabout()} disabled={isClientConnected}>
+                                        <PlusSquare size={14} /> Roundabout
+                                    </ActionBtn>
+                                    {selectedExits.length === 2 && (
+                                        <ActionBtn onClick={() => addNewLink()} disabled={isClientConnected}>
+                                            <Link2 size={14} /> Link Exits ({selectedExits.map(e => `exit ${e.exitIndex}`).join(" ↔ ")})
+                                        </ActionBtn>
+                                    )}
+                                </div>
                             </div>
-                        </>
+
+                            {junction.junctionLinks.length > 0 && (
+                                <div className="flex-1 min-w-0">
+                                    <SectionTitle>Links</SectionTitle>
+                                    <div className="grid gap-1" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
+                                        {junction.junctionLinks.map(link => {
+                                            const objA = junction.junctionObjects.find(o => o.id === link.objectPair[0].structureID);
+                                            const objB = junction.junctionObjects.find(o => o.id === link.objectPair[1].structureID);
+                                            return (
+                                                <div key={link.id} className="flex items-center justify-between px-2 py-1.5 bg-white/[0.04] border border-white/[0.08] rounded text-xs">
+                                                    <span className="text-white/92">
+                                                        {objA?.name ?? "?"} Exit {link.objectPair[0].exitIndex}
+                                                        <span className="opacity-40 mx-1.5">↔</span>
+                                                        {objB?.name ?? "?"} Exit {link.objectPair[1].exitIndex}
+                                                    </span>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="size-6 text-red-400/60 hover:text-red-400 hover:bg-red-500/10 ml-2"
+                                                        onClick={() => removeLink(link.id)}
+                                                        disabled={isClientConnected}
+                                                    >
+                                                        <Trash2 size={13} />
+                                                    </Button>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     )}
                 </DropdownPanel>
             )}

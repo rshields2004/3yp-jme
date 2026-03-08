@@ -98,8 +98,8 @@ export type JModellerState = {
     simConfig: SimConfig;
     setSimConfig: React.Dispatch<React.SetStateAction<SimConfig>>;
 
-    toolMode: "view" | "build" | "select";
-    setToolMode: React.Dispatch<React.SetStateAction<"view" | "build" | "select">>;
+    toolMode: "view" | "build";
+    setToolMode: React.Dispatch<React.SetStateAction<"view" | "build">>;
 };
 
 

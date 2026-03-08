@@ -1,5 +1,6 @@
 import { Vehicle } from "../junctionmanagerutils/vehicle";
 import { JunctionObjectTypes } from "./types";
+import { CarClassOverride } from "./carTypes";
 
 
 export type Tuple3 = [number, number, number];
@@ -93,6 +94,7 @@ export type SimulationStats = {
     };
 };
 
+
 export type SimConfig = {
     spawning: {
         spawnRate: number;  // default vehicles per second per entry
@@ -122,13 +124,15 @@ export type SimConfig = {
         yOffset: number;
     };
 
+    carClassOverrides: Record<string, CarClassOverride>;
+
     controllers: {
         roundabout: {
-            roundaboutMinGap: number;           // Min distance to any circulating vehicle
-            roundaboutMinTimeGap: number;       // Seconds buffer for approaching vehicles
-            roundaboutSafeEntryDist: number;    // Check approaching vehicles within this distance
-            roundaboutEntryTimeout: number;     // Seconds before a conflicting entry expires
-            roundaboutMinAngularSep: number;    // Radians — min angular separation between entries
+            roundaboutMinGap: number;
+            roundaboutMinTimeGap: number;
+            roundaboutSafeEntryDist: number;
+            roundaboutEntryTimeout: number;
+            roundaboutMinAngularSep: number;
         };
         intersection: {
             intersectionGreenTime: number;

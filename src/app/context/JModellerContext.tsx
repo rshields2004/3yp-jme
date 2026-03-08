@@ -29,7 +29,7 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
     const [isConfigConfirmed, setIsConfigConfirmed] = useState<boolean>(false);
     const [simConfig, setSimConfig] = useState(defaultSimConfig);
     const [objectCounter, setObjectCounter] = useState(0);
-    const [toolMode, setToolMode] = useState<"view" | "build" | "select">("view");
+    const [toolMode, setToolMode] = useState<"view" | "build">("view");
 
     // ── P2P: receive config from host ─────────────────────────────────────
     const { connections, isHost } = usePeer();
@@ -246,6 +246,9 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
 
     const confirmConfig = () => {
         setIsConfigConfirmed(true);
+        setToolMode("view");
+        setSelectedObjects([]);
+        setSelectedExits([]);
     };
 
     const resetConfig = () => {
