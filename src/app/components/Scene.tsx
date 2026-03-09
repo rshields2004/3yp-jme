@@ -168,9 +168,9 @@ const Scene = forwardRef<SceneHandle>(function Scene(_, ref) {
         };
     }, [camera, gl, junctionObjectRefs, toolMode]);
 
-    // ── Build mode: right-click on an object to select it (camera zoom handled by selection effect)
+    // ── Build mode: double-click on an object to select it (camera zoom handled by selection effect)
     useEffect(() => {
-        const handleContextMenu = (e: MouseEvent) => {
+        const handleDblClick = (e: MouseEvent) => {
             if (toolMode !== "build") return;
             if (simIsRunning) return;
             if (isConfigConfirmed) return;
@@ -211,9 +211,9 @@ const Scene = forwardRef<SceneHandle>(function Scene(_, ref) {
             });
         };
 
-        gl.domElement.addEventListener("contextmenu", handleContextMenu);
+        gl.domElement.addEventListener("dblclick", handleDblClick);
         return () => {
-            gl.domElement.removeEventListener("contextmenu", handleContextMenu);
+            gl.domElement.removeEventListener("dblclick", handleDblClick);
         };
     }, [camera, gl, junctionObjectRefs, toolMode, simIsRunning, isConfigConfirmed, setSelectedObjects]);
 
@@ -331,7 +331,6 @@ const Scene = forwardRef<SceneHandle>(function Scene(_, ref) {
                         sectionColor="#3f3f46"
                         fadeDistance={400}
                         fadeStrength={3}
-                        infiniteGrid
                     />
                     <mesh position={[0, 0, 0]}>
                         <sphereGeometry args={[0.12, 16, 16]} />

@@ -170,6 +170,9 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
         toolMode, setToolMode,
     } = useJModellerContext();
 
+    const statsRef = useRef(stats);
+    statsRef.current = stats;
+
     useEffect(() => {
         if (!openMenu) {
             onMenuHeightChangeAction?.(0);
@@ -202,7 +205,11 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
         if (msg.type === "INIT_CONFIG") {
             setJunction(msg.appdata.junctionConfig);
             setSimConfig(msg.appdata.simulationConfig);
-            confirmConfig();
+            if (msg.appdata.isConfigConfirmed) {
+                confirmConfig();
+            } else {
+                resetConfig();
+            }
         }
         if (msg.type === "START")  { startSim(); }
         if (msg.type === "PAUSE")  { pauseSim(); }
@@ -213,6 +220,7 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
     const buildSharedState = (): SharedState => ({
         junctionConfig: junction,
         simulationConfig: simConfig,
+        isConfigConfirmed,
     });
 
     useEffect(() => {
@@ -239,7 +247,7 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
     useEffect(() => {
         if (!isHost) return;
         send({ type: "INIT_CONFIG", appdata: buildSharedState() });
-    }, [junction, simConfig]);
+    }, [junction, simConfig, isConfigConfirmed]);
 
     useEffect(() => {
         if (isHost && hostId) {
@@ -945,7 +953,7 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
                                 const body = w.document.body;
                                 const update = () => {
                                     if (w.closed) return;
-                                    const s = stats;
+                                    const s = statsRef.current;
                                     body.innerHTML = `
                                         <div class="grid" style="grid-template-columns:1fr 1fr 1fr 1fr">
                                             ${[["Active",s.active],["Spawn Queue",s.spawnQueue],["Spawned",s.spawned],["Completed",s.completed],["Routes",s.routes],["Elapsed",s.elapsedTime.toFixed(1)+"s"]]

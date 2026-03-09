@@ -41,4 +41,5 @@ export type PeerContextType = {
 export type SharedState = {
     junctionConfig: JunctionConfig;
     simulationConfig: SimConfig;
+    isConfigConfirmed: boolean;
 };

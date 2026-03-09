@@ -63,9 +63,9 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     {
         id: "select-intersection",
         title: "Select the Intersection",
-        description: "Right-click the intersection to open its config panel on the left side of the screen.",
+        description: "Double-click the intersection to open its config panel on the left side of the screen.",
         target: "canvas",
-        action: "right-click",
+        action: "dblclick",
         position: "top",
         autoAdvance: true,
     },

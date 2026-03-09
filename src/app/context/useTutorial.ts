@@ -92,11 +92,11 @@ export function useTutorial(): UseTutorialReturn {
         }
     }, [stepIndex]);
 
-    // Auto-advance on click / right-click: when the user interacts with the current step's target
+    // Auto-advance on click / dblclick: when the user interacts with the current step's target
     useEffect(() => {
         if (!currentStep?.autoAdvance) return;
         const action = currentStep.action;
-        if (action !== "click" && action !== "right-click") return;
+        if (action !== "click" && action !== "dblclick") return;
 
         const advance = () => {
             setTimeout(() => setStepIndex(i => {
@@ -119,7 +119,7 @@ export function useTutorial(): UseTutorialReturn {
             }
         };
 
-        const eventName = action === "right-click" ? "contextmenu" : "click";
+        const eventName = action === "dblclick" ? "dblclick" : "click";
         document.addEventListener(eventName, handler, true);
         return () => document.removeEventListener(eventName, handler, true);
     }, [currentStep]);
