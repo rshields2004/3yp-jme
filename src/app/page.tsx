@@ -10,6 +10,8 @@ import { useJModellerContext } from "./context/JModellerContext";
 import { PeerProvider } from "./context/PeerContext";
 import { useEffect, useRef, useState } from "react";
 import CoverPage from "./components/CoverPage";
+import { useTutorial } from "./context/useTutorial";
+import { TutorialOverlay } from "./components/TutorialOverlay";
 
 const zoomBtnStyle: React.CSSProperties = {
     display: "flex", alignItems: "center", justifyContent: "center",
@@ -32,9 +34,18 @@ function AppContent({ onExit }: { onExit: () => void }) {
     const HEADER_H = 44;
     const canvasTop = `${HEADER_H + navDropdownHeight}px`;
     const sceneRef = useRef<SceneHandle>(null);
+    const tutorial = useTutorial();
     return (
         <>
-            <AppHeader onExitAction={onExit} onMenuHeightChangeAction={setNavDropdownHeight} />
+            <AppHeader onExitAction={onExit} onMenuHeightChangeAction={setNavDropdownHeight} onStartTutorialAction={tutorial.start} />
+            <TutorialOverlay
+                currentStep={tutorial.currentStep}
+                stepIndex={tutorial.stepIndex}
+                totalSteps={tutorial.totalSteps}
+                highlightRect={tutorial.highlightRect}
+                onNext={tutorial.next}
+                onSkip={tutorial.skip}
+            />
             <Canvas
                 camera={{ position: [20, 35, 20], fov: 60 }}
                 style={{

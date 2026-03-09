@@ -211,6 +211,7 @@ function ObjectConfig({ objId }: { objId: string }) {
                     <div className="text-[12px] tracking-[0.12em] text-white/92 uppercase mb-1.5">Exits</div>
                     <div className="flex items-center gap-2.5">
                         <Slider
+                            data-slider="numExits"
                             min={2}
                             max={obj.type === "roundabout" ? 6 : 10}
                             value={[obj.config.numExits]}
@@ -358,6 +359,7 @@ export default function SelectionPanel() {
                         className="size-6 text-white/75 hover:text-white hover:bg-white/[0.07]"
                         onClick={() => setSelectedObjects([])}
                         title="Deselect (Esc)"
+                        data-action="deselect"
                     >
                         <X size={16} />
                     </Button>

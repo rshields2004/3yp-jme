@@ -9,8 +9,8 @@ import { numberToExcelColumn } from "../includes/utils";
 import { carClasses } from "../includes/types/carTypes";
 import {
     Play, Pause, Square, Check, RotateCcw,
-    ChevronDown, Link2, Trash2, PlusSquare, Copy, LogOut, Settings2,
-    Eye, Hammer
+    ChevronDown, ChevronUp, Link2, Trash2, PlusSquare, Copy, LogOut, Settings2,
+    Eye, Hammer, HelpCircle, ExternalLink
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,13 +26,14 @@ import { cn } from "@/lib/utils";
 // ─── small reusable sub-components ──────────────────────────────────────────
 
 function IconBtn({
-    children, title, onClick, disabled = false, active = false,
+    children, title, onClick, disabled = false, active = false, ...rest
 }: {
     children: React.ReactNode;
     title?: string;
     onClick?: () => void;
     disabled?: boolean;
     active?: boolean;
+    [key: string]: unknown;
 }) {
     return (
         <Tooltip>
@@ -47,6 +48,7 @@ function IconBtn({
                         active && "bg-white/[0.1] border-white/25",
                         !disabled && "hover:bg-white/[0.08] hover:border-white/20 hover:text-white"
                     )}
+                    {...rest}
                 >
                     {children}
                 </Button>
@@ -122,12 +124,13 @@ function SliderRowUi({
 }
 
 function ActionBtn({
-    children, onClick, disabled = false, variant = "default",
+    children, onClick, disabled = false, variant = "default", ...rest
 }: {
     children: React.ReactNode;
     onClick?: () => void;
     disabled?: boolean;
     variant?: "default" | "danger";
+    [key: string]: unknown;
 }) {
     return (
         <Button
@@ -139,6 +142,7 @@ function ActionBtn({
                 "text-xs tracking-wide font-normal gap-1.5",
                 variant === "default" && "bg-white/[0.04] border-white/[0.1] text-white/90 hover:bg-white/[0.1] hover:border-white/25 hover:text-white"
             )}
+            {...rest}
         >
             {children}
         </Button>
@@ -149,9 +153,10 @@ function ActionBtn({
 
 type MenuId = "session" | "config" | "modes" | null;
 
-export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeightChangeAction }: { onExitAction?: () => void; panelOpen?: boolean; onMenuHeightChangeAction?: (height: number) => void }) {
+export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeightChangeAction, onStartTutorialAction }: { onExitAction?: () => void; panelOpen?: boolean; onMenuHeightChangeAction?: (height: number) => void; onStartTutorialAction?: () => void }) {
     const [openMenu, setOpenMenu] = useState<MenuId>(null);
     const [joinCode, setJoinCode] = useState("");
+    const [statsCollapsed, setStatsCollapsed] = useState(false);
 
     const {
         isConfigConfirmed, simIsRunning, carsReady, junction,
@@ -391,7 +396,7 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
                         className="h-[26px] w-auto mr-4 select-none block"
                     />
 
-                    {(["session", "config", "modes"] as MenuId[]).map(id => {
+                    {(["session", "modes", "config"] as MenuId[]).map(id => {
                         const label = id === "config" ? "Sim Config" : id!.charAt(0).toUpperCase() + id!.slice(1);
                         const isOpen = openMenu === id;
                         const disabled = id === "config" && !isConfigConfirmed;
@@ -400,6 +405,7 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
                                 key={id}
                                 variant="ghost"
                                 size="sm"
+                                data-menu-id={id}
                                 onClick={() => !disabled && toggleMenu(id)}
                                 disabled={disabled}
                                 className={cn(
@@ -420,6 +426,13 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
 
                 {/* right: sim control icons */}
                 <div className="flex items-center gap-1.5">
+                    {/* tutorial */}
+                    <IconBtn title="Tutorial" onClick={onStartTutorialAction}>
+                        <HelpCircle size={17} />
+                    </IconBtn>
+
+                    <Separator orientation="vertical" className="h-5 mx-0.5 bg-white/[0.08]" />
+
                     {/* connection status dot */}
                     <div
                         title={connStatus}
@@ -441,7 +454,8 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
                         <IconBtn
                             title="Confirm Config"
                             disabled={junction.junctionObjects.length === 0 || simIsRunning || isClientConnected}
-                            onClick={confirmConfig}
+                            onClick={() => { confirmConfig(); setOpenMenu(null); }}
+                            data-action="confirm-config"
                         >
                             <Check size={17} />
                         </IconBtn>
@@ -460,6 +474,7 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
                         disabled={simIsRunning || !carsReady || !isConfigConfirmed || isClientConnected}
                         active={simIsRunning && !simIsPaused}
                         onClick={() => { send({ type: "START" }); startSim(); }}
+                        data-action="play-sim"
                     >
                         <Play size={17} />
                     </IconBtn>
@@ -590,6 +605,99 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
                             )}
                         </div>
                     </div>
+                </DropdownPanel>
+            )}
+
+            {/* ── MODES dropdown ── */}
+            {openMenu === "modes" && (
+                <DropdownPanel panelOpen={isPanelOpen}>
+                    <SectionTitle>Mode</SectionTitle>
+                    <div className="flex gap-2 mb-3">
+                        <button
+                            onClick={() => { setToolMode("view"); setSelectedObjects([]); setSelectedExits([]); setOpenMenu(null); }}
+                            className={cn(
+                                "flex items-center gap-2 px-4 py-2.5 rounded border text-[12px] tracking-[0.12em] uppercase transition-colors",
+                                toolMode === "view"
+                                    ? "bg-white/[0.12] border-white/30 text-white"
+                                    : "bg-white/[0.03] border-white/[0.08] text-white/60 hover:bg-white/[0.07] hover:text-white/90",
+                            )}
+                        >
+                            <Eye size={14} />
+                            View
+                        </button>
+                        <button
+                            data-tool-mode="build"
+                            onClick={() => { setToolMode("build"); setSelectedObjects([]); setSelectedExits([]); }}
+                            disabled={simIsRunning || isConfigConfirmed}
+                            className={cn(
+                                "flex items-center gap-2 px-4 py-2.5 rounded border text-[12px] tracking-[0.12em] uppercase transition-colors",
+                                toolMode === "build"
+                                    ? "bg-white/[0.12] border-white/30 text-white"
+                                    : "bg-white/[0.03] border-white/[0.08] text-white/60 hover:bg-white/[0.07] hover:text-white/90",
+                                (simIsRunning || isConfigConfirmed) && "opacity-40 cursor-not-allowed"
+                            )}
+                        >
+                            <Hammer size={14} />
+                            Build
+                        </button>
+                    </div>
+                    <p className="text-[11px] text-white/50 leading-relaxed mb-3">
+                        {toolMode === "view"
+                            ? "Orbit camera freely. Double-click a junction to centre on it."
+                            : "Top-down view. Place junctions, drag to reposition, link exits, and right-click to edit config."}
+                    </p>
+
+                    {/* ── Build-mode inline tools ── */}
+                    {toolMode === "build" && !simIsRunning && !isConfigConfirmed && (
+                        <div className="flex gap-6">
+                            <div className="flex-1 min-w-0">
+                                <SectionTitle>Build Tools</SectionTitle>
+                                <div className="flex gap-1.5 mb-3 flex-wrap">
+                                    <ActionBtn onClick={() => addNewIntersection()} disabled={isClientConnected} data-action="add-intersection">
+                                        <PlusSquare size={14} /> Intersection
+                                    </ActionBtn>
+                                    <ActionBtn onClick={() => addNewRoundabout()} disabled={isClientConnected} data-action="add-roundabout">
+                                        <PlusSquare size={14} /> Roundabout
+                                    </ActionBtn>
+                                    {selectedExits.length === 2 && (
+                                        <ActionBtn onClick={() => addNewLink()} disabled={isClientConnected} data-action="link-exits">
+                                            <Link2 size={14} /> Link Exits ({selectedExits.map(e => `exit ${e.exitIndex}`).join(" ↔ ")})
+                                        </ActionBtn>
+                                    )}
+                                </div>
+                            </div>
+
+                            {junction.junctionLinks.length > 0 && (
+                                <div className="flex-1 min-w-0">
+                                    <SectionTitle>Links</SectionTitle>
+                                    <div className="grid gap-1" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
+                                        {junction.junctionLinks.map(link => {
+                                            const objA = junction.junctionObjects.find(o => o.id === link.objectPair[0].structureID);
+                                            const objB = junction.junctionObjects.find(o => o.id === link.objectPair[1].structureID);
+                                            return (
+                                                <div key={link.id} className="flex items-center justify-between px-2 py-1.5 bg-white/[0.04] border border-white/[0.08] rounded text-xs">
+                                                    <span className="text-white/92">
+                                                        {objA?.name ?? "?"} Exit {link.objectPair[0].exitIndex}
+                                                        <span className="opacity-40 mx-1.5">↔</span>
+                                                        {objB?.name ?? "?"} Exit {link.objectPair[1].exitIndex}
+                                                    </span>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="size-6 text-red-400/60 hover:text-red-400 hover:bg-red-500/10 ml-2"
+                                                        onClick={() => removeLink(link.id)}
+                                                        disabled={isClientConnected}
+                                                    >
+                                                        <Trash2 size={13} />
+                                                    </Button>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </DropdownPanel>
             )}
 
@@ -790,156 +898,128 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
 
             {/* ── STATS panel ── */}
             {simIsRunning && followedVehicleId === null && (
-                <DropdownPanel anchor="bottom" panelOpen={isPanelOpen}>
-                    <div className="grid gap-x-8 gap-y-0.5 text-[13px] mb-2.5" style={{ gridTemplateColumns: "1fr 1fr 1fr 1fr" }}>
-                        {[
-                            ["Active", stats.active],
-                            ["Spawn Queue", stats.spawnQueue],
-                            ["Spawned", stats.spawned],
-                            ["Completed", stats.completed],
-                            ["Routes", stats.routes],
-                            ["Elapsed", `${stats.elapsedTime.toFixed(1)}s`],
-                        ].map(([k, v]) => (
-                            <div key={String(k)} className="flex justify-between py-0.5 border-b border-white/[0.08]">
-                                <span className="text-white/75">{k}</span>
-                                <span className="text-white tabular-nums">{v}</span>
-                            </div>
-                        ))}
-                    </div>
-
-                    {stats.spawnQueueByEntry && Object.keys(stats.spawnQueueByEntry).length > 0 && (
-                        <>
-                            <SectionTitle>Queue by Entry</SectionTitle>
-                            {Object.entries(stats.spawnQueueByEntry)
-                                .filter(([, q]) => q > 0)
-                                .map(([key, q]) => {
-                                    const parts = key.split("-");
-                                    const exitIndex = parts[parts.length - 1];
-                                    const structureID = parts.slice(0, -1).join("-");
-                                    const obj = junction.junctionObjects.find(o => o.id === structureID);
-                                    return (
-                                        <div key={key} className="text-xs text-white/75 mb-0.5">
-                                            {obj?.type ?? "junction"} {obj?.name ?? structureID.slice(0, 6)} Exit {exitIndex}:
-                                            <span className="text-white ml-1">{q}</span>
+                <div
+                    className="fixed right-0 bg-zinc-950/97 overflow-hidden px-0 py-0 font-mono text-white/95 backdrop-blur-xl bottom-0 border-t border-white/[0.08] shadow-[0_-8px_32px_rgba(0,0,0,0.5)]"
+                    style={{
+                        zIndex: 49,
+                        left: isPanelOpen ? "25vw" : "0",
+                        transition: "left 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                    }}
+                >
+                    {/* Collapse / Undock toolbar */}
+                    <div className="flex items-center justify-between px-4 py-1.5 border-b border-white/[0.08]">
+                        <button
+                            onClick={() => setStatsCollapsed(c => !c)}
+                            className="flex items-center gap-1.5 text-[11px] tracking-[0.12em] text-white/75 uppercase hover:text-white transition-colors"
+                        >
+                            {statsCollapsed ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                            Statistics
+                        </button>
+                        <button
+                            onClick={() => {
+                                const w = window.open("", "_blank", "width=480,height=400,menubar=no,toolbar=no,location=no,status=no");
+                                if (!w) return;
+                                w.document.title = "Simulation Statistics";
+                                const style = w.document.createElement("style");
+                                style.textContent = `body{margin:0;background:#09090b;color:#f5f5f5;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;padding:16px}
+                                    .grid{display:grid;grid-template-columns:1fr 1fr;gap:2px 24px;margin-bottom:12px}
+                                    .row{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.08)}
+                                    .label{opacity:0.75}.value{font-variant-numeric:tabular-nums}
+                                    h3{font-size:11px;letter-spacing:0.18em;text-transform:uppercase;opacity:0.75;margin:12px 0 6px}`;
+                                w.document.head.appendChild(style);
+                                const body = w.document.body;
+                                const update = () => {
+                                    if (w.closed) return;
+                                    const s = stats;
+                                    body.innerHTML = `
+                                        <div class="grid" style="grid-template-columns:1fr 1fr 1fr 1fr">
+                                            ${[["Active",s.active],["Spawn Queue",s.spawnQueue],["Spawned",s.spawned],["Completed",s.completed],["Routes",s.routes],["Elapsed",s.elapsedTime.toFixed(1)+"s"]]
+                                                .map(([k,v])=>`<div class="row"><span class="label">${k}</span><span class="value">${v}</span></div>`).join("")}
                                         </div>
-                                    );
-                                })}
-                        </>
-                    )}
-
-                    <SectionTitle>Junctions ({stats.junctions.global.count})</SectionTitle>
-                    <div className="grid gap-x-6 gap-y-0.5 text-[13px]" style={{ gridTemplateColumns: "1fr 1fr" }}>
-                        {[
-                            ["Approaching", stats.junctions.global.approaching],
-                            ["Waiting", stats.junctions.global.waiting],
-                            ["Inside", stats.junctions.global.inside],
-                            ["Exiting", stats.junctions.global.exiting],
-                            ["Entered", stats.junctions.global.entered],
-                            ["Exited", stats.junctions.global.exited],
-                        ].map(([k, v]) => (
-                            <div key={String(k)} className="flex justify-between py-0.5 border-b border-white/[0.08]">
-                                <span className="text-white/75">{k}</span>
-                                <span className="text-white tabular-nums">{v}</span>
-                            </div>
-                        ))}
-                    </div>
-                    <div className="mt-2 text-[13px] flex justify-between">
-                        <span className="text-white/75">Avg Wait Time</span>
-                        <span className="text-white">{stats.junctions.global.avgWaitTime.toFixed(1)}s</span>
-                    </div>
-                </DropdownPanel>
-            )}
-
-            {/* ── MODES dropdown ── */}
-            {openMenu === "modes" && (
-                <DropdownPanel panelOpen={isPanelOpen}>
-                    <SectionTitle>Mode</SectionTitle>
-                    <div className="flex gap-2 mb-3">
-                        <button
-                            onClick={() => { setToolMode("view"); setSelectedObjects([]); setSelectedExits([]); setOpenMenu(null); }}
-                            className={cn(
-                                "flex items-center gap-2 px-4 py-2.5 rounded border text-[12px] tracking-[0.12em] uppercase transition-colors",
-                                toolMode === "view"
-                                    ? "bg-white/[0.12] border-white/30 text-white"
-                                    : "bg-white/[0.03] border-white/[0.08] text-white/60 hover:bg-white/[0.07] hover:text-white/90",
-                            )}
+                                        <h3>Junctions (${s.junctions.global.count})</h3>
+                                        <div class="grid">
+                                            ${[["Approaching",s.junctions.global.approaching],["Waiting",s.junctions.global.waiting],["Inside",s.junctions.global.inside],["Exiting",s.junctions.global.exiting],["Entered",s.junctions.global.entered],["Exited",s.junctions.global.exited]]
+                                                .map(([k,v])=>`<div class="row"><span class="label">${k}</span><span class="value">${v}</span></div>`).join("")}
+                                        </div>
+                                        <div class="row" style="border:none"><span class="label">Avg Wait Time</span><span class="value">${s.junctions.global.avgWaitTime.toFixed(1)}s</span></div>`;
+                                };
+                                update();
+                                const interval = setInterval(update, 500);
+                                w.addEventListener("beforeunload", () => {
+                                    clearInterval(interval);
+                                    setStatsCollapsed(false);
+                                });
+                                setStatsCollapsed(true);
+                            }}
+                            className="text-white/50 hover:text-white transition-colors"
+                            title="Undock to separate window"
                         >
-                            <Eye size={14} />
-                            View
-                        </button>
-                        <button
-                            onClick={() => { setToolMode("build"); setSelectedObjects([]); setSelectedExits([]); }}
-                            disabled={simIsRunning || isConfigConfirmed}
-                            className={cn(
-                                "flex items-center gap-2 px-4 py-2.5 rounded border text-[12px] tracking-[0.12em] uppercase transition-colors",
-                                toolMode === "build"
-                                    ? "bg-white/[0.12] border-white/30 text-white"
-                                    : "bg-white/[0.03] border-white/[0.08] text-white/60 hover:bg-white/[0.07] hover:text-white/90",
-                                (simIsRunning || isConfigConfirmed) && "opacity-40 cursor-not-allowed"
-                            )}
-                        >
-                            <Hammer size={14} />
-                            Build
+                            <ExternalLink size={14} />
                         </button>
                     </div>
-                    <p className="text-[11px] text-white/50 leading-relaxed mb-3">
-                        {toolMode === "view"
-                            ? "Orbit camera freely. Double-click a junction to centre on it."
-                            : "Top-down view. Place junctions, drag to reposition, link exits, and right-click to edit config."}
-                    </p>
 
-                    {/* ── Build-mode inline tools ── */}
-                    {toolMode === "build" && !simIsRunning && !isConfigConfirmed && (
-                        <div className="flex gap-6">
-                            <div className="flex-1 min-w-0">
-                                <SectionTitle>Build Tools</SectionTitle>
-                                <div className="flex gap-1.5 mb-3 flex-wrap">
-                                    <ActionBtn onClick={() => addNewIntersection()} disabled={isClientConnected}>
-                                        <PlusSquare size={14} /> Intersection
-                                    </ActionBtn>
-                                    <ActionBtn onClick={() => addNewRoundabout()} disabled={isClientConnected}>
-                                        <PlusSquare size={14} /> Roundabout
-                                    </ActionBtn>
-                                    {selectedExits.length === 2 && (
-                                        <ActionBtn onClick={() => addNewLink()} disabled={isClientConnected}>
-                                            <Link2 size={14} /> Link Exits ({selectedExits.map(e => `exit ${e.exitIndex}`).join(" ↔ ")})
-                                        </ActionBtn>
-                                    )}
-                                </div>
+                    {/* Collapsible content */}
+                    {!statsCollapsed && (
+                        <div className="px-6 py-4 overflow-y-auto" style={{ maxHeight: "22vh" }}>
+                            <div className="grid gap-x-8 gap-y-0.5 text-[13px] mb-2.5" style={{ gridTemplateColumns: "1fr 1fr 1fr 1fr" }}>
+                                {[
+                                    ["Active", stats.active],
+                                    ["Spawn Queue", stats.spawnQueue],
+                                    ["Spawned", stats.spawned],
+                                    ["Completed", stats.completed],
+                                    ["Routes", stats.routes],
+                                    ["Elapsed", `${stats.elapsedTime.toFixed(1)}s`],
+                                ].map(([k, v]) => (
+                                    <div key={String(k)} className="flex justify-between py-0.5 border-b border-white/[0.08]">
+                                        <span className="text-white/75">{k}</span>
+                                        <span className="text-white tabular-nums">{v}</span>
+                                    </div>
+                                ))}
                             </div>
 
-                            {junction.junctionLinks.length > 0 && (
-                                <div className="flex-1 min-w-0">
-                                    <SectionTitle>Links</SectionTitle>
-                                    <div className="grid gap-1" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
-                                        {junction.junctionLinks.map(link => {
-                                            const objA = junction.junctionObjects.find(o => o.id === link.objectPair[0].structureID);
-                                            const objB = junction.junctionObjects.find(o => o.id === link.objectPair[1].structureID);
+                            {stats.spawnQueueByEntry && Object.keys(stats.spawnQueueByEntry).length > 0 && (
+                                <>
+                                    <SectionTitle>Queue by Entry</SectionTitle>
+                                    {Object.entries(stats.spawnQueueByEntry)
+                                        .filter(([, q]) => q > 0)
+                                        .map(([key, q]) => {
+                                            const parts = key.split("-");
+                                            const exitIndex = parts[parts.length - 1];
+                                            const structureID = parts.slice(0, -1).join("-");
+                                            const obj = junction.junctionObjects.find(o => o.id === structureID);
                                             return (
-                                                <div key={link.id} className="flex items-center justify-between px-2 py-1.5 bg-white/[0.04] border border-white/[0.08] rounded text-xs">
-                                                    <span className="text-white/92">
-                                                        {objA?.name ?? "?"} Exit {link.objectPair[0].exitIndex}
-                                                        <span className="opacity-40 mx-1.5">↔</span>
-                                                        {objB?.name ?? "?"} Exit {link.objectPair[1].exitIndex}
-                                                    </span>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="size-6 text-red-400/60 hover:text-red-400 hover:bg-red-500/10 ml-2"
-                                                        onClick={() => removeLink(link.id)}
-                                                        disabled={isClientConnected}
-                                                    >
-                                                        <Trash2 size={13} />
-                                                    </Button>
+                                                <div key={key} className="text-xs text-white/75 mb-0.5">
+                                                    {obj?.type ?? "junction"} {obj?.name ?? structureID.slice(0, 6)} Exit {exitIndex}:
+                                                    <span className="text-white ml-1">{q}</span>
                                                 </div>
                                             );
                                         })}
-                                    </div>
-                                </div>
+                                </>
                             )}
+
+                            <SectionTitle>Junctions ({stats.junctions.global.count})</SectionTitle>
+                            <div className="grid gap-x-6 gap-y-0.5 text-[13px]" style={{ gridTemplateColumns: "1fr 1fr" }}>
+                                {[
+                                    ["Approaching", stats.junctions.global.approaching],
+                                    ["Waiting", stats.junctions.global.waiting],
+                                    ["Inside", stats.junctions.global.inside],
+                                    ["Exiting", stats.junctions.global.exiting],
+                                    ["Entered", stats.junctions.global.entered],
+                                    ["Exited", stats.junctions.global.exited],
+                                ].map(([k, v]) => (
+                                    <div key={String(k)} className="flex justify-between py-0.5 border-b border-white/[0.08]">
+                                        <span className="text-white/75">{k}</span>
+                                        <span className="text-white tabular-nums">{v}</span>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="mt-2 text-[13px] flex justify-between">
+                                <span className="text-white/75">Avg Wait Time</span>
+                                <span className="text-white">{stats.junctions.global.avgWaitTime.toFixed(1)}s</span>
+                            </div>
                         </div>
                     )}
-                </DropdownPanel>
+                </div>
             )}
         </>
     );
