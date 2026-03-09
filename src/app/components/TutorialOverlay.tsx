@@ -114,9 +114,10 @@ const TutorialTooltip: FC<{
             position: "fixed",
             zIndex: 9999,
             width: TOOLTIP_WIDTH,
-            background: "white",
+            background: "#18181b",
+            border: "1px solid rgba(255,255,255,0.08)",
             borderRadius: 10,
-            boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
+            boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
             padding: "18px 20px",
             ...getTooltipStyle(step.position, highlightRect),
             ...clamped,
@@ -131,17 +132,17 @@ const TutorialTooltip: FC<{
                         width: 6,
                         height: 6,
                         borderRadius: "50%",
-                        background: i === stepIndex ? "#4F46E5" : "#D1D5DB",
+                        background: i === stepIndex ? "#818CF8" : "#3f3f46",
                         transition: "background 0.2s",
                     }}
                 />
             ))}
         </div>
 
-        <h3 style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 600, color: "#111827" }}>
+        <h3 style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 600, color: "#f5f5f5" }}>
             {step.title}
         </h3>
-        <p style={{ margin: "0 0 16px", fontSize: 13, color: "#6B7280", lineHeight: 1.6 }}>
+        <p style={{ margin: "0 0 16px", fontSize: 13, color: "#a1a1aa", lineHeight: 1.6 }}>
             {step.description}
         </p>
 
@@ -151,7 +152,7 @@ const TutorialTooltip: FC<{
                 style={{
                     background: "none",
                     border: "none",
-                    color: "#9CA3AF",
+                    color: "#71717a",
                     fontSize: 12,
                     cursor: "pointer",
                     padding: 0,

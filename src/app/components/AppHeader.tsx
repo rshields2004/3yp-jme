@@ -202,6 +202,7 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
         if (msg.type === "INIT_CONFIG") {
             setJunction(msg.appdata.junctionConfig);
             setSimConfig(msg.appdata.simulationConfig);
+            confirmConfig();
         }
         if (msg.type === "START")  { startSim(); }
         if (msg.type === "PAUSE")  { pauseSim(); }
@@ -260,6 +261,19 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
         const interval = setInterval(() => { send({ type: "PING" }); }, 3000);
         return () => clearInterval(interval);
     }, [isHost, connections.length, send]);
+
+    // Reset state when a client loses connection
+    const wasClientRef = useRef(false);
+    useEffect(() => {
+        const isClient = !isHost && connections.length > 0;
+        if (isClient) {
+            wasClientRef.current = true;
+        } else if (wasClientRef.current) {
+            wasClientRef.current = false;
+            if (simIsRunning) haltSim();
+            resetConfig();
+        }
+    }, [isHost, connections.length]);
 
     // ── junction helpers ──────────────────────────────────────────────────
     const addNewIntersection = () => {
@@ -399,7 +413,8 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
                     {(["session", "modes", "config"] as MenuId[]).map(id => {
                         const label = id === "config" ? "Sim Config" : id!.charAt(0).toUpperCase() + id!.slice(1);
                         const isOpen = openMenu === id;
-                        const disabled = id === "config" && !isConfigConfirmed;
+                        const isClient = !isHost && connections.length > 0;
+                        const disabled = (id === "config" && (!isConfigConfirmed || isClient)) || (id === "modes" && isClient);
                         return (
                             <Button
                                 key={id}
@@ -427,7 +442,7 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
                 {/* right: sim control icons */}
                 <div className="flex items-center gap-1.5">
                     {/* tutorial */}
-                    <IconBtn title="Tutorial" onClick={onStartTutorialAction}>
+                    <IconBtn title="Tutorial" onClick={onStartTutorialAction} disabled={!isHost && connections.length > 0}>
                         <HelpCircle size={17} />
                     </IconBtn>
 
@@ -559,7 +574,7 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
                                             }}
                                             title="Copy invite link"
                                         >
-                                            <Copy size={14} />
+                                            <Link2 size={14} />
                                         </Button>
                                     </div>
                                     {connectedPeerIds.length === 0 ? (
@@ -598,7 +613,7 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
                             {isClientConnected && (
                                 <div className="flex flex-col gap-2">
                                     <p className="text-xs text-white/75 m-0">Already in a session.</p>
-                                    <ActionBtn variant="danger" onClick={() => { disconnect(); setOpenMenu(null); }}>
+                                    <ActionBtn variant="danger" onClick={() => { disconnect(); resetConfig(); if (simIsRunning) haltSim(); setOpenMenu(null); }}>
                                         <LogOut size={13} /> Disconnect
                                     </ActionBtn>
                                 </div>
