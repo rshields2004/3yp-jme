@@ -98,7 +98,7 @@ Links are bidirectional. Vehicles can traverse them in either direction. They ar
 
 ## Simulation
 
-Press the **✓ Confirm** button to lock your layout, then press **▶ Play** to start the simulation.
+Press the **Confirm** button to lock your layout, then press **Play** to start the simulation.
 
 ### Vehicle Spawning
 
@@ -119,9 +119,9 @@ Vehicles follow the **Intelligent Driver Model (IDM)** with:
 
 | Button | Action |
 |--------|--------|
-| ▶ Play | Start simulation |
-| ⏸ Pause | Pause (vehicles freeze in place) |
-| ■ Stop | Halt and reset simulation |
+| Play | Start simulation |
+| Pause | Pause (vehicles freeze in place) |
+| Stop | Halt and reset simulation |
 
 ---
 
@@ -189,7 +189,7 @@ Throughput, Avg Wait, Max Queue, PRC, and MMQ are also computed network-wide acr
 
 ## PDF Reports
 
-Click the **📄 Report** button (available after stopping a simulation that has recorded data) to generate a 3-page landscape A4 PDF:
+Click the **Report** button (available after stopping a simulation that has recorded data) to generate a 3-page landscape A4 PDF:
 
 | Page | Content |
 |------|---------|
@@ -203,7 +203,7 @@ Click the **📄 Report** button (available after stopping a simulation that has
 
 ### Saving
 
-Click the **↓ Download** button to export your junction layout and simulation configuration as a `.jme` JSON file.
+Click the **Download** button to export your junction layout and simulation configuration as a `.jme` JSON file.
 
 The save file contains:
 
@@ -213,7 +213,7 @@ The save file contains:
 
 ### Loading
 
-Click the **↑ Upload** button and select a `.jme` file. The current layout is replaced with the saved configuration. You can immediately confirm and run a simulation.
+Click the **Upload** button and select a `.jme` file. The current layout is replaced with the saved configuration. You can immediately confirm and run a simulation.
 
 ---
 
