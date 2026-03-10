@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from "react";
 import CoverPage from "./components/CoverPage";
 import { useTutorial } from "./context/useTutorial";
 import { TutorialOverlay } from "./components/TutorialOverlay";
+import { SaveFile } from "./includes/saveLoad";
 
 const zoomBtnStyle: React.CSSProperties = {
     display: "flex", alignItems: "center", justifyContent: "center",
@@ -27,14 +28,24 @@ const zoomBtnStyle: React.CSSProperties = {
     transition: "color 0.15s, background 0.15s",
 };
 
-function AppContent({ onExit }: { onExit: () => void }) {
-    const { selectedObjects } = useJModellerContext();
+function AppContent({ onExit, loadedSave }: { onExit: () => void; loadedSave?: SaveFile | null }) {
+    const { selectedObjects, setJunction, setSimConfig } = useJModellerContext();
     const panelOpen = selectedObjects.length > 0;
     const [navDropdownHeight, setNavDropdownHeight] = useState(0);
     const HEADER_H = 44;
     const canvasTop = `${HEADER_H + navDropdownHeight}px`;
     const sceneRef = useRef<SceneHandle>(null);
     const tutorial = useTutorial();
+
+    useEffect(() => {
+        if (!loadedSave) {
+            return;
+        }
+        setJunction(loadedSave.junctionConfig);
+        setSimConfig(loadedSave.simConfig);
+    })
+
+
     return (
         <>
             <AppHeader onExitAction={onExit} onMenuHeightChangeAction={setNavDropdownHeight} onStartTutorialAction={tutorial.start} />
@@ -85,12 +96,23 @@ export default function Page() {
 
     const [entered, setEntered] = useState(false);
     const [sessionCode, setSessionCode] = useState("");
+    const [loadedSave, setLoadedSave] = useState<SaveFile | null>(null);
 
     useEffect(() => {
         const code = new URLSearchParams(window.location.search).get("s") ?? "";
         setSessionCode(code);
     }, []);
 
+    const handleLoadSave = (save: SaveFile) => {
+        setLoadedSave(save);
+        setEntered(true);
+    };
+
+
+    const handleExit = () => {
+        setEntered(false);
+        setLoadedSave(null);
+    };
 
     return (
         <PeerProvider>
@@ -103,10 +125,16 @@ export default function Page() {
                         <CoverPage 
                             onContinueAction={() => setEntered(true)}
                             initialSessionCode={sessionCode}
+                            onLoadSaveAction={handleLoadSave}
                         />
                     )}
 
-                    {entered && <AppContent onExit={() => setEntered(false)} />}
+                    {entered && (
+                         <AppContent
+                            onExit={handleExit}
+                            loadedSave={loadedSave}
+                        />
+                    )}
                 </div>
             </JModellerProvider>
         </PeerProvider>

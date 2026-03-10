@@ -8,17 +8,19 @@ import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { Settings2 } from "lucide-react";
+import { loadSaveFromFile, SaveFile } from "../includes/saveLoad";
 
 type CoverPageProps = {
     onContinueAction: () => void;
     initialSessionCode?: string;
+    onLoadSaveAction: (save: SaveFile) => void;
 };
 
-export default function CoverPage({ onContinueAction, initialSessionCode = "" }: CoverPageProps) {
+export default function CoverPage({ onContinueAction, initialSessionCode = "", onLoadSaveAction }: CoverPageProps) {
     const [joinCode, setJoinCode] = useState<string>(initialSessionCode);
     const [mode, setMode] = useState<"idle" | "join">(initialSessionCode ? "join" : "idle");
     const { joinHost, isConnecting, connectionError, connections } = usePeer();
-
+    const [loadError, setLoadError] = useState<string | null>(null);
 
     useEffect(() => {
         if (initialSessionCode) {
@@ -50,6 +52,20 @@ export default function CoverPage({ onContinueAction, initialSessionCode = "" }:
             onContinueAction();
         }
     }, [isConnected]);
+
+
+
+    const handleLoadSave = async () => {
+        setLoadError(null);
+        try {
+            const save = await loadSaveFromFile();
+            onLoadSaveAction(save);
+        }
+        catch {
+            setLoadError("Invalid or unreadable save file");
+        }
+    };
+
 
     return (
         <div className="fixed inset-0 bg-[#080808] flex flex-col items-center justify-center" style={{ zIndex: 100, fontFamily: "var(--font-mono), 'Courier New', monospace", overflow: "hidden" }}>
@@ -108,6 +124,14 @@ export default function CoverPage({ onContinueAction, initialSessionCode = "" }:
                             New Session
                         </Button>
 
+
+                        <Button
+                            onClick={handleLoadSave}
+                            variant="ghost"
+                            className="w-full py-3.5 h-auto text-[13px] tracking-[0.12em] uppercase border border-white/[0.1] text-white/50 hover:border-white/25 hover:text-white/80 hover:bg-transparent transition-all duration-150"
+                        >
+                            Load Save
+                        </Button>
                         <Button
                             onClick={() => setMode("join")}
                             variant="ghost"
@@ -115,6 +139,9 @@ export default function CoverPage({ onContinueAction, initialSessionCode = "" }:
                         >
                             Join Session
                         </Button>
+                        {loadError && (
+                            <p className="text-xs text-red-400/80 text-center tracking-wide m-0">{loadError}</p>
+                        )}
                     </div>
                 )}
 

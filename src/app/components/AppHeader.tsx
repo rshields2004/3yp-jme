@@ -10,7 +10,9 @@ import { carClasses } from "../includes/types/carTypes";
 import {
     Play, Pause, Square, Check, RotateCcw,
     ChevronDown, ChevronUp, Link2, Trash2, PlusSquare, Copy, LogOut, Settings2,
-    Eye, Hammer, HelpCircle, ExternalLink
+    Eye, Hammer, HelpCircle, ExternalLink,
+    Download,
+    Upload
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +24,7 @@ import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Kbd } from "@/components/ui/kbd";
 import { cn } from "@/lib/utils";
+import { downloadSave, loadSaveFromFile } from "../includes/saveLoad";
 
 // ─── small reusable sub-components ──────────────────────────────────────────
 
@@ -452,6 +455,34 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
                     {/* tutorial */}
                     <IconBtn title="Tutorial" onClick={onStartTutorialAction} disabled={!isHost && connections.length > 0}>
                         <HelpCircle size={17} />
+                    </IconBtn>
+
+                    <IconBtn
+                        title="Save config"
+                        disabled={simIsRunning || isClientConnected}
+                        onClick={() => downloadSave(junction, simConfig)}
+                    >
+                        <Download size={17} />
+                    </IconBtn>
+
+                    <IconBtn
+                        title="Load config"
+                        disabled={simIsRunning || isClientConnected}
+                        onClick={async () => {
+                            try {
+                                const save = await loadSaveFromFile();
+                                // Reset sim state first
+                                if (simIsRunning) haltSim();
+                                resetConfig();
+                                setJunction(save.junctionConfig);
+                                setSimConfig(save.simConfig);
+                                setOpenMenu(null);
+                            } catch {
+                                // user cancelled or bad file — silently ignore
+                            }
+                        }}
+                    >
+                        <Upload size={17} />
                     </IconBtn>
 
                     <Separator orientation="vertical" className="h-5 mx-0.5 bg-white/[0.08]" />
