@@ -2202,6 +2202,9 @@ export class VehicleManager {
             if (!byId[jid]) {
                 const c = this.junctionCounters.get(jid) ?? { entered: 0, exited: 0, blockedDownstream: 0, totalWaitTime: 0, waitCount: 0, maxWaitTime: 0, maxQueueLength: 0 };
                 const avgWait = c.waitCount > 0 ? c.totalWaitTime / c.waitCount : 0;
+                const arrivalRate = this.elapsedTime > 0 ? c.entered / this.elapsedTime : 0;
+                const departureRate = this.elapsedTime > 0 ? c.exited / this.elapsedTime : 0;
+                const dos = departureRate > 0 ? arrivalRate / departureRate : 0;
                 byId[jid] = {
                     id: jid,
                     type,
@@ -2216,6 +2219,9 @@ export class VehicleManager {
                     throughput: this.elapsedTime > 0 ? (c.exited / this.elapsedTime) * 60 : 0,
                     maxQueueLength: c.maxQueueLength,
                     levelOfService: computeLOS(avgWait, type),
+                    dos,
+                    prc: dos > 0 ? ((1 / dos) - 1) * 100 : 0,
+                    mmq: c.maxQueueLength,
                     currentGreenKey: null,
                     state: undefined,
                 };
@@ -2355,10 +2361,14 @@ export class VehicleManager {
             avgWaitTime: 0,
             maxQueueLength: 0,
             throughput: 0,
+            prc: 0,
+            mmq: 0,
         };
 
         let totalWaitTime = 0;
         let totalWaitCount = 0;
+        let maxDos = 0;
+        let totalMaxQueue = 0;
 
         for (const j of Object.values(byId)) {
             global.approaching += j.approaching;
@@ -2367,6 +2377,8 @@ export class VehicleManager {
             global.exiting += j.exiting;
             global.entered += j.entered;
             global.exited += j.exited;
+            if (j.dos > maxDos) maxDos = j.dos;
+            totalMaxQueue += j.maxQueueLength;
 
             // Accumulate wait times for global average
             if (j.id) {
@@ -2379,6 +2391,11 @@ export class VehicleManager {
         }
 
         global.avgWaitTime = totalWaitCount > 0 ? totalWaitTime / totalWaitCount : 0;
+
+        // PRC from highest DoS across all junctions
+        global.prc = maxDos > 0 ? ((1 / maxDos) - 1) * 100 : 0;
+        // MMQ = mean of per-junction peak queue lengths
+        global.mmq = global.count > 0 ? totalMaxQueue / global.count : 0;
 
         // Track global max queue high-water mark
         if (global.waiting > this.globalMaxQueueLength) {

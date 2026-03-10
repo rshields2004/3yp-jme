@@ -456,13 +456,7 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
                 {/* right: sim control icons */}
                 <div className="flex items-center gap-1.5">
                     {/* tutorial */}
-                    <IconBtn title="Tutorial" onClick={() => {
-                        if (simIsRunning) haltSim();
-                        resetConfig();
-                        setJunction(defaultJunctionConfig);
-                        setSimConfig(defaultSimConfig);
-                        onStartTutorialAction?.();
-                    }} disabled={!isHost && connections.length > 0}>
+                    <IconBtn title="Tutorial" onClick={onStartTutorialAction} disabled={!isHost && connections.length > 0}>
                         <HelpCircle size={17} />
                     </IconBtn>
 
@@ -1022,7 +1016,7 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
                                                 .map(([k,v])=>`<div class="row"><span class="label">${k}</span><span class="value">${v}</span></div>`).join("")}
                                         </div>
                                         <div class="grid">
-                                            ${[["Avg Wait",s.junctions.global.avgWaitTime.toFixed(1)+"s"],["Max Queue",s.junctions.global.maxQueueLength],["Throughput",s.junctions.global.throughput.toFixed(1)+" v/m"]]
+                                            ${[["Avg Wait",s.junctions.global.avgWaitTime.toFixed(1)+"s"],["Max Queue",s.junctions.global.maxQueueLength],["Throughput",s.junctions.global.throughput.toFixed(1)+" v/m"],["PRC",s.junctions.global.prc.toFixed(1)+"%"],["MMQ",s.junctions.global.mmq.toFixed(1)]]
                                                 .map(([k,v])=>`<div class="row"><span class="label">${k}</span><span class="value">${v}</span></div>`).join("")}
                                         </div>
                                         ${Object.values(s.junctions.byId).map(j => {
@@ -1035,7 +1029,8 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
                                             return `<h3>${typeLabel} ${name}</h3>
                                             <div class="grid">
                                                 ${[["Approaching",j.approaching],["Waiting",j.waiting],["Inside",j.inside],["Exiting",j.exiting],["Entered",j.entered],["Exited",j.exited],
-                                                   ["Avg Wait",j.avgWaitTime.toFixed(1)+"s"],["Max Wait",j.maxWaitTime.toFixed(1)+"s"],["Throughput",j.throughput.toFixed(1)+" v/m"],["Max Queue",j.maxQueueLength]]
+                                                   ["Avg Wait",j.avgWaitTime.toFixed(1)+"s"],["Max Wait",j.maxWaitTime.toFixed(1)+"s"],["Throughput",j.throughput.toFixed(1)+" v/m"],["Max Queue",j.maxQueueLength],
+                                                   ["DoS",j.dos.toFixed(2)],["PRC",j.prc.toFixed(1)+"%"],["MMQ",j.mmq.toFixed(1)]]
                                                     .map(([k,v])=>`<div class="row"><span class="label">${k}</span><span class="value">${v}</span></div>`).join("")}
                                                 <div class="row"><span class="label">LOS</span><span class="value" style="color:${losColor};font-weight:700">${j.levelOfService}</span></div>
                                                 ${j.state ? `<div class="row" style="border:none"><span class="label">Signal</span><span class="value">${j.state}</span></div>` : ""}
@@ -1122,6 +1117,8 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
                                 {[
                                     ["Max Queue", stats.junctions.global.maxQueueLength],
                                     ["Throughput", `${stats.junctions.global.throughput.toFixed(1)} v/m`],
+                                    ["PRC", `${stats.junctions.global.prc.toFixed(1)}%`],
+                                    ["MMQ", stats.junctions.global.mmq.toFixed(1)],
                                 ].map(([k, v]) => (
                                     <div key={String(k)} className="flex justify-between py-0.5 border-b border-white/[0.08]">
                                         <span className="text-white/75">{k}</span>
@@ -1153,6 +1150,9 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
                                                 ["Max Wait", `${j.maxWaitTime.toFixed(1)}s`],
                                                 ["Throughput", `${j.throughput.toFixed(1)} v/m`],
                                                 ["Max Queue", j.maxQueueLength],
+                                                ["DoS", j.dos.toFixed(2)],
+                                                ["PRC", `${j.prc.toFixed(1)}%`],
+                                                ["MMQ", j.mmq.toFixed(1)],
                                             ] as [string, string | number][]).map(([k, v]) => (
                                                 <div key={k} className="flex justify-between py-0.5 border-b border-white/[0.08]">
                                                     <span className="text-white/75">{k}</span>

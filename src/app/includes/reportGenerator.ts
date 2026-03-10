@@ -681,6 +681,8 @@ function buildStatsPage(pdf: jsPDF, stats: SimulationStats, junction: JunctionCo
         ["Throughput", `${g.throughput.toFixed(1)} v/min`],
         ["Avg Wait Time", `${g.avgWaitTime.toFixed(2)} s`],
         ["Peak Queue Length", `${g.maxQueueLength}`],
+        ["Practical Reserve Capacity", `${g.prc.toFixed(1)}%`],
+        ["Mean Max Queue", `${g.mmq.toFixed(1)}`],
     ];
     let ri = 0;
     for (const [k, v] of gRows) {
@@ -756,6 +758,9 @@ function buildStatsPage(pdf: jsPDF, stats: SimulationStats, junction: JunctionCo
             ["Avg Wait Time", `${js.avgWaitTime.toFixed(2)} s`],
             ["Max Wait Time", `${js.maxWaitTime.toFixed(2)} s`],
             ["Peak Queue Length", `${js.maxQueueLength}`],
+            ["Degree of Saturation", `${js.dos.toFixed(2)}`],
+            ["Practical Reserve Capacity", `${js.prc.toFixed(1)}%`],
+            ["Mean Max Queue", `${js.mmq.toFixed(1)}`],
         ];
         for (const [k, v] of jRows) {
             yR = kvRow(pdf, k, v, jCol, yR, jWidth, ri++ % 2 === 0);
@@ -796,7 +801,7 @@ export async function generateReport(
         estY += objHeight;
     }
     // Estimate stats overflow pages for per-junction breakdown
-    const JUNCTION_BLOCK_H = 5.5 + 6 * ROW_H + 4; // chip + 6 rows + gap
+    const JUNCTION_BLOCK_H = 5.5 + 9 * ROW_H + 4; // chip + 9 rows + gap
     const jIds = Object.keys(stats.junctions.byId ?? {});
     let estStatsY = TOP + 7; // starts after section label
     let extraStatsPages = 0;

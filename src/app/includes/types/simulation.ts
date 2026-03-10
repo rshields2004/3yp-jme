@@ -68,6 +68,9 @@ export type JunctionStats = {
     throughput: number;      // vehicles per minute (based on exited / elapsed)
     maxQueueLength: number;  // peak waiting count observed
     levelOfService: LevelOfService; // HCM-style A-F grade based on avg delay
+    dos: number;             // degree of saturation (demand / capacity ratio)
+    prc: number;             // practical reserve capacity (%)
+    mmq: number;             // mean maximum queue (avg of per-arm peak queues)
 
     // signals (optional)
     currentGreenKey?: string | null;
@@ -85,6 +88,8 @@ export type JunctionStatsGlobal = {
     avgWaitTime: number;     // global average wait time in seconds
     maxQueueLength: number;  // peak global waiting count observed
     throughput: number;      // global vehicles per minute
+    prc: number;             // practical reserve capacity (%) from max DoS across junctions
+    mmq: number;             // mean maximum queue (avg of per-junction peak queues)
 };
 
 export type SimulationStats = {

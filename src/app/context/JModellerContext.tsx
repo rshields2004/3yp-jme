@@ -79,6 +79,8 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
                     avgWaitTime: 0,
                     maxQueueLength: 0,
                     throughput: 0,
+                    prc: 0,
+                    mmq: 0,
                 },
                 byId: {},
             },

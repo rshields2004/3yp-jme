@@ -7,12 +7,13 @@ import Scene from "./components/Scene";
 import type { SceneHandle } from "./components/Scene";
 import { JModellerProvider } from "./context/JModellerContext";
 import { useJModellerContext } from "./context/JModellerContext";
-import { PeerProvider } from "./context/PeerContext";
+import { PeerProvider, usePeer } from "./context/PeerContext";
 import { useEffect, useRef, useState } from "react";
 import CoverPage from "./components/CoverPage";
 import { useTutorial } from "./context/useTutorial";
 import { TutorialOverlay } from "./components/TutorialOverlay";
 import { SaveFile } from "./includes/saveLoad";
+import { defaultJunctionConfig, defaultSimConfig } from "./includes/defaults";
 
 const zoomBtnStyle: React.CSSProperties = {
     display: "flex", alignItems: "center", justifyContent: "center",
@@ -29,13 +30,36 @@ const zoomBtnStyle: React.CSSProperties = {
 };
 
 function AppContent({ onExit, loadedSave }: { onExit: () => void; loadedSave?: SaveFile | null }) {
-    const { selectedObjects, setJunction, setSimConfig } = useJModellerContext();
+    const { selectedObjects, setJunction, setSimConfig, haltSim, resetConfig, setSelectedObjects, setSelectedExits, setObjectCounter, junctionObjectRefs, unregisterJunctionObject } = useJModellerContext();
+    const { disconnect, connections, isHost } = usePeer();
     const panelOpen = selectedObjects.length > 0;
     const [navDropdownHeight, setNavDropdownHeight] = useState(0);
     const HEADER_H = 44;
     const canvasTop = `${HEADER_H + navDropdownHeight}px`;
     const sceneRef = useRef<SceneHandle>(null);
     const tutorial = useTutorial();
+
+    const handleStartTutorial = () => {
+        // Halt any running simulation
+        haltSim();
+        resetConfig();
+        // Disconnect P2P session
+        if (isHost || connections.length > 0) {
+            disconnect();
+        }
+        // Dispose and clear all Three.js junction object refs
+        for (const group of [...junctionObjectRefs.current]) {
+            unregisterJunctionObject(group);
+        }
+        // Reset config to defaults
+        setJunction({ ...defaultJunctionConfig });
+        setSimConfig({ ...defaultSimConfig });
+        setSelectedObjects([]);
+        setSelectedExits([]);
+        setObjectCounter(0);
+        // Start tutorial
+        tutorial.start();
+    };
 
     useEffect(() => {
         if (!loadedSave) {
@@ -48,7 +72,7 @@ function AppContent({ onExit, loadedSave }: { onExit: () => void; loadedSave?: S
 
     return (
         <>
-            <AppHeader onExitAction={onExit} onMenuHeightChangeAction={setNavDropdownHeight} onStartTutorialAction={tutorial.start} />
+            <AppHeader onExitAction={onExit} onMenuHeightChangeAction={setNavDropdownHeight} onStartTutorialAction={handleStartTutorial} />
             <TutorialOverlay
                 currentStep={tutorial.currentStep}
                 stepIndex={tutorial.stepIndex}
