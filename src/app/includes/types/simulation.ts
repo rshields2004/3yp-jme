@@ -48,11 +48,13 @@ export type Graph = Map<NodeKey, Edge[]>;
 
 export type LightColour = "RED" | "RED_AMBER" | "GREEN" | "AMBER";
 
+export type LevelOfService = "A" | "B" | "C" | "D" | "E" | "F" | "-";
+
 export type JunctionStats = {
     id: string;
     type: JunctionObjectTypes;
 
-    // vehicles “associated” with this junction right now
+    // vehicles "associated" with this junction right now
     approaching: number;     // on approach segments to this junction
     waiting: number;         // stopped/queued at stop lines / give-way
     inside: number;          // crossing/within junction (incl. roundabout ring if you want)
@@ -62,6 +64,10 @@ export type JunctionStats = {
     entered: number;         // cumulative since sim start/reset
     exited: number;          // cumulative since sim start/reset
     avgWaitTime: number;     // average wait time in seconds
+    maxWaitTime: number;     // longest individual wait recorded (seconds)
+    throughput: number;      // vehicles per minute (based on exited / elapsed)
+    maxQueueLength: number;  // peak waiting count observed
+    levelOfService: LevelOfService; // HCM-style A-F grade based on avg delay
 
     // signals (optional)
     currentGreenKey?: string | null;
@@ -77,6 +83,8 @@ export type JunctionStatsGlobal = {
     entered: number;
     exited: number;
     avgWaitTime: number;     // global average wait time in seconds
+    maxQueueLength: number;  // peak global waiting count observed
+    throughput: number;      // global vehicles per minute
 };
 
 export type SimulationStats = {
@@ -88,6 +96,8 @@ export type SimulationStats = {
     spawnQueue: number;
     elapsedTime: number; // time elapsed since simulation start in seconds
     spawnQueueByEntry: Record<string, number>; // per-entry spawn queue
+    avgSpeed: number;       // average speed of all active vehicles
+    avgTravelTime: number;  // average time from spawn to completion (seconds)
     junctions: {
         global: JunctionStatsGlobal;
         byId: Record<string, JunctionStats>;

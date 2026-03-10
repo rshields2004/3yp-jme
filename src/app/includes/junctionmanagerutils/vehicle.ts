@@ -29,6 +29,9 @@ export class Vehicle {
     // stable start-lane identifier for spawn spacing (NOT route-dependent)
     spawnKey = "";
 
+    // Timestamp when this vehicle was spawned (simulation elapsed time)
+    spawnTime = 0;
+
     // Per-vehicle driving characteristics (adds natural variation)
     maxAccel: number;
     maxDecel: number;

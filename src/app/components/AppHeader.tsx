@@ -987,7 +987,7 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
                                     const s = statsRef.current;
                                     body.innerHTML = `
                                         <div class="grid" style="grid-template-columns:1fr 1fr 1fr 1fr">
-                                            ${[["Active",s.active],["Spawn Queue",s.spawnQueue],["Spawned",s.spawned],["Completed",s.completed],["Routes",s.routes],["Elapsed",s.elapsedTime.toFixed(1)+"s"]]
+                                            ${[["Active",s.active],["Spawn Queue",s.spawnQueue],["Spawned",s.spawned],["Completed",s.completed],["Routes",s.routes],["Elapsed",s.elapsedTime.toFixed(1)+"s"],["Avg Speed",s.avgSpeed.toFixed(1)],["Avg Travel",s.avgTravelTime.toFixed(1)+"s"]]
                                                 .map(([k,v])=>`<div class="row"><span class="label">${k}</span><span class="value">${v}</span></div>`).join("")}
                                         </div>
                                         <h3>Junctions (${s.junctions.global.count})</h3>
@@ -995,7 +995,10 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
                                             ${[["Approaching",s.junctions.global.approaching],["Waiting",s.junctions.global.waiting],["Inside",s.junctions.global.inside],["Exiting",s.junctions.global.exiting],["Entered",s.junctions.global.entered],["Exited",s.junctions.global.exited]]
                                                 .map(([k,v])=>`<div class="row"><span class="label">${k}</span><span class="value">${v}</span></div>`).join("")}
                                         </div>
-                                        <div class="row" style="border:none"><span class="label">Avg Wait Time</span><span class="value">${s.junctions.global.avgWaitTime.toFixed(1)}s</span></div>`;
+                                        <div class="grid">
+                                            ${[["Avg Wait",s.junctions.global.avgWaitTime.toFixed(1)+"s"],["Max Queue",s.junctions.global.maxQueueLength],["Throughput",s.junctions.global.throughput.toFixed(1)+" v/m"]]
+                                                .map(([k,v])=>`<div class="row"><span class="label">${k}</span><span class="value">${v}</span></div>`).join("")}
+                                        </div>`;
                                 };
                                 update();
                                 const interval = setInterval(update, 500);
@@ -1023,6 +1026,8 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
                                     ["Completed", stats.completed],
                                     ["Routes", stats.routes],
                                     ["Elapsed", `${stats.elapsedTime.toFixed(1)}s`],
+                                    ["Avg Speed", stats.avgSpeed.toFixed(1)],
+                                    ["Avg Travel", `${stats.avgTravelTime.toFixed(1)}s`],
                                 ].map(([k, v]) => (
                                     <div key={String(k)} className="flex justify-between py-0.5 border-b border-white/[0.08]">
                                         <span className="text-white/75">{k}</span>
@@ -1070,6 +1075,17 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
                             <div className="mt-2 text-[13px] flex justify-between">
                                 <span className="text-white/75">Avg Wait Time</span>
                                 <span className="text-white">{stats.junctions.global.avgWaitTime.toFixed(1)}s</span>
+                            </div>
+                            <div className="grid gap-x-6 gap-y-0.5 text-[13px] mt-1" style={{ gridTemplateColumns: "1fr 1fr" }}>
+                                {[
+                                    ["Max Queue", stats.junctions.global.maxQueueLength],
+                                    ["Throughput", `${stats.junctions.global.throughput.toFixed(1)} v/m`],
+                                ].map(([k, v]) => (
+                                    <div key={String(k)} className="flex justify-between py-0.5 border-b border-white/[0.08]">
+                                        <span className="text-white/75">{k}</span>
+                                        <span className="text-white tabular-nums">{v}</span>
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     )}

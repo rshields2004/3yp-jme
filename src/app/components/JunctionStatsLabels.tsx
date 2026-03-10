@@ -88,6 +88,34 @@ export const JunctionStatsLabels = ({ junctionGroups, stats, positionsCache}: Ju
                                         <span style={{ color: "rgba(225,225,230,0.85)" }}>Avg Wait</span>
                                         <span style={{ color: "rgba(255,255,255,0.95)", fontVariantNumeric: "tabular-nums" }}>{js.avgWaitTime.toFixed(1)}s</span>
                                     </div>
+                                    {([
+                                        ["Max Wait",     `${js.maxWaitTime.toFixed(1)}s`],
+                                        ["Throughput",   `${js.throughput.toFixed(1)} v/m`],
+                                        ["Max Queue",    js.maxQueueLength],
+                                    ] as [string, string | number][]).map(([label, value]) => (
+                                        <div key={label} style={{
+                                            display: "flex", justifyContent: "space-between",
+                                            gap: 16, fontSize: 11,
+                                            padding: "2px 0",
+                                            borderBottom: "1px solid rgba(161,161,170,0.07)",
+                                        }}>
+                                            <span style={{ color: "rgba(225,225,230,0.85)" }}>{label}</span>
+                                            <span style={{ color: "rgba(255,255,255,0.95)", fontVariantNumeric: "tabular-nums" }}>{value}</span>
+                                        </div>
+                                    ))}
+                                    <div style={{
+                                        display: "flex", justifyContent: "space-between",
+                                        gap: 16, fontSize: 11, marginTop: 4,
+                                    }}>
+                                        <span style={{ color: "rgba(225,225,230,0.85)" }}>LOS</span>
+                                        <span style={{
+                                            color: js.levelOfService === "A" || js.levelOfService === "B" ? "rgba(74,222,128,0.95)"
+                                                : js.levelOfService === "C" || js.levelOfService === "D" ? "rgba(250,204,21,0.95)"
+                                                : js.levelOfService === "E" || js.levelOfService === "F" ? "rgba(248,113,113,0.95)"
+                                                : "rgba(255,255,255,0.95)",
+                                            fontVariantNumeric: "tabular-nums", fontWeight: 700,
+                                        }}>{js.levelOfService}</span>
+                                    </div>
                                     {js.state && (
                                         <div style={{
                                             marginTop: 5, paddingTop: 5,

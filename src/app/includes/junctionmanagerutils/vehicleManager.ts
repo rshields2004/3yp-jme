@@ -3,7 +3,7 @@ import { getRoutePoints, computeSegmentDistances } from "./routing/routeUtils";
 import { IntersectionController } from "./controllers/intersectionController";
 import { Vehicle } from "./vehicle";
 import { JunctionConfig, JunctionObjectTypes } from "../types/types";
-import { SimConfig, SimulationStats, JunctionStats, JunctionStatsGlobal, LaneOcc, Route, RouteSegment, Tuple3 } from "../types/simulation";
+import { SimConfig, SimulationStats, JunctionStats, JunctionStatsGlobal, LaneOcc, LevelOfService, Route, RouteSegment, Tuple3 } from "../types/simulation";
 import { RoundaboutController } from "./controllers/roundaboutController";
 import { disposeObjectTree } from "./helpers/dispose";
 import { nodeKeyOf, segmentId, segmentLen, laneKeyForSegment } from "./helpers/segmentHelpers";
@@ -74,11 +74,15 @@ export class VehicleManager {
 
     private statsSnapshot: SimulationStats | null = null; // A cached object containing the latest statistics
 
-    private junctionCounters = new Map<string, { entered: number; exited: number; totalWaitTime: number; waitCount: number }>(); // Tracks stats per junction object
+    private junctionCounters = new Map<string, { entered: number; exited: number; totalWaitTime: number; waitCount: number; maxWaitTime: number; maxQueueLength: number }>(); // Tracks stats per junction object
 
     private lastVehJunctionTag = new Map<number, { jid: string | null; phase: string | null }>(); // Remembers last junction and phase a vehicle was in, used to detect x entered y
 
     private vehicleWaitStart = new Map<number, { jid: string; startTime: number }>(); // Tracks timestamp when a specific vehicle started waiting at a stop line
+
+    private totalTravelTime = 0;  // Cumulative travel time of all completed vehicles
+    private travelCount = 0;      // Number of completed vehicles with tracked travel time
+    private globalMaxQueueLength = 0; // Peak global waiting count observed
 
 
     
@@ -367,6 +371,9 @@ export class VehicleManager {
         this.junctionCounters.clear();
         this.lastVehJunctionTag.clear();
         this.vehicleWaitStart.clear();
+        this.totalTravelTime = 0;
+        this.travelCount = 0;
+        this.globalMaxQueueLength = 0;
     }
 
 
@@ -400,6 +407,7 @@ export class VehicleManager {
         }
 
         // Run the spawning system (rate updates, demand accumulation, vehicle creation)
+        const vehicleCountBefore = this.vehicles.length;
         spawnTick(
             this.spawnState, dt, junctionObjectRefs,
             this.cfg, this.vehicles, this.carModels, this.scene, this.junction,
@@ -411,6 +419,11 @@ export class VehicleManager {
             (g) => this.getGroupId(g),
             (v) => this.updateVehicleSegment(v),
         );
+
+        // Stamp spawnTime on newly created vehicles
+        for (let i = vehicleCountBefore; i < this.vehicles.length; i++) {
+            this.vehicles[i].spawnTime = this.elapsedTime;
+        }
 
 
         // Refresh segment/laneKey before lane logic
@@ -439,6 +452,11 @@ export class VehicleManager {
                 for (const roundabout of this.roundaboutControllers.values()) {
                     roundabout.clearVehicle(v.id);
                 }
+
+                // Track travel time before removing
+                const travelTime = this.elapsedTime - v.spawnTime;
+                this.totalTravelTime += travelTime;
+                this.travelCount += 1;
 
                 this.scene.remove(v.model);
                 this.vehicles.splice(i, 1);
@@ -480,9 +498,10 @@ export class VehicleManager {
                 // Vehicle is not waiting - if it was waiting before, record the wait duration
                 if (existing) {
                     const waitDuration = this.elapsedTime - existing.startTime;
-                    const c = this.junctionCounters.get(existing.jid) ?? { entered: 0, exited: 0, blockedDownstream: 0, totalWaitTime: 0, waitCount: 0 };
+                    const c = this.junctionCounters.get(existing.jid) ?? { entered: 0, exited: 0, blockedDownstream: 0, totalWaitTime: 0, waitCount: 0, maxWaitTime: 0, maxQueueLength: 0 };
                     c.totalWaitTime += waitDuration;
                     c.waitCount += 1;
+                    if (waitDuration > c.maxWaitTime) c.maxWaitTime = waitDuration;
                     this.junctionCounters.set(existing.jid, c);
                     this.vehicleWaitStart.delete(v.id);
                 }
@@ -2140,9 +2159,30 @@ export class VehicleManager {
     private updateStats(): SimulationStats {
         const byId: Record<string, JunctionStats> = {};
 
+        const computeLOS = (avgDelay: number, type: JunctionObjectTypes): LevelOfService => {
+            if (avgDelay <= 0) return "-";
+            if (type === "roundabout") {
+                // HCM roundabout LOS thresholds (seconds of delay)
+                if (avgDelay <= 10) return "A";
+                if (avgDelay <= 15) return "B";
+                if (avgDelay <= 25) return "C";
+                if (avgDelay <= 35) return "D";
+                if (avgDelay <= 50) return "E";
+                return "F";
+            }
+            // HCM signalised intersection LOS thresholds
+            if (avgDelay <= 10) return "A";
+            if (avgDelay <= 20) return "B";
+            if (avgDelay <= 35) return "C";
+            if (avgDelay <= 55) return "D";
+            if (avgDelay <= 80) return "E";
+            return "F";
+        };
+
         const ensure = (jid: string, type: JunctionObjectTypes): JunctionStats => {
             if (!byId[jid]) {
-                const c = this.junctionCounters.get(jid) ?? { entered: 0, exited: 0, blockedDownstream: 0, totalWaitTime: 0, waitCount: 0 };
+                const c = this.junctionCounters.get(jid) ?? { entered: 0, exited: 0, blockedDownstream: 0, totalWaitTime: 0, waitCount: 0, maxWaitTime: 0, maxQueueLength: 0 };
+                const avgWait = c.waitCount > 0 ? c.totalWaitTime / c.waitCount : 0;
                 byId[jid] = {
                     id: jid,
                     type,
@@ -2152,7 +2192,11 @@ export class VehicleManager {
                     exiting: 0,
                     entered: c.entered,
                     exited: c.exited,
-                    avgWaitTime: c.waitCount > 0 ? c.totalWaitTime / c.waitCount : 0,
+                    avgWaitTime: avgWait,
+                    maxWaitTime: c.maxWaitTime,
+                    throughput: this.elapsedTime > 0 ? (c.exited / this.elapsedTime) * 60 : 0,
+                    maxQueueLength: c.maxQueueLength,
+                    levelOfService: computeLOS(avgWait, type),
                     currentGreenKey: null,
                     state: undefined,
                 };
@@ -2205,7 +2249,7 @@ export class VehicleManager {
 
                 // “entered” when phase becomes inside for a junction
                 if (jid && seg.phase === "inside" && !(prev.jid === jid && prev.phase === "inside")) {
-                    const c = this.junctionCounters.get(jid) ?? { entered: 0, exited: 0, blockedDownstream: 0, totalWaitTime: 0, waitCount: 0 };
+                    const c = this.junctionCounters.get(jid) ?? { entered: 0, exited: 0, blockedDownstream: 0, totalWaitTime: 0, waitCount: 0, maxWaitTime: 0, maxQueueLength: 0 };
                     c.entered += 1;
                     this.junctionCounters.set(jid, c);
                     js.entered = c.entered; // keep snapshot aligned
@@ -2219,7 +2263,7 @@ export class VehicleManager {
 
                 // “exited” when phase becomes exit for a junction
                 if (jid && seg.phase === "exit" && !(prev.jid === jid && prev.phase === "exit")) {
-                    const c = this.junctionCounters.get(jid) ?? { entered: 0, exited: 0, blockedDownstream: 0, totalWaitTime: 0, waitCount: 0 };
+                    const c = this.junctionCounters.get(jid) ?? { entered: 0, exited: 0, blockedDownstream: 0, totalWaitTime: 0, waitCount: 0, maxWaitTime: 0, maxQueueLength: 0 };
                     c.exited += 1;
                     this.junctionCounters.set(jid, c);
                     js.exited = c.exited;
@@ -2252,7 +2296,7 @@ export class VehicleManager {
             js.currentGreenKey = controller.getCurrentGreen?.() ?? null;
             js.state = controller.getState?.();
             // Keep counters in sync (in case controller exists but no vehicles near it)
-            const c = this.junctionCounters.get(jid) ?? { entered: 0, exited: 0, blockedDownstream: 0, totalWaitTime: 0, waitCount: 0 };
+            const c = this.junctionCounters.get(jid) ?? { entered: 0, exited: 0, blockedDownstream: 0, totalWaitTime: 0, waitCount: 0, maxWaitTime: 0, maxQueueLength: 0 };
             js.entered = c.entered;
             js.exited = c.exited;
         }
@@ -2261,13 +2305,25 @@ export class VehicleManager {
             const js = ensure(jid, "roundabout");
             js.currentGreenKey = controller.getCurrentGreen?.() ?? null;
             js.state = controller.getState?.();
-            const c = this.junctionCounters.get(jid) ?? { entered: 0, exited: 0, blockedDownstream: 0, totalWaitTime: 0, waitCount: 0 };
+            const c = this.junctionCounters.get(jid) ?? { entered: 0, exited: 0, blockedDownstream: 0, totalWaitTime: 0, waitCount: 0, maxWaitTime: 0, maxQueueLength: 0 };
             js.entered = c.entered;
             js.exited = c.exited;
         }
 
         // ---------
-        // 3) Global junction aggregates
+        // 3) Update per-junction max queue length (high-water mark)
+        // ---------
+        for (const j of Object.values(byId)) {
+            const c = this.junctionCounters.get(j.id);
+            if (c && j.waiting > c.maxQueueLength) {
+                c.maxQueueLength = j.waiting;
+                this.junctionCounters.set(j.id, c);
+                j.maxQueueLength = c.maxQueueLength;
+            }
+        }
+
+        // ---------
+        // 4) Global junction aggregates
         // ---------
         const global: JunctionStatsGlobal = {
             count: Object.keys(byId).length,
@@ -2278,6 +2334,8 @@ export class VehicleManager {
             entered: 0,
             exited: 0,
             avgWaitTime: 0,
+            maxQueueLength: 0,
+            throughput: 0,
         };
 
         let totalWaitTime = 0;
@@ -2303,8 +2361,15 @@ export class VehicleManager {
 
         global.avgWaitTime = totalWaitCount > 0 ? totalWaitTime / totalWaitCount : 0;
 
+        // Track global max queue high-water mark
+        if (global.waiting > this.globalMaxQueueLength) {
+            this.globalMaxQueueLength = global.waiting;
+        }
+        global.maxQueueLength = this.globalMaxQueueLength;
+        global.throughput = this.elapsedTime > 0 ? (global.exited / this.elapsedTime) * 60 : 0;
+
         // ---------
-        // 4) Build final SimulationStats snapshot
+        // 5) Build final SimulationStats snapshot
         // ---------
         
         // Calculate total spawn queue from all entry demands
@@ -2315,6 +2380,16 @@ export class VehicleManager {
             totalSpawnQueue += queue;
             spawnQueueByEntry[entryKey] = queue;
         }
+
+        // Average speed of active vehicles
+        let avgSpeed = 0;
+        if (this.vehicles.length > 0) {
+            let totalSpeed = 0;
+            for (const v of this.vehicles) {
+                totalSpeed += v.speed;
+            }
+            avgSpeed = totalSpeed / this.vehicles.length;
+        }
         
         const snapshot: SimulationStats = {
             active: this.vehicles.length,
@@ -2324,6 +2399,8 @@ export class VehicleManager {
             spawnQueueByEntry,
             routes: this.routes.length,
             elapsedTime: this.elapsedTime,
+            avgSpeed,
+            avgTravelTime: this.travelCount > 0 ? this.totalTravelTime / this.travelCount : 0,
 
             // keep this as a convenience; for now equal to junction waiting aggregate
             waiting: global.waiting,
