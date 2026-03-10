@@ -456,7 +456,13 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
                 {/* right: sim control icons */}
                 <div className="flex items-center gap-1.5">
                     {/* tutorial */}
-                    <IconBtn title="Tutorial" onClick={onStartTutorialAction} disabled={!isHost && connections.length > 0}>
+                    <IconBtn title="Tutorial" onClick={() => {
+                        if (simIsRunning) haltSim();
+                        resetConfig();
+                        setJunction(defaultJunctionConfig);
+                        setSimConfig(defaultSimConfig);
+                        onStartTutorialAction?.();
+                    }} disabled={!isHost && connections.length > 0}>
                         <HelpCircle size={17} />
                     </IconBtn>
 
