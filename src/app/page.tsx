@@ -112,6 +112,13 @@ export default function Page() {
     const handleExit = () => {
         setEntered(false);
         setLoadedSave(null);
+        setSessionCode("");
+        // Remove ?s= from URL so CoverPage won't auto-rejoin
+        const url = new URL(window.location.href);
+        if (url.searchParams.has("s")) {
+            url.searchParams.delete("s");
+            window.history.replaceState(null, "", url.toString());
+        }
     };
 
     return (
