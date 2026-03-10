@@ -100,6 +100,9 @@ export type JModellerState = {
 
     toolMode: "view" | "build";
     setToolMode: React.Dispatch<React.SetStateAction<"view" | "build">>;
+
+    showOverlayLabels: boolean;
+    setShowOverlayLabels: React.Dispatch<React.SetStateAction<boolean>>;
 };
 
 

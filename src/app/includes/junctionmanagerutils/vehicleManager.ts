@@ -338,6 +338,25 @@ export class VehicleManager {
     }
 
     /**
+     * Returns a world-space position that lies `distance` metres ahead of
+     * vehicle `v` along its route.  Returns null when the route is too
+     * short or the vehicle has no route points.
+     */
+    public getPositionAhead(v: Vehicle, distance: number): THREE.Vector3 | null {
+        const pts = this.getRoutePointsCached(v.route);
+        if (!pts || pts.length < 2) return null;
+        const cumDist = this.getRouteCumulativeDistances(v.route);
+        const maxS = cumDist[cumDist.length - 1];
+        const aheadS = Math.min(v.s + distance, maxS);
+        const { idx, t } = this.findIndexAtS(cumDist, aheadS);
+        const a = pts[idx];
+        const b = pts[idx + 1];
+        const pA = new THREE.Vector3(a[0], a[1] + this.cfg.rendering.yOffset, a[2]);
+        const pB = new THREE.Vector3(b[0], b[1] + this.cfg.rendering.yOffset, b[2]);
+        return pA.clone().lerp(pB, t);
+    }
+
+    /**
      * Resets the simulation back to the beginning ready to be played again
      */
     public reset() {

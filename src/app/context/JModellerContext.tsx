@@ -30,6 +30,7 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
     const [simConfig, setSimConfig] = useState(defaultSimConfig);
     const [objectCounter, setObjectCounter] = useState(0);
     const [toolMode, setToolMode] = useState<"view" | "build">("view");
+    const [showOverlayLabels, setShowOverlayLabels] = useState(true);
 
     // ── P2P: receive config from host ─────────────────────────────────────
     const { connections, isHost } = usePeer();
@@ -309,6 +310,8 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
             setSimConfig,
             toolMode,
             setToolMode,
+            showOverlayLabels,
+            setShowOverlayLabels,
         }}>
             {children}
         </JModellerContext.Provider>

@@ -10,7 +10,7 @@ import { carClasses } from "../includes/types/carTypes";
 import {
     Play, Pause, Square, Check, RotateCcw,
     ChevronDown, ChevronUp, Link2, Trash2, PlusSquare, Copy, LogOut, Settings2,
-    Eye, Hammer, HelpCircle, ExternalLink,
+    Eye, EyeOff, Hammer, HelpCircle, ExternalLink,
     Download,
     Upload
 } from "lucide-react";
@@ -171,6 +171,7 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
         objectCounter, setObjectCounter,
         followedVehicleId, followedVehicleStats,
         toolMode, setToolMode,
+        showOverlayLabels, setShowOverlayLabels,
     } = useJModellerContext();
 
     const statsRef = useRef(stats);
@@ -552,6 +553,16 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
                         onClick={() => { send({ type: "HALT" }); haltSim(); }}
                     >
                         <Square size={17} />
+                    </IconBtn>
+
+                    {/* toggle overlay labels */}
+                    <IconBtn
+                        title={showOverlayLabels ? "Hide Overlay Labels" : "Show Overlay Labels"}
+                        disabled={!simIsRunning}
+                        onClick={() => setShowOverlayLabels(v => !v)}
+                        active={showOverlayLabels}
+                    >
+                        {showOverlayLabels ? <Eye size={17} /> : <EyeOff size={17} />}
                     </IconBtn>
                 </div>
             </div>
@@ -998,7 +1009,23 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
                                         <div class="grid">
                                             ${[["Avg Wait",s.junctions.global.avgWaitTime.toFixed(1)+"s"],["Max Queue",s.junctions.global.maxQueueLength],["Throughput",s.junctions.global.throughput.toFixed(1)+" v/m"]]
                                                 .map(([k,v])=>`<div class="row"><span class="label">${k}</span><span class="value">${v}</span></div>`).join("")}
-                                        </div>`;
+                                        </div>
+                                        ${Object.values(s.junctions.byId).map(j => {
+                                            const obj = junction.junctionObjects.find(o => o.id === j.id);
+                                            const name = obj?.name ?? j.id.slice(0, 6);
+                                            const typeLabel = j.type === "roundabout" ? "Roundabout" : "Intersection";
+                                            const losColor = (j.levelOfService === "A" || j.levelOfService === "B") ? "#4ade80"
+                                                : (j.levelOfService === "C" || j.levelOfService === "D") ? "#facc15"
+                                                : (j.levelOfService === "E" || j.levelOfService === "F") ? "#f87171" : "#fff";
+                                            return `<h3>${typeLabel} ${name}</h3>
+                                            <div class="grid">
+                                                ${[["Approaching",j.approaching],["Waiting",j.waiting],["Inside",j.inside],["Exiting",j.exiting],["Entered",j.entered],["Exited",j.exited],
+                                                   ["Avg Wait",j.avgWaitTime.toFixed(1)+"s"],["Max Wait",j.maxWaitTime.toFixed(1)+"s"],["Throughput",j.throughput.toFixed(1)+" v/m"],["Max Queue",j.maxQueueLength]]
+                                                    .map(([k,v])=>`<div class="row"><span class="label">${k}</span><span class="value">${v}</span></div>`).join("")}
+                                                <div class="row"><span class="label">LOS</span><span class="value" style="color:${losColor};font-weight:700">${j.levelOfService}</span></div>
+                                                ${j.state ? `<div class="row" style="border:none"><span class="label">Signal</span><span class="value">${j.state}</span></div>` : ""}
+                                            </div>`;
+                                        }).join("")}`;
                                 };
                                 update();
                                 const interval = setInterval(update, 500);
@@ -1087,6 +1114,50 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
                                     </div>
                                 ))}
                             </div>
+
+                            {/* Per-junction breakdown */}
+                            {Object.values(stats.junctions.byId).map((j) => {
+                                const obj = junction.junctionObjects.find(o => o.id === j.id);
+                                const name = obj?.name ?? j.id.slice(0, 6);
+                                const typeLabel = j.type === "roundabout" ? "Roundabout" : "Intersection";
+                                const losColor = (j.levelOfService === "A" || j.levelOfService === "B") ? "text-green-400"
+                                    : (j.levelOfService === "C" || j.levelOfService === "D") ? "text-yellow-400"
+                                    : (j.levelOfService === "E" || j.levelOfService === "F") ? "text-red-400" : "text-white";
+                                return (
+                                    <div key={j.id}>
+                                        <SectionTitle>{typeLabel} {name}</SectionTitle>
+                                        <div className="grid gap-x-6 gap-y-0.5 text-[13px]" style={{ gridTemplateColumns: "1fr 1fr" }}>
+                                            {([
+                                                ["Approaching", j.approaching],
+                                                ["Waiting", j.waiting],
+                                                ["Inside", j.inside],
+                                                ["Exiting", j.exiting],
+                                                ["Entered", j.entered],
+                                                ["Exited", j.exited],
+                                                ["Avg Wait", `${j.avgWaitTime.toFixed(1)}s`],
+                                                ["Max Wait", `${j.maxWaitTime.toFixed(1)}s`],
+                                                ["Throughput", `${j.throughput.toFixed(1)} v/m`],
+                                                ["Max Queue", j.maxQueueLength],
+                                            ] as [string, string | number][]).map(([k, v]) => (
+                                                <div key={k} className="flex justify-between py-0.5 border-b border-white/[0.08]">
+                                                    <span className="text-white/75">{k}</span>
+                                                    <span className="text-white tabular-nums">{v}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div className="mt-1 text-[13px] flex justify-between">
+                                            <span className="text-white/75">LOS</span>
+                                            <span className={`${losColor} font-bold tabular-nums`}>{j.levelOfService}</span>
+                                        </div>
+                                        {j.state && (
+                                            <div className="text-[13px] flex justify-between">
+                                                <span className="text-white/75">Signal</span>
+                                                <span className="text-white">{j.state}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
                         </div>
                     )}
                 </div>

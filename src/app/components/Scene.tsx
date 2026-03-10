@@ -219,6 +219,15 @@ const Scene = forwardRef<SceneHandle>(function Scene(_, ref) {
 
 
     useFrame((_, delta) => {
+        // ── FPV active: TrafficSimulation owns the camera — skip all
+        //    OrbitControls updates & lerps to avoid fighting with it.
+        //    Also force-disable the controls object so the drei internal
+        //    useFrame (priority -1) won't call controls.update() either.
+        if (followedVehicleId !== null) {
+            if (controlsRef.current) controlsRef.current.enabled = false;
+            return;
+        }
+
         // ── Pending top-down: wait for the CSS panel transition to finish
         //    before computing camera position (transition is 300ms).
         if (pendingTopDownRef.current) {

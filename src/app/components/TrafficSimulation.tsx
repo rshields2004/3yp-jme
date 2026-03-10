@@ -55,7 +55,7 @@ const MAX_TICKS_PER_FRAME = 5;
  * Drop this into your Scene component to enable traffic simulation
  */
 export const TrafficSimulation = () => {
-    const { junction, junctionObjectRefs, simIsRunning, stats, setStats, carsReady, setCarsReady, followedVehicleId, setFollowedVehicleId, setFollowedVehicleStats, simIsPaused, simConfig } = useJModellerContext();
+    const { junction, junctionObjectRefs, simIsRunning, stats, setStats, carsReady, setCarsReady, followedVehicleId, setFollowedVehicleId, setFollowedVehicleStats, simIsPaused, simConfig, showOverlayLabels } = useJModellerContext();
     const { scene, camera, gl } = useThree();
     const simIsPausedRef = useRef(simIsPaused);
     const [isInitialised, setisInitialised] = useState(false);
@@ -68,6 +68,7 @@ export const TrafficSimulation = () => {
     const prevSpeedRef = useRef(0);
     const prevDtRef = useRef(FIXED_DT);
     const raycasterRef = useRef(new THREE.Raycaster());
+    const smoothedYawRef = useRef<number | null>(null);
 
     /**
      * Fixed-step accumulator.
@@ -379,6 +380,7 @@ export const TrafficSimulation = () => {
         if (!simIsRunning) {
             setFollowedVehicleId(null);
             vehicleStatsRef.current = null;
+            smoothedYawRef.current = null;
         }
     }, [simIsRunning, setFollowedVehicleId]);
 
@@ -405,31 +407,53 @@ export const TrafficSimulation = () => {
             const vehicle = vm.getVehicleById(followedVehicleId);
             if (vehicle) {
                 const carPos = vehicle.model.position.clone();
-                const carRotation = vehicle.model.rotation.y;
-                
+
+                // Derive heading from a point 8 m ahead on the route rather
+                // than from model.rotation.y, which jumps at sharp waypoint
+                // corners inside intersections.
+                const lookAheadPt = vm.getPositionAhead(vehicle, 8);
+                let rawYaw: number | null = null;
+                if (lookAheadPt) {
+                    const dx = lookAheadPt.x - carPos.x;
+                    const dz = lookAheadPt.z - carPos.z;
+                    if (dx * dx + dz * dz > 1e-6) {
+                        rawYaw = Math.atan2(dx, dz);
+                    }
+                }
+
+                // Seed smoothed yaw on first frame only
+                if (smoothedYawRef.current === null) {
+                    smoothedYawRef.current = rawYaw ?? vehicle.model.rotation.y;
+                }
+
+                // Smooth the yaw with angular interpolation.
+                // Only update when we have a valid rawYaw AND the vehicle is
+                // moving.  Otherwise hold the last stable heading.
+                if (rawYaw !== null && vehicle.speed >= 0.3) {
+                    let diff = rawYaw - smoothedYawRef.current;
+                    diff = ((diff + Math.PI) % (2 * Math.PI) + (2 * Math.PI)) % (2 * Math.PI) - Math.PI;
+                    const alpha = 1 - Math.exp(-4 * delta);
+                    smoothedYawRef.current += diff * alpha;
+                }
+
+                const carRotation = smoothedYawRef.current;
+
                 const cameraHeight = 1.1;
                 const forwardOffset = -0.4;
-                const horizontalOffset = 0;
                 const lookAheadDistance = 15;
-                
+
                 const forward = new THREE.Vector3(
                     Math.sin(carRotation),
                     0,
                     Math.cos(carRotation)
                 );
-                
-                const right = new THREE.Vector3(
-                    Math.cos(carRotation),
-                    0,
-                    -Math.sin(carRotation)
-                );
-                
+
                 camera.position.set(
-                    carPos.x + forward.x * forwardOffset + right.x * horizontalOffset,
+                    carPos.x + forward.x * forwardOffset,
                     carPos.y + cameraHeight,
-                    carPos.z + forward.z * forwardOffset + right.z * horizontalOffset
+                    carPos.z + forward.z * forwardOffset
                 );
-                
+
                 const lookAt = carPos.clone().add(forward.multiplyScalar(lookAheadDistance));
                 lookAt.y = carPos.y + 1;
                 camera.lookAt(lookAt);
@@ -455,6 +479,7 @@ export const TrafficSimulation = () => {
             } else {
                 vehicleStatsRef.current = null;
                 setFollowedVehicleId(null);
+                smoothedYawRef.current = null;
             }
         }
 
@@ -533,7 +558,7 @@ export const TrafficSimulation = () => {
 
     return (
         <>
-            {simIsRunning && isInitialised && (
+            {simIsRunning && isInitialised && showOverlayLabels && (
                 <>
                     <JunctionStatsLabels
                         junctionGroups={junctionObjectRefs.current}
