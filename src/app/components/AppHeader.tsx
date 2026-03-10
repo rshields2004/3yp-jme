@@ -7,12 +7,14 @@ import { NetMessage, SharedState } from "../includes/types/peer";
 import { defaultIntersectionConfig, defaultRoundaboutConfig, defaultJunctionConfig, defaultSimConfig } from "../includes/defaults";
 import { numberToExcelColumn } from "../includes/utils";
 import { carClasses } from "../includes/types/carTypes";
+import { generateReport } from "../includes/reportGenerator";
 import {
     Play, Pause, Square, Check, RotateCcw,
     ChevronDown, ChevronUp, Link2, Trash2, PlusSquare, Copy, LogOut, Settings2,
     Eye, EyeOff, Hammer, HelpCircle, ExternalLink,
     Download,
-    Upload
+    Upload,
+    FileText
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -484,6 +486,13 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
                         }}
                     >
                         <Upload size={17} />
+                    </IconBtn>
+                    <IconBtn
+                        title="Generate PDF Report"
+                        disabled={simIsRunning || stats.spawned === 0}
+                        onClick={() => generateReport(junction, simConfig, stats)}
+                    >
+                        <FileText size={17} />
                     </IconBtn>
 
                     <Separator orientation="vertical" className="h-5 mx-0.5 bg-white/[0.08]" />
