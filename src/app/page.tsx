@@ -67,9 +67,13 @@ function AppContent({ onExit, loadedSave }: { onExit: () => void; loadedSave?: S
         if (!loadedSave) {
             return;
         }
+        haltSim();
+        resetConfig();
+        setSelectedObjects([]);
+        setSelectedExits([]);
         setJunction(loadedSave.junctionConfig);
         setSimConfig(loadedSave.simConfig);
-    })
+    }, [loadedSave])
 
 
     return (
