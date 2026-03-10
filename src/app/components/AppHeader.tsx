@@ -464,6 +464,7 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
                         title="Save config"
                         disabled={simIsRunning || isClientConnected}
                         onClick={() => downloadSave(junction, simConfig)}
+                        data-action="download-save"
                     >
                         <Download size={17} />
                     </IconBtn>
@@ -491,6 +492,7 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
                         title="Generate PDF Report"
                         disabled={simIsRunning || stats.spawned === 0}
                         onClick={() => generateReport(junction, simConfig, stats)}
+                        data-action="download-report"
                     >
                         <FileText size={17} />
                     </IconBtn>
@@ -560,6 +562,7 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
                         title="Stop Simulation"
                         disabled={!simIsRunning || isClientConnected}
                         onClick={() => { send({ type: "HALT" }); haltSim(); }}
+                        data-action="stop-sim"
                     >
                         <Square size={17} />
                     </IconBtn>

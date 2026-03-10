@@ -189,6 +189,40 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
         position: "bottom",
         autoAdvance: true,
     },
+
+    // ── 11. Stop the simulation ───────────────────────────────────────
+    {
+        id: "stop-simulation",
+        title: "Stop the Simulation",
+        description: "Let the simulation run for a few seconds, then click the ■ (stop) button to halt it. Statistics are preserved after stopping.",
+        target: "[data-action='stop-sim']",
+        action: "click",
+        position: "bottom",
+        autoAdvance: true,
+    },
+
+    // ── 12. Download a save file ──────────────────────────────────────
+    {
+        id: "download-save",
+        title: "Download a Save File",
+        description: "Click the ↓ (download) button to save your junction layout and simulation config as a JSON file. You can load this later to restore your work.",
+        target: "[data-action='download-save']",
+        action: "click",
+        position: "bottom",
+        autoAdvance: true,
+    },
+
+    // ── 13. Download a report ─────────────────────────────────────────
+    {
+        id: "download-report",
+        title: "Download a Report",
+        description: "Click the 📄 (report) button to generate a PDF report of your junction, including the diagram, configuration, and simulation statistics.",
+        target: "[data-action='download-report']",
+        action: "click",
+        position: "bottom",
+        autoAdvance: true,
+    },
+
     // ── Done ──────────────────────────────────────────────────────────
     {
         id: "tutorial-complete",
