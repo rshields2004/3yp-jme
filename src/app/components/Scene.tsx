@@ -16,6 +16,7 @@ import { lerp } from "three/src/math/MathUtils.js";
 
 export type SceneHandle = {
     zoom: (factor: number) => void;
+    resetCamera: () => void;
 };
 
 const Scene = forwardRef<SceneHandle>(function Scene(_, ref) {
@@ -35,6 +36,17 @@ const Scene = forwardRef<SceneHandle>(function Scene(_, ref) {
             const newDist = Math.max(5, Math.min(200, dist * factor));
             camera.position.copy((controls as any).target).addScaledVector(dir, newDist);
             controls.update();
+        },
+        resetCamera: () => {
+            camera.position.set(20, 35, 20);
+            camera.up.set(0, 1, 0);
+            isTopDownRef.current = false;
+            const controls = controlsRef.current;
+            if (controls) {
+                (controls as any).target.set(0, 0, 0);
+                controls.enabled = true;
+                controls.update();
+            }
         },
     }), [camera]);
 

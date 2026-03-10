@@ -57,6 +57,8 @@ function AppContent({ onExit, loadedSave }: { onExit: () => void; loadedSave?: S
         setSelectedObjects([]);
         setSelectedExits([]);
         setObjectCounter(0);
+        // Reset camera to default isometric view
+        sceneRef.current?.resetCamera();
         // Start tutorial
         tutorial.start();
     };
