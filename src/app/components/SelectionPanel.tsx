@@ -268,7 +268,7 @@ function ExitRow({ j, exit, obj, globalSpawnRate, onLaneCount, onExitLength, onN
                 className="flex items-center justify-between w-full px-2.5 py-[7px] bg-white/[0.04] border-none cursor-pointer font-mono text-white/88 hover:bg-white/[0.07] transition-colors"
             >
                 <span className="text-[13px] tracking-[0.08em]">
-                    Exit {j}
+                    Exit {j + 1}
                 </span>
                 <ChevronDown
                     size={14}

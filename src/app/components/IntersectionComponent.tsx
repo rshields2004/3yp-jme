@@ -301,9 +301,8 @@ export const IntersectionComponent = ({ id, intersectionConfig, name, initialTra
                             anchorY="middle"
                             strokeColor="black"
                         >
-                            Exit {exitIndex}
+                            Exit {exitIndex + 1}
                         </Text>
-
                         {/* Exit Invisible Mesh for selection */}
                         <mesh
                             key={`i-${id}-exitmesh-${exitIndex}`}

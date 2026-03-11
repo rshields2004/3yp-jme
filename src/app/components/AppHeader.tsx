@@ -1088,7 +1088,7 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
                                             const obj = junction.junctionObjects.find(o => o.id === structureID);
                                             return (
                                                 <div key={key} className="text-xs text-white/75 mb-0.5">
-                                                    {obj?.type ?? "junction"} {obj?.name ?? structureID.slice(0, 6)} Exit {exitIndex}:
+                                                    {obj?.type ?? "junction"} {obj?.name ?? structureID.slice(0, 6)} Exit {Number(exitIndex) + 1}:
                                                     <span className="text-white ml-1">{q}</span>
                                                 </div>
                                             );

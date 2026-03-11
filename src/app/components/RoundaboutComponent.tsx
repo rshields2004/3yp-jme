@@ -309,7 +309,7 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, name, initialTransfo
                             anchorY="middle"  
                             strokeColor="black"       
                         >
-                            Exit {exitIndex}
+                            Exit {exitIndex + 1}
                         </Text>
 
                         {/* Exit Invisible Mesh for selection */}
