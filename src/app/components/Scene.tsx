@@ -370,7 +370,7 @@ const Scene = forwardRef<SceneHandle>(function Scene(_, ref) {
                 minPolarAngle={Math.PI / 6}
                 maxPolarAngle={Math.PI / 2}
                 minDistance={5}
-                maxDistance={200}
+                maxDistance={1000}
             />
 
 
