@@ -33,7 +33,7 @@ const Scene = forwardRef<SceneHandle>(function Scene(_, ref) {
             if (!controls) return;
             const dir = new THREE.Vector3().subVectors(camera.position, (controls as any).target).normalize();
             const dist = camera.position.distanceTo((controls as any).target);
-            const newDist = Math.max(5, Math.min(200, dist * factor));
+            const newDist = Math.max(5, Math.min(1000, dist * factor));
             camera.position.copy((controls as any).target).addScaledVector(dir, newDist);
             controls.update();
         },
