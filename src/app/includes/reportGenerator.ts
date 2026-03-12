@@ -792,13 +792,15 @@ export async function generateReport(
     const SECTION_OVERHEAD = 11; // sectionLabel (7) + gap (4)
     let estY = TOP + 7 + GLOBAL_ROWS * ROW_H + SECTION_OVERHEAD;
     let extraConfigPages = 0;
-    for (const obj of junction.junctionObjects) {
+    for (let i = 0; i < junction.junctionObjects.length; i++) {
+        const obj = junction.junctionObjects[i];
         const objHeight = OBJ_HEADER + 2 * ROW_H + obj.config.exitConfig.length * ROW_H + 3;
-        if (estY + objHeight > PH - 20) {
+        estY += objHeight;
+        // Match buildConfigPage: overflow checked after drawing, skipped for last object
+        if (estY > PH - 20 && i < junction.junctionObjects.length - 1) {
             extraConfigPages++;
             estY = TOP + 7; // reset for new page
         }
-        estY += objHeight;
     }
     // Estimate stats overflow pages for per-junction breakdown
     const JUNCTION_BLOCK_H = 5.5 + 9 * ROW_H + 4; // chip + 9 rows + gap
@@ -806,7 +808,8 @@ export async function generateReport(
     let estStatsY = TOP + 7; // starts after section label
     let extraStatsPages = 0;
     for (const _jid of jIds) {
-        if (estStatsY + JUNCTION_BLOCK_H > PH - 14) {
+        // Match buildStatsPage: overflow checked before drawing based on current Y
+        if (estStatsY > PH - 14) {
             extraStatsPages++;
             estStatsY = TOP + 7;
         }

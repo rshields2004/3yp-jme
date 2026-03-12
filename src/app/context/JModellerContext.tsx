@@ -144,6 +144,7 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
 
             const pos = new THREE.Vector3();
             g.getWorldPosition(pos);
+            pos.y = FLOOR_Y_OFFSET; // flatten to ground plane for XZ-only collision
             return {
                 pos,
                 radius: data.maxDistanceToStopLine,
@@ -151,6 +152,7 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
         }).filter((obj): obj is { pos: THREE.Vector3; radius: number} => obj !== null).filter(obj => !!obj);
 
         const newWorldPos = draggedWorld.clone();
+        newWorldPos.y = FLOOR_Y_OFFSET; // flatten to ground plane for XZ-only collision
         let safe = false;
         let maxIterations = 50;
 
