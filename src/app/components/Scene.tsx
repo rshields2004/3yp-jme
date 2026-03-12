@@ -337,7 +337,7 @@ const Scene = forwardRef<SceneHandle>(function Scene(_, ref) {
             <ambientLight intensity={1} />
 
             <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, FLOOR_Y - 1, 0]} receiveShadow>
-                <planeGeometry args={[1000, 1000]} />
+                <planeGeometry args={[2000, 2000]} />
                 <meshStandardMaterial color="#09090b" polygonOffset polygonOffsetFactor={4} polygonOffsetUnits={4} />
             </mesh>
 
