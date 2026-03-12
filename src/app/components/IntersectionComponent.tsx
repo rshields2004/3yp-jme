@@ -139,10 +139,6 @@ export const IntersectionComponent = ({ id, intersectionConfig, name, initialTra
         return data ? selectedObjects.includes(data.id) : false;
     })() : false;
 
-    const handleIntersectionClick = (event: ThreeEvent<PointerEvent>) => {
-        // Right-click selection is now handled by Scene.tsx for select mode
-        // No click action needed on the intersection floor itself
-    };
 
     const handleExitClick = (event: ThreeEvent<PointerEvent>, exitIndex: number) => {
         if (event.button !== 0) {
@@ -214,7 +210,6 @@ export const IntersectionComponent = ({ id, intersectionConfig, name, initialTra
                 geometry={intersectionMemo.intersectionFloor}
                 rotation={[-Math.PI / 2, Math.PI, Math.PI]}
                 position={[0, 0, 0]}
-                onPointerDown={(event) => handleIntersectionClick(event)}
             >
                 <meshStandardMaterial color="darkgrey" side={THREE.DoubleSide} polygonOffset polygonOffsetFactor={2} polygonOffsetUnits={2} />
             </mesh>

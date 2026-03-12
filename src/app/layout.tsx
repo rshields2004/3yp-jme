@@ -10,8 +10,8 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-    title: "JME - An Online Traffic Simulator",
-    description: "Junction Modeller Expanded: 3D Traffic Simulation with Multi-Client Viewing and Crash Dynamics",
+    title: "Junction Modeller Expanded",
+    description: "Junction Modeller Expanded: A Web-Based 3D Traffic Simulation and Junction Analysis Platform",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -392,11 +392,11 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
 
             {/* ── header bar ── */}
             <div
-                className="fixed top-0 right-0 h-[44px] bg-zinc-950/97 border-b border-white/[0.08] flex items-center justify-between backdrop-blur-xl px-3 font-mono text-white/95"
+                className="fixed top-0 right-0 h-[44px] bg-zinc-950/97 border-b border-white/[0.08] flex items-center justify-between backdrop-blur-xl px-3 font-mono text-white/95 overflow-x-auto"
                 style={{ zIndex: 50, left: panelOpen ? "25vw" : "0", transition: "left 0.3s cubic-bezier(0.4, 0, 0.2, 1)" }}
             >
                 {/* left: exit + logo + menus */}
-                <div className="flex items-center">
+                <div className="flex items-center flex-shrink-0">
                     <Tooltip>
                         <TooltipTrigger asChild>
                             <Button
@@ -454,7 +454,7 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
                 </div>
 
                 {/* right: sim control icons */}
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 flex-shrink-0">
                     {/* tutorial */}
                     <IconBtn title="Tutorial" onClick={onStartTutorialAction} disabled={!isHost && connections.length > 0}>
                         <HelpCircle size={17} />
