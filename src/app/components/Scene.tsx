@@ -14,6 +14,8 @@ import * as THREE from "three";
 import { useFrame, useThree } from "@react-three/fiber";
 import { lerp } from "three/src/math/MathUtils.js";
 
+const MAX_ZOOM = 500;
+
 export type SceneHandle = {
     zoom: (factor: number) => void;
     resetCamera: () => void;
@@ -33,7 +35,7 @@ const Scene = forwardRef<SceneHandle>(function Scene(_, ref) {
             if (!controls) return;
             const dir = new THREE.Vector3().subVectors(camera.position, (controls as any).target).normalize();
             const dist = camera.position.distanceTo((controls as any).target);
-            const newDist = Math.max(5, Math.min(1000, dist * factor));
+            const newDist = Math.max(5, Math.min(MAX_ZOOM, dist * factor));
             camera.position.copy((controls as any).target).addScaledVector(dir, newDist);
             controls.update();
         },
@@ -370,7 +372,7 @@ const Scene = forwardRef<SceneHandle>(function Scene(_, ref) {
                 minPolarAngle={Math.PI / 6}
                 maxPolarAngle={Math.PI / 2}
                 minDistance={5}
-                maxDistance={1000}
+                maxDistance={MAX_ZOOM}
             />
 
 
