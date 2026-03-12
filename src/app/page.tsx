@@ -8,7 +8,7 @@ import type { SceneHandle } from "./components/Scene";
 import { JModellerProvider } from "./context/JModellerContext";
 import { useJModellerContext } from "./context/JModellerContext";
 import { PeerProvider, usePeer } from "./context/PeerContext";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import CoverPage from "./components/CoverPage";
 import { useTutorial } from "./context/useTutorial";
 import { TutorialOverlay } from "./components/TutorialOverlay";
@@ -122,16 +122,76 @@ function AppContent({ onExit, loadedSave }: { onExit: () => void; loadedSave?: S
     );
 }
 
+function MobileGate({ onProceed }: { onProceed: () => void }) {
+    return (
+        <div className="fixed inset-0 bg-[#080808] flex flex-col items-center justify-center" style={{ zIndex: 200, fontFamily: "var(--font-mono), 'Courier New', monospace", overflow: "hidden" }}>
+            {/* Grid background */}
+            <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                    backgroundImage: `
+                        linear-gradient(rgba(161,161,170,0.04) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(161,161,170,0.04) 1px, transparent 1px)
+                    `,
+                    backgroundSize: "40px 40px",
+                }}
+            />
+            {/* Corner accents */}
+            {([
+                { top: 24, left: 24, borderTop: "1px solid", borderLeft: "1px solid" },
+                { top: 24, right: 24, borderTop: "1px solid", borderRight: "1px solid" },
+                { bottom: 24, left: 24, borderBottom: "1px solid", borderLeft: "1px solid" },
+                { bottom: 24, right: 24, borderBottom: "1px solid", borderRight: "1px solid" },
+            ] as React.CSSProperties[]).map((style, i) => (
+                <div
+                    key={i}
+                    className="absolute w-8 h-8"
+                    style={{ ...style, borderColor: "rgba(240,240,240,0.57)" }}
+                />
+            ))}
+            {/* Content */}
+            <div className="relative flex flex-col items-center max-w-[400px] w-full px-6 text-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/logo.png" alt="JME" className="h-12 w-auto mb-8 select-none" />
+                <h2 className="text-[18px] font-semibold text-white/90 tracking-[0.04em] mb-3">
+                    Best used on desktop
+                </h2>
+                <p className="text-[13px] text-white/40 leading-relaxed tracking-[0.03em] mb-10">
+                    This application relies on keyboard shortcuts, drag controls, and a wide viewport that work best on a desktop browser.
+                </p>
+                <button
+                    onClick={onProceed}
+                    className="text-[12px] tracking-[0.15em] uppercase text-white/35 hover:text-white/70 transition-colors duration-150 bg-transparent border-none cursor-pointer underline underline-offset-4 decoration-white/15 hover:decoration-white/40"
+                >
+                    Proceed anyway
+                </button>
+            </div>
+        </div>
+    );
+}
+
 export default function Page() {
 
     const [entered, setEntered] = useState(false);
     const [sessionCode, setSessionCode] = useState("");
     const [loadedSave, setLoadedSave] = useState<SaveFile | null>(null);
+    const [mobileBypass, setMobileBypass] = useState(false);
+    const [isMobile, setIsMobile] = useState(false);
 
     useEffect(() => {
         const code = new URLSearchParams(window.location.search).get("s") ?? "";
         setSessionCode(code);
     }, []);
+
+    const checkMobile = useCallback(() => {
+        setIsMobile(window.innerWidth < 768);
+    }, []);
+
+    useEffect(() => {
+        checkMobile();
+        window.addEventListener("resize", checkMobile);
+        return () => window.removeEventListener("resize", checkMobile);
+    }, [checkMobile]);
 
     const handleLoadSave = (save: SaveFile) => {
         setLoadedSave(save);
@@ -158,6 +218,10 @@ export default function Page() {
                     style={{ width: "100vw", height: "100vh", position: "relative", overflow: "hidden" }}
                     onContextMenu={(e) => e.preventDefault()}
                 >
+                    {isMobile && !mobileBypass && (
+                        <MobileGate onProceed={() => setMobileBypass(true)} />
+                    )}
+
                     {!entered && (
                         <CoverPage 
                             onContinueAction={() => setEntered(true)}
