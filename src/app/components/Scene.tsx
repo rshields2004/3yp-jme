@@ -345,7 +345,7 @@ const Scene = forwardRef<SceneHandle>(function Scene(_, ref) {
                 <>
                     <Grid
                         position={[0, FLOOR_Y, 0]}
-                        args={[1000, 1000]}
+                        args={[2000, 2000]}
                         cellSize={1}
                         cellThickness={0.6}
                         cellColor="#27272a"
