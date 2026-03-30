@@ -39,6 +39,7 @@ export function computeIdmAccel(
     // Finds sum of +ve and -ve acceleration
     const accel = a * (freeRoadTerm - interaction);
 
+    // Real life constraint, max decel isnt possible so we cap it at that
     return Math.max(-v.maxDecel, Math.min(accel, a));
 }
 
