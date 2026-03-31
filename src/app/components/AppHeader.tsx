@@ -211,6 +211,9 @@ const ActionBtn = ({
  * @param onStartTutorialAction - callback to start the tutorial
  * @returns the rendered header bar
  */
+
+type MenuId = "session" | "modes" | "config" | null;
+
 const AppHeader = ({ onExitAction, panelOpen = false, onMenuHeightChangeAction, onStartTutorialAction }: { onExitAction?: () => void; panelOpen?: boolean; onMenuHeightChangeAction?: (height: number) => void; onStartTutorialAction?: () => void }) => {
     const [openMenu, setOpenMenu] = useState<MenuId>(null);
     const [joinCode, setJoinCode] = useState("");
