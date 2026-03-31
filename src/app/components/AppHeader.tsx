@@ -18,7 +18,7 @@ import { generateReport } from "../includes/reportGenerator";
 import {
     Play, Pause, Square, Check, RotateCcw,
     ChevronDown, ChevronUp, Link2, Trash2, PlusSquare, Copy, LogOut, Settings2,
-    Eye, EyeOff, Hammer, HelpCircle, ExternalLink,
+    Eye, EyeOff, Hammer, HelpCircle, ExternalLink, BookOpen,
     Download,
     Upload,
     FileText
@@ -511,6 +511,11 @@ const AppHeader = ({ onExitAction, panelOpen = false, onMenuHeightChangeAction, 
 
                 {/* right: sim control icons */}
                 <div className="flex items-center gap-1.5 flex-shrink-0">
+                    {/* docs */}
+                    <IconBtn title="Documentation" onClick={() => window.open("https://rshields.xyz/docs/index.html", "_blank", "noopener,noreferrer")}>
+                        <BookOpen size={17} />
+                    </IconBtn>
+
                     {/* tutorial */}
                     <IconBtn title="Tutorial" onClick={onStartTutorialAction} disabled={!isHost && connections.length > 0}>
                         <HelpCircle size={17} />

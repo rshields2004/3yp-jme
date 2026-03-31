@@ -154,6 +154,16 @@ const CoverPage = ({ onContinueAction, initialSessionCode = "", onLoadSaveAction
                         >
                             Join Session
                         </Button>
+
+                        <a
+                            href="https://rshields.xyz/docs/index.html"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-full text-center py-2 text-[11px] tracking-[0.15em] uppercase text-white/30 hover:text-white/60 transition-colors duration-150"
+                        >
+                            Documentation ↗
+                        </a>
+
                         {loadError && (
                             <p className="text-xs text-red-400/80 text-center tracking-wide m-0">{loadError}</p>
                         )}
