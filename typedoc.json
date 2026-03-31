@@ -3,5 +3,5 @@
   "entryPointStrategy": "expand",
   "out": "public/docs",
   "readme": "README.md",
-  "name": "JME - Junction Modeller Expanded",
+  "name": "JME Docs",
 }
