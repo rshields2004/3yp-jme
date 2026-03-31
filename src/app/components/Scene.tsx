@@ -1,3 +1,10 @@
+/**
+ * Scene.tsx
+ *
+ * R3F scene setup including camera controls, lighting, grid, and
+ * post-processing. Manages view/build mode camera transitions.
+ */
+
 "use client";
 
 import { OrbitControls, Html, Grid } from "@react-three/drei";
@@ -6,7 +13,7 @@ import { useEffect, useRef, useImperativeHandle, forwardRef } from "react";
 import { Bloom, EffectComposer } from "@react-three/postprocessing";
 import { useJModellerContext } from "../context/JModellerContext";
 import { usePeer } from "../context/PeerContext";
-import { FLOOR_Y } from "../includes/defaults";
+import { FLOOR_Y, MAX_ZOOM, ISO_OFFSET_X, ISO_OFFSET_Y, ISO_OFFSET_Z } from "../includes/constants";
 import { JunctionComponents } from "./JunctionComponents";
 import { TrafficSimulation } from "./TrafficSimulation";
 import { RouteDebug } from "./RouteDebug";
@@ -14,14 +21,16 @@ import * as THREE from "three";
 import { useFrame, useThree } from "@react-three/fiber";
 import { lerp } from "three/src/math/MathUtils.js";
 
-const MAX_ZOOM = 500;
-
 export type SceneHandle = {
     zoom: (factor: number) => void;
     resetCamera: () => void;
 };
 
-const Scene = forwardRef<SceneHandle>(function Scene(_, ref) {
+/**
+ * R3F scene root: orbit controls, lighting, junction components, simulation, labels, and debug overlays.
+ * @returns the rendered scene graph
+ */
+const Scene = forwardRef<SceneHandle>((_, ref) => {
     const { selectedObjects, setSelectedObjects, selectedExits, setSelectedExits, followedVehicleId, junction, setJunction, simIsRunning, isConfigConfirmed, junctionObjectRefs, toolMode, objectCounter, setObjectCounter } = useJModellerContext();
     const { isHost, connections } = usePeer();
     const { camera, gl } = useThree();
@@ -59,8 +68,8 @@ const Scene = forwardRef<SceneHandle>(function Scene(_, ref) {
     const lerpCamRef = useRef<THREE.Vector3 | null>(null);
     const isTopDownRef = useRef(false);
 
-    // Isometric offset used for double-click centering (OrbitControls re-enables after)
-    const ISO_OFFSET = new THREE.Vector3(20, 35, 20);
+    // Isometric offset used for double-click centring (OrbitControls re-enables after)
+    const ISO_OFFSET = new THREE.Vector3(ISO_OFFSET_X, ISO_OFFSET_Y, ISO_OFFSET_Z);
 
     // Helper: compute the top-down camera height needed to fit a given radius.
     // Reads live canvas dimensions so it works even inside a stale closure (e.g. setTimeout).
@@ -96,7 +105,7 @@ const Scene = forwardRef<SceneHandle>(function Scene(_, ref) {
     const pendingTopDownRef = useRef<{ id: string } | null>(null);
     const pendingFrameCount = useRef<number>(0);
 
-    // ── Build mode: top-down view centered on origin (or selected object).
+    // Build mode: top-down view centered on origin (or selected object).
     //    When an object is selected via right-click, zoom to it;
     //    when deselected, return to top-down overview.
     useEffect(() => {
@@ -119,7 +128,7 @@ const Scene = forwardRef<SceneHandle>(function Scene(_, ref) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedObjects, toolMode]);
 
-    // ── View mode: restore isometric orbit view
+    // View mode: restore isometric orbit view
     useEffect(() => {
         if (toolMode === "view") {
             if (isTopDownRef.current) {
@@ -182,7 +191,7 @@ const Scene = forwardRef<SceneHandle>(function Scene(_, ref) {
         };
     }, [camera, gl, junctionObjectRefs, toolMode]);
 
-    // ── Build mode: double-click on an object to select it (camera zoom handled by selection effect)
+    // Build mode: double-click on an object to select it (camera zoom handled by selection effect)
     useEffect(() => {
         const handleDblClick = (e: MouseEvent) => {
             if (toolMode !== "build") return;
@@ -233,7 +242,7 @@ const Scene = forwardRef<SceneHandle>(function Scene(_, ref) {
 
 
     useFrame((_, delta) => {
-        // ── FPV active: TrafficSimulation owns the camera — skip all
+        // FPV active: TrafficSimulation owns the camera — skip all
         //    OrbitControls updates & lerps to avoid fighting with it.
         //    Also force-disable the controls object so the drei internal
         //    useFrame (priority -1) won't call controls.update() either.
@@ -242,7 +251,7 @@ const Scene = forwardRef<SceneHandle>(function Scene(_, ref) {
             return;
         }
 
-        // ── Pending top-down: wait for the CSS panel transition to finish
+        // Pending top-down: wait for the CSS panel transition to finish
         //    before computing camera position (transition is 300ms).
         if (pendingTopDownRef.current) {
             pendingFrameCount.current++;

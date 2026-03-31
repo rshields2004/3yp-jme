@@ -1,101 +1,148 @@
+﻿/**
+ * reportGenerator.ts
+ *
+ * Generates a multi-page PDF report (dark themed) for a junction simulation
+ * using jsPDF. Includes a junction diagram, full configuration tables, and
+ * aggregated simulation statistics.
+ */
+
 import jsPDF from "jspdf";
 import { JunctionConfig } from "./types/types";
 import { SimConfig, SimulationStats } from "./types/simulation";
+import { PDF_PAGE_WIDTH, PDF_PAGE_HEIGHT, PDF_MARGIN, PDF_CONTENT_WIDTH, COLOURS } from "./constants";
 
-// ── A4 Landscape constants (mm) ──────────────────────────────────────────────
-const PW = 297;
-const PH = 210;
-const MARGIN = 14;
-const CONTENT_W = PW - MARGIN * 2;
+// HELPERS
 
-// ── Colour palette ───────────────────────────────────────────────────────────
-const C = {
-    bg: [9, 9, 11] as const,
-    surface: [24, 24, 27] as const,
-    border: [63, 63, 70] as const,
-    muted: [113, 113, 122] as const,
-    dimText: [161, 161, 170] as const,
-    text: [228, 228, 231] as const,
-    white: [255, 255, 255] as const,
-    accent: [99, 102, 241] as const,   // indigo
-    green: [34, 197, 94] as const,
-    amber: [245, 158, 11] as const,
-};
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function setFill(pdf: jsPDF, rgb: readonly [number, number, number]) {
+/**
+ * Set the PDF fill colour from an RGB tuple.
+ *
+ * @param pdf - the jsPDF document instance
+ * @param rgb - RGB colour tuple
+ */
+const setFill = (pdf: jsPDF, rgb: readonly [number, number, number]) => {
     pdf.setFillColor(rgb[0], rgb[1], rgb[2]);
 }
-function setDraw(pdf: jsPDF, rgb: readonly [number, number, number]) {
+/**
+ * Set the PDF draw (stroke) colour from an RGB tuple.
+ *
+ * @param pdf - the jsPDF document instance
+ * @param rgb - RGB colour tuple
+ */
+const setDraw = (pdf: jsPDF, rgb: readonly [number, number, number]) => {
     pdf.setDrawColor(rgb[0], rgb[1], rgb[2]);
 }
-function setTextColor(pdf: jsPDF, rgb: readonly [number, number, number]) {
+/**
+ * Set the PDF text colour from an RGB tuple.
+ *
+ * @param pdf - the jsPDF document instance
+ * @param rgb - RGB colour tuple
+ */
+const setTextColor = (pdf: jsPDF, rgb: readonly [number, number, number]) => {
     pdf.setTextColor(rgb[0], rgb[1], rgb[2]);
 }
 
-function pageBackground(pdf: jsPDF) {
-    setFill(pdf, C.bg);
-    pdf.rect(0, 0, PW, PH, "F");
+/**
+ * Fill the entire page with the dark background colour.
+ *
+ * @param pdf - the jsPDF document instance
+ */
+const pageBackground = (pdf: jsPDF) => {
+    setFill(pdf, COLOURS.bg);
+    pdf.rect(0, 0, PDF_PAGE_WIDTH, PDF_PAGE_HEIGHT, "F");
 }
 
-/** Thin horizontal rule (optionally scoped to a column) */
-function hRule(pdf: jsPDF, y: number, x0 = MARGIN, x1 = PW - MARGIN) {
-    setDraw(pdf, C.border);
+/**
+ * Thin horizontal rule (optionally scoped to a column)
+ *
+ * @param pdf - the jsPDF document instance
+ * @param y - y-coordinate
+ * @param x0 - left x-coordinate
+ * @param x1 - right x-coordinate
+ */
+const hRule = (pdf: jsPDF, y: number, x0 = PDF_MARGIN, x1 = PDF_PAGE_WIDTH - PDF_MARGIN) => {
+    setDraw(pdf, COLOURS.border);
     pdf.setLineWidth(0.25);
     pdf.line(x0, y, x1, y);
 }
 
-/** Page header band */
-function pageHeader(pdf: jsPDF, title: string, subtitle: string, pageNum: number, totalPages = 3) {
+/**
+ * Page header band
+ *
+ * @param pdf - the jsPDF document instance
+ * @param title - title text
+ * @param subtitle - subtitle text
+ * @param pageNum - current page number
+ * @param totalPages - total number of pages
+ */
+const pageHeader = (pdf: jsPDF, title: string, subtitle: string, pageNum: number, totalPages = 3) => {
     // Top bar
-    setFill(pdf, C.surface);
-    pdf.rect(0, 0, PW, 18, "F");
-    setFill(pdf, C.accent);
+    setFill(pdf, COLOURS.surface);
+    pdf.rect(0, 0, PDF_PAGE_WIDTH, 18, "F");
+    setFill(pdf, COLOURS.accent);
     pdf.rect(0, 0, 3, 18, "F");
 
     // Title
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(10);
-    setTextColor(pdf, C.white);
-    pdf.text("JME", MARGIN + 1, 11.5);
+    setTextColor(pdf, COLOURS.white);
+    pdf.text("JME", PDF_MARGIN + 1, 11.5);
 
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(8);
-    setTextColor(pdf, C.dimText);
-    pdf.text("Junction Modeller Expanded", MARGIN + 11, 11.5);
+    setTextColor(pdf, COLOURS.dimText);
+    pdf.text("Junction Modeller Expanded", PDF_MARGIN + 11, 11.5);
 
     // Section title centred
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(9);
-    setTextColor(pdf, C.text);
-    pdf.text(title, PW / 2, 11.5, { align: "center" });
+    setTextColor(pdf, COLOURS.text);
+    pdf.text(title, PDF_PAGE_WIDTH / 2, 11.5, { align: "center" });
 
     // Right: page number
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(8);
-    setTextColor(pdf, C.muted);
-    pdf.text(`Page ${pageNum} / ${totalPages}`, PW - MARGIN, 11.5, { align: "right" });
+    setTextColor(pdf, COLOURS.muted);
+    pdf.text(`Page ${pageNum} / ${totalPages}`, PDF_PAGE_WIDTH - PDF_MARGIN, 11.5, { align: "right" });
 
     // Subtitle below bar
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(7.5);
-    setTextColor(pdf, C.muted);
-    pdf.text(subtitle, MARGIN, 25);
+    setTextColor(pdf, COLOURS.muted);
+    pdf.text(subtitle, PDF_MARGIN, 25);
 }
 
-// ── Section label ────────────────────────────────────────────────────────────
-function sectionLabel(pdf: jsPDF, text: string, y: number, x = MARGIN, w = CONTENT_W): number {
+/**
+ * Render an uppercase section heading with a horizontal rule underneath.
+ *
+ * @param pdf - the jsPDF document instance
+ * @param text - display text
+ * @param y - y-coordinate
+ * @param x - x-coordinate
+ * @param w - width
+ * @returns the updated y-coordinate
+ */
+const sectionLabel = (pdf: jsPDF, text: string, y: number, x = PDF_MARGIN, w = PDF_CONTENT_WIDTH): number => {
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(7);
-    setTextColor(pdf, C.accent);
+    setTextColor(pdf, COLOURS.accent);
     pdf.text(text.toUpperCase(), x, y);
     hRule(pdf, y + 2, x, x + w);
     return y + 7;
 }
 
-// ── Key-value row ────────────────────────────────────────────────────────────
-function kvRow(
+/**
+ * Render a labelled key-value row, optionally highlighted with a filled surface background.
+ *
+ * @param pdf - the jsPDF document instance
+ * @param label - label text
+ * @param value - display value
+ * @param x - x-coordinate
+ * @param y - y-coordinate
+ * @param colWidth - column width in mm
+ * @param highlight - whether to apply highlight styling
+ * @returns the updated y-coordinate
+ */
+const kvRow = (
     pdf: jsPDF,
     label: string,
     value: string,
@@ -103,27 +150,31 @@ function kvRow(
     y: number,
     colWidth: number,
     highlight = false
-): number {
+): number => {
     const ROW_H = 5.5;
     if (highlight) {
-        setFill(pdf, C.surface);
+        setFill(pdf, COLOURS.surface);
         pdf.rect(x, y - 3.5, colWidth, ROW_H, "F");
     }
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(7.5);
-    setTextColor(pdf, C.dimText);
+    setTextColor(pdf, COLOURS.dimText);
     pdf.text(label, x + 2, y);
     pdf.setFont("helvetica", "bold");
-    setTextColor(pdf, C.text);
+    setTextColor(pdf, COLOURS.text);
     pdf.text(value, x + colWidth - 2, y, { align: "right" });
     return y + ROW_H;
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// PAGE 1 — Junction Diagram
-// ════════════════════════════════════════════════════════════════════════════
+// PAGE 1 - JUNCTION DIAGRAM
 
-function drawJunctionDiagram(junction: JunctionConfig): string {
+/**
+ * Render the junction layout onto an off-screen canvas and return the result as a data-URL PNG.
+ *
+ * @param junction - the junction configuration
+ * @returns the diagram as a data-URL PNG string
+ */
+const drawJunctionDiagram = (junction: JunctionConfig): string => {
     const CW = 2400;
     const CH = 1520;
     const canvas = document.createElement("canvas");
@@ -151,7 +202,7 @@ function drawJunctionDiagram(junction: JunctionConfig): string {
         return canvas.toDataURL("image/png");
     }
 
-    // Compute bounds — account for the rendered extent of each object
+    // Compute bounds - account for the rendered extent of each object
     // (body radius + arm length + label bubble) so arms don't overflow.
     const xs = objects.map(o => o.transform!.position.x);
     const zs = objects.map(o => o.transform!.position.z);
@@ -204,7 +255,7 @@ function drawJunctionDiagram(junction: JunctionConfig): string {
         };
     };
 
-    // ── Draw links (exit-to-exit with bezier curves) ─────────────────
+        // Draw links (exit-to-exit with bezier curves)
     // Bezier helpers for offset lane lines
     const bezPt = (t: number, p0: number, c1: number, c2: number, p3: number) => {
         const u = 1 - t;
@@ -283,7 +334,7 @@ function drawJunctionDiagram(junction: JunctionConfig): string {
         }
     }
 
-    // ── Draw objects ─────────────────────────────────────────────────
+        // Draw objects
     for (const obj of objects) {
         const { cx, cy } = toC(obj.transform!.position.x, obj.transform!.position.z);
         const maxExit = Math.max(...obj.config.exitConfig.map(e => e.exitLength));
@@ -438,15 +489,37 @@ function drawJunctionDiagram(junction: JunctionConfig): string {
     return canvas.toDataURL("image/png");
 }
 
-function setCanvasShadow(ctx: CanvasRenderingContext2D, color: string, blur: number) {
+/**
+ * Apply a drop-shadow to subsequent canvas draw calls.
+ *
+ * @param ctx - the canvas 2D rendering context
+ * @param color - CSS colour string
+ * @param blur - blur radius in pixels
+ */
+const setCanvasShadow = (ctx: CanvasRenderingContext2D, color: string, blur: number) => {
     ctx.shadowColor = color;
     ctx.shadowBlur = blur;
 }
-function clearCanvasShadow(ctx: CanvasRenderingContext2D) {
+/**
+ * Clear any active canvas shadow.
+ *
+ * @param ctx - the canvas 2D rendering context
+ */
+const clearCanvasShadow = (ctx: CanvasRenderingContext2D) => {
     ctx.shadowColor = "transparent";
     ctx.shadowBlur = 0;
 }
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+/**
+ * Draw a filled rounded rectangle with the given corner radius.
+ *
+ * @param ctx - the canvas 2D rendering context
+ * @param x - x-coordinate
+ * @param y - y-coordinate
+ * @param w - width
+ * @param h - height
+ * @param r - corner radius
+ */
+const roundRect = (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) => {
     ctx.beginPath();
     ctx.moveTo(x + r, y);
     ctx.lineTo(x + w - r, y);
@@ -461,20 +534,28 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
     ctx.fill();
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// PAGE 2 — Junction + Sim Config
-// ════════════════════════════════════════════════════════════════════════════
+// PAGE 2 - JUNCTION AND SIM CONFIG
 
-function buildConfigPage(pdf: jsPDF, junction: JunctionConfig, simConfig: SimConfig, startPage: number, totalPages: number): number {
+/**
+ * Build the configuration page: global settings, per-object tables, link details, and simulation parameters.
+ *
+ * @param pdf - the jsPDF document instance
+ * @param junction - the junction configuration
+ * @param simConfig - the simulation configuration
+ * @param startPage - starting page number
+ * @param totalPages - total number of pages
+ * @returns the final page number used
+ */
+const buildConfigPage = (pdf: jsPDF, junction: JunctionConfig, simConfig: SimConfig, startPage: number, totalPages: number): number => {
     pageBackground(pdf);
     pageHeader(pdf, "Configuration", `Generated ${new Date().toLocaleString()} · ${junction.junctionObjects.length} object(s) · ${junction.junctionLinks.length} link(s)`, startPage, totalPages);
 
     const TOP = 30;
-    const COL_W = (CONTENT_W - 6) / 3;   // 3 equal columns
-    const cols = [MARGIN, MARGIN + COL_W + 3, MARGIN + (COL_W + 3) * 2];
+    const COL_W = (PDF_CONTENT_WIDTH - 6) / 3;   // 3 equal columns
+    const cols = [PDF_MARGIN, PDF_MARGIN + COL_W + 3, PDF_MARGIN + (COL_W + 3) * 2];
     let currentPage = startPage;
 
-    // ── Column 1: Global + Junction Objects ──────────────────────────
+    // Column 1: Global + Junction Objects
     let y = TOP;
     y = sectionLabel(pdf, "Global Settings", y, cols[0], COL_W);
     const even = [true, false];
@@ -497,7 +578,7 @@ function buildConfigPage(pdf: jsPDF, junction: JunctionConfig, simConfig: SimCon
         pdf.rect(cols[0], y - 3.5, COL_W, 5.5, "F");
         pdf.setFont("helvetica", "bold");
         pdf.setFontSize(7.5);
-        setTextColor(pdf, C.white);
+        setTextColor(pdf, COLOURS.white);
         const tag = obj.type === "roundabout" ? "RBT" : "INT";
         pdf.text(`${tag} ${obj.name}  —  ${obj.config.numExits} exits`, cols[0] + 2, y);
         y += 5.5;
@@ -517,7 +598,7 @@ function buildConfigPage(pdf: jsPDF, junction: JunctionConfig, simConfig: SimCon
         y += 3;
 
         // Overflow: start a new page for remaining objects
-        if (y > PH - 20 && junction.junctionObjects.indexOf(obj) < junction.junctionObjects.length - 1) {
+        if (y > PDF_PAGE_HEIGHT - 20 && junction.junctionObjects.indexOf(obj) < junction.junctionObjects.length - 1) {
             pdf.addPage();
             currentPage++;
             pageBackground(pdf);
@@ -527,7 +608,7 @@ function buildConfigPage(pdf: jsPDF, junction: JunctionConfig, simConfig: SimCon
         }
     }
 
-    // ── Column 2: Spawning + Motion + Spacing ────────────────────────
+    // Column 2: Spawning + Motion + Spacing
     y = TOP;
     y = sectionLabel(pdf, "Spawning", y, cols[1], COL_W);
     const sp = simConfig.spawning;
@@ -565,7 +646,7 @@ function buildConfigPage(pdf: jsPDF, junction: JunctionConfig, simConfig: SimCon
     idx = 0;
     for (const [k, v] of scRows) y = kvRow(pdf, k, v, cols[1], y, COL_W, idx++ % 2 === 0);
 
-    // ── Column 3: Controllers + Car Classes ──────────────────────────
+    // Column 3: Controllers + Car Classes
     y = TOP;
     y = sectionLabel(pdf, "Intersection Controller", y, cols[2], COL_W);
     const ic = simConfig.controllers.intersection;
@@ -597,7 +678,7 @@ function buildConfigPage(pdf: jsPDF, junction: JunctionConfig, simConfig: SimCon
     const CC_COLS = [3, 31, 49, 66, 83];  // offsets within col 3 (3mm left pad)
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(6.5);
-    setTextColor(pdf, C.muted);
+    setTextColor(pdf, COLOURS.muted);
     ["Class", "Speed", "Accel", "Decel", "Wt"].forEach((h, i) => {
         pdf.text(h, cols[2] + CC_COLS[i], y);
     });
@@ -607,36 +688,43 @@ function buildConfigPage(pdf: jsPDF, junction: JunctionConfig, simConfig: SimCon
     const enabled = simConfig.rendering.enabledCarClasses;
     for (const [bt, ovr] of Object.entries(simConfig.carClassOverrides)) {
         const on = enabled.includes(bt);
-        setFill(pdf, on ? C.surface : C.bg);
+        setFill(pdf, on ? COLOURS.surface : COLOURS.bg);
         pdf.rect(cols[2], y - 3.5, COL_W, 5, "F");
         pdf.setFont("helvetica", on ? "normal" : "italic");
         pdf.setFontSize(6.5);
-        setTextColor(pdf, on ? C.text : C.muted);
+        setTextColor(pdf, on ? COLOURS.text : COLOURS.muted);
 
         const vals = [bt, `${ovr.speedFactor.toFixed(2)}x`, `${ovr.accelFactor.toFixed(2)}x`, `${ovr.decelFactor.toFixed(2)}x`, `${ovr.weight}`];
         vals.forEach((v, i) => pdf.text(v, cols[2] + CC_COLS[i], y));
         y += 5;
-        if (y > PH - 12) break;
+        if (y > PDF_PAGE_HEIGHT - 12) break;
     }
     return currentPage;
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// PAGE 3 — Simulation Stats
-// ════════════════════════════════════════════════════════════════════════════
+// PAGE 3 - SIMULATION STATS
 
-function buildStatsPage(pdf: jsPDF, stats: SimulationStats, junction: JunctionConfig, pageNum: number, totalPages: number) {
+/**
+ * Build the statistics page: summary tiles, per-link throughput / wait-time tables, and object stats.
+ *
+ * @param pdf - the jsPDF document instance
+ * @param stats - aggregated simulation statistics
+ * @param junction - the junction configuration
+ * @param pageNum - current page number
+ * @param totalPages - total number of pages
+ */
+const buildStatsPage = (pdf: jsPDF, stats: SimulationStats, junction: JunctionConfig, pageNum: number, totalPages: number) => {
     pageBackground(pdf);
     pageHeader(pdf, "Simulation Summary",
         `Elapsed: ${stats.elapsedTime.toFixed(1)} s · Spawned: ${stats.spawned} · Completed: ${stats.completed}`, pageNum, totalPages);
 
     const TOP = 30;
-    const HALF = (CONTENT_W - 4) / 2;
-    const col2 = MARGIN + HALF + 4;
+    const HALF = (PDF_CONTENT_WIDTH - 4) / 2;
+    const col2 = PDF_MARGIN + HALF + 4;
 
-    // ── Left: Summary overview (big stat tiles) ──────────────────────
+    // Left: Summary overview (big stat tiles)
     let y = TOP;
-    y = sectionLabel(pdf, "Simulation Overview", y, MARGIN, HALF);
+    y = sectionLabel(pdf, "Simulation Overview", y, PDF_MARGIN, HALF);
 
     const bigStats: [string, string, string][] = [
         ["Total Spawned", `${stats.spawned}`, "#a3e635"],
@@ -651,9 +739,9 @@ function buildStatsPage(pdf: jsPDF, stats: SimulationStats, junction: JunctionCo
     const TILE_H = 20;
     for (let i = 0; i < bigStats.length; i++) {
         const [label, value, colour] = bigStats[i];
-        const tx = MARGIN + (i % 3) * (TILE_W + 2);
+        const tx = PDF_MARGIN + (i % 3) * (TILE_W + 2);
         const ty = y + Math.floor(i / 3) * (TILE_H + 2);
-        setFill(pdf, C.surface);
+        setFill(pdf, COLOURS.surface);
         pdf.rect(tx, ty, TILE_W, TILE_H, "F");
         // Accent top bar
         const rgb = hexToRgb(colour);
@@ -661,18 +749,18 @@ function buildStatsPage(pdf: jsPDF, stats: SimulationStats, junction: JunctionCo
 
         pdf.setFont("helvetica", "bold");
         pdf.setFontSize(14);
-        if (rgb) setTextColor(pdf, rgb); else setTextColor(pdf, C.white);
+        if (rgb) setTextColor(pdf, rgb); else setTextColor(pdf, COLOURS.white);
         pdf.text(value, tx + TILE_W / 2, ty + 11, { align: "center" });
 
         pdf.setFont("helvetica", "normal");
         pdf.setFontSize(6.5);
-        setTextColor(pdf, C.muted);
+        setTextColor(pdf, COLOURS.muted);
         pdf.text(label, tx + TILE_W / 2, ty + 17, { align: "center" });
     }
     y += (TILE_H + 2) * 2 + 6;
 
-    // ── Left: Global junction aggregate (cumulative) ─────────────────
-    y = sectionLabel(pdf, "All-Junction Aggregate", y, MARGIN, HALF);
+    // Left: Global junction aggregate (cumulative)
+    y = sectionLabel(pdf, "All-Junction Aggregate", y, PDF_MARGIN, HALF);
     const g = stats.junctions.global;
     const gRows: [string, string][] = [
         ["Junctions Tracked", `${g.count}`],
@@ -686,10 +774,10 @@ function buildStatsPage(pdf: jsPDF, stats: SimulationStats, junction: JunctionCo
     ];
     let ri = 0;
     for (const [k, v] of gRows) {
-        y = kvRow(pdf, k, v, MARGIN, y, HALF, ri++ % 2 === 0);
+        y = kvRow(pdf, k, v, PDF_MARGIN, y, HALF, ri++ % 2 === 0);
     }
 
-    // ── Right: Per-junction stats (cumulative) ────────────────────────
+    // Right: Per-junction stats (cumulative)
     let yR = TOP;
     let currentPage = pageNum;
     yR = sectionLabel(pdf, "Per-Junction Breakdown", yR, col2, HALF);
@@ -698,7 +786,7 @@ function buildStatsPage(pdf: jsPDF, stats: SimulationStats, junction: JunctionCo
     if (jIds.length === 0) {
         pdf.setFont("helvetica", "italic");
         pdf.setFontSize(7.5);
-        setTextColor(pdf, C.muted);
+        setTextColor(pdf, COLOURS.muted);
         pdf.text("No per-junction data recorded.", col2, yR + 4);
     }
 
@@ -712,7 +800,7 @@ function buildStatsPage(pdf: jsPDF, stats: SimulationStats, junction: JunctionCo
         const obj = junction.junctionObjects.find(o => o.id === jid);
 
         // Overflow: start a new full-width page
-        if (yR > PH - 14) {
+        if (yR > PDF_PAGE_HEIGHT - 14) {
             pdf.addPage();
             currentPage++;
             pageBackground(pdf);
@@ -720,8 +808,8 @@ function buildStatsPage(pdf: jsPDF, stats: SimulationStats, junction: JunctionCo
             yR = TOP;
             if (!overflowed) {
                 overflowed = true;
-                jCol = MARGIN;
-                jWidth = CONTENT_W;
+                jCol = PDF_MARGIN;
+                jWidth = PDF_CONTENT_WIDTH;
             }
             yR = sectionLabel(pdf, "Per-Junction Breakdown (cont.)", yR, jCol, jWidth);
         }
@@ -732,20 +820,20 @@ function buildStatsPage(pdf: jsPDF, stats: SimulationStats, junction: JunctionCo
         pdf.rect(jCol, yR - 3.5, jWidth, 5.5, "F");
         pdf.setFont("helvetica", "bold");
         pdf.setFontSize(7.5);
-        setTextColor(pdf, C.white);
+        setTextColor(pdf, COLOURS.white);
         const tag = js.type === "roundabout" ? "RBT" : "INT";
         pdf.text(`${tag} ${obj?.name ?? jid.slice(0, 8)}`, jCol + 2, yR);
 
         // LOS pill
-        const losColor = js.levelOfService === "-" ? C.muted
-            : js.levelOfService <= "B" ? C.green
-            : js.levelOfService <= "D" ? C.amber
+        const losColor = js.levelOfService === "-" ? COLOURS.muted
+            : js.levelOfService <= "B" ? COLOURS.green
+            : js.levelOfService <= "D" ? COLOURS.amber
             : [239, 68, 68] as const;
         setFill(pdf, losColor as readonly [number, number, number]);
         pdf.rect(jCol + jWidth - 28, yR - 3, 26, 4.5, "F");
         pdf.setFont("helvetica", "bold");
         pdf.setFontSize(5.5);
-        setTextColor(pdf, js.levelOfService === "-" ? C.dimText : [0, 0, 0]);
+        setTextColor(pdf, js.levelOfService === "-" ? COLOURS.dimText : [0, 0, 0]);
         const losLabel = js.levelOfService === "-" ? "N/A" : `LOS ${js.levelOfService}`;
         pdf.text(losLabel, jCol + jWidth - 15, yR, { align: "center" });
         yR += 5.5;
@@ -769,20 +857,32 @@ function buildStatsPage(pdf: jsPDF, stats: SimulationStats, junction: JunctionCo
     }
 }
 
-function hexToRgb(hex: string): [number, number, number] | null {
+/**
+ * Parse a hex colour string (e.g. `"#ff8800"`) into an `[R, G, B]` tuple, or `null` on failure.
+ *
+ * @param hex - hex colour string (e.g. "#ff8800")
+ * @returns the [R, G, B] tuple, or `null` on parse failure
+ */
+const hexToRgb = (hex: string): [number, number, number] | null => {
     const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
     return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : null;
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// Public entry point
-// ════════════════════════════════════════════════════════════════════════════
+// PUBLIC ENTRY POINT
 
-export async function generateReport(
+/**
+ * Builds and downloads a multi-page PDF report for the current junction.
+ *
+ * @param junction - The junction configuration (objects, links, lane width).
+ * @param simConfig - The simulation configuration (spawning, motion, controllers).
+ * @param stats - Aggregated statistics collected during the simulation run.
+ * @returns void (triggers a browser download)
+ */
+export const generateReport = async (
     junction: JunctionConfig,
     simConfig: SimConfig,
     stats: SimulationStats,
-): Promise<void> {
+): Promise<void> => {
     // Pre-calculate total pages: 1 (diagram) + config pages + stats pages
     // Estimate how many config pages are needed for junction objects
     const ROW_H = 5.5;
@@ -797,7 +897,7 @@ export async function generateReport(
         const objHeight = OBJ_HEADER + 2 * ROW_H + obj.config.exitConfig.length * ROW_H + 3;
         estY += objHeight;
         // Match buildConfigPage: overflow checked after drawing, skipped for last object
-        if (estY > PH - 20 && i < junction.junctionObjects.length - 1) {
+        if (estY > PDF_PAGE_HEIGHT - 20 && i < junction.junctionObjects.length - 1) {
             extraConfigPages++;
             estY = TOP + 7; // reset for new page
         }
@@ -809,7 +909,7 @@ export async function generateReport(
     let extraStatsPages = 0;
     for (const _jid of jIds) {
         // Match buildStatsPage: overflow checked before drawing based on current Y
-        if (estStatsY > PH - 14) {
+        if (estStatsY > PDF_PAGE_HEIGHT - 14) {
             extraStatsPages++;
             estStatsY = TOP + 7;
         }
@@ -819,22 +919,22 @@ export async function generateReport(
 
     const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
 
-    // ── Page 1 ───────────────────────────────────────────────────────
+    //  Page 1 
     pageBackground(pdf);
     pageHeader(pdf, "Junction Diagram",
         `${junction.junctionObjects.length} object(s) · ${junction.junctionLinks.length} link(s) · Lane width ${junction.laneWidth} wu`, 1, totalPages);
 
     const imgData = drawJunctionDiagram(junction);
     const IMG_Y = 22;
-    const IMG_H = PH - IMG_Y - MARGIN;
-    const IMG_W = CONTENT_W;
-    pdf.addImage(imgData, "PNG", MARGIN, IMG_Y, IMG_W, IMG_H);
+    const IMG_H = PDF_PAGE_HEIGHT - IMG_Y - PDF_MARGIN;
+    const IMG_W = PDF_CONTENT_WIDTH;
+    pdf.addImage(imgData, "PNG", PDF_MARGIN, IMG_Y, IMG_W, IMG_H);
 
-    // ── Page 2 (+ overflow pages) ────────────────────────────────────
+    // Page 2 (+ overflow pages)
     pdf.addPage();
     const lastConfigPage = buildConfigPage(pdf, junction, simConfig, 2, totalPages);
 
-    // ── Final Page — Stats ────────────────────────────────────────────
+    // Final Page - Stats
     pdf.addPage();
     buildStatsPage(pdf, stats, junction, lastConfigPage + 1, totalPages);
 

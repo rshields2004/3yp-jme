@@ -1,12 +1,18 @@
+/**
+ * roundaboutController.ts
+ *
+ * Position-based gap-acceptance controller for roundabout junctions. Uses
+ * actual world positions for gap checking and tracks vehicles per ring lane.
+ * Entering vehicles must have a clear gap on ALL circulating lanes since the
+ * entry path crosses every ring lane.
+ */
+
 import * as THREE from "three";
 import { LightColour, SimConfig } from "../../types/simulation";
 
 /**
- * RoundaboutController with position-based collision detection.
- *
- * Uses actual world positions for gap checking and tracks vehicles
- * per ring lane. Entering vehicles must have a clear gap on ALL
- * circulating lanes, since the entry path crosses every ring lane.
+ * Position-based gap-acceptance controller for roundabout junctions.
+ * Tracks circulating vehicles per ring lane and checks entry clearance.
  */
 export class RoundaboutController {
     id: string;
@@ -36,7 +42,7 @@ export class RoundaboutController {
     >();
 
     private entryKeys: string[];
-    private center = new THREE.Vector3();
+    private centre = new THREE.Vector3();
     private now = 0;
 
     // Lane geometry for lane-aware gap checking
@@ -51,14 +57,25 @@ export class RoundaboutController {
     private get ENTRY_TIMEOUT() { return this.getCfg().controllers.roundabout.roundaboutEntryTimeout; }
     private get MIN_ANGULAR_SEPARATION() { return this.getCfg().controllers.roundabout.roundaboutMinAngularSep; }
 
+    /**
+     * Create a new roundabout controller.
+     * @param id - unique junction ID matching the Three.js group's userData
+     * @param entryKeys - distinct entry-group keys that feed into this roundabout
+     * @param cfgGetter - accessor returning the current simulation config
+     */
     constructor(id: string, entryKeys: string[], cfgGetter: () => SimConfig) {
         this.id = id;
         this.entryKeys = [...new Set(entryKeys)];
         this.getCfg = cfgGetter;
     }
 
-    setGeometry(center: THREE.Vector3, laneMidRadii?: number[]): void {
-        this.center.copy(center);
+    /**
+     * Sets the roundabout centre and optional per-lane mid-radii for gap detection.
+     * @param centre - world-space position of the roundabout centre
+     * @param laneMidRadii - mid-radius of each ring lane
+     */
+    setGeometry(centre: THREE.Vector3, laneMidRadii?: number[]): void {
+        this.centre.copy(centre);
         if (laneMidRadii && laneMidRadii.length > 0) {
             this.laneMidRadii = [...laneMidRadii];
             if (laneMidRadii.length >= 2) {
@@ -69,11 +86,16 @@ export class RoundaboutController {
         }
     }
 
-    /** Determine which ring lane a world position is on based on distance from center */
+    /**
+     * Determines which ring lane a world position is on based on distance from centre.
+     *
+     * @param position - position identifier or vector
+     * @returns the ring-lane index (0 = innermost)
+     */
     getLaneIndexForPosition(position: THREE.Vector3): number {
         if (this.laneMidRadii.length <= 1) return 0;
-        const dx = position.x - this.center.x;
-        const dz = position.z - this.center.z;
+        const dx = position.x - this.centre.x;
+        const dz = position.z - this.centre.z;
         const distFromCenter = Math.sqrt(dx * dx + dz * dz);
         let bestLane = 0;
         let bestDist = Infinity;
@@ -87,26 +109,49 @@ export class RoundaboutController {
         return bestLane;
     }
 
-    /** Get the outermost lane radius (vehicles enter through this lane) */
+    /**
+     * Get the outermost lane radius (vehicles enter through this lane)
+     * @returns the outermost ring-lane radius
+     */
     getOuterLaneRadius(): number {
         if (this.laneMidRadii.length === 0) return 10;
         return this.laneMidRadii[this.laneMidRadii.length - 1];
     }
 
-    /** Get the outermost lane index */
+    /**
+     * Get the outermost lane index
+     * @returns the outermost ring-lane index
+     */
     getOuterLaneIndex(): number {
         return Math.max(0, this.laneMidRadii.length - 1);
     }
 
-    /** Get lane width */
+    /**
+     * Get lane width
+     * @returns the lane width in world units
+     */
     getLaneWidth(): number {
         return this.laneWidth;
     }
 
+    /**
+     * Advance the internal clock by `dt` seconds.
+     *
+     * @param dt - time delta in seconds since last frame
+     */
     update(dt: number): void {
         this.now += dt;
     }
 
+    /**
+     * Update (or insert) a circulating vehicle's position, speed, lane, and heading.
+     * @param vehicleId - numeric vehicle identifier
+     * @param position - current world position
+     * @param speed - current scalar speed
+     * @param laneIndex - ring-lane index the vehicle is on
+     * @param heading - normalised forward direction
+     * @param entryKey - optional entry-group key the vehicle entered from
+     */
     updateCirculatingVehicle(
         vehicleId: number,
         position: THREE.Vector3,
@@ -127,11 +172,24 @@ export class RoundaboutController {
         });
     }
 
+    /**
+     * Remove a vehicle from the circulating and entering tracking maps.
+     *
+     * @param vehicleId - unique identifier of the vehicle
+     */
     removeCirculatingVehicle(vehicleId: number): void {
         this.circulating.delete(vehicleId);
         this.entering.delete(vehicleId);
     }
 
+    /**
+     * Mark a vehicle as committed to enter the roundabout.
+     * Optionally records the entry position for conflicting-entry detection.
+     *
+     * @param vehicleId - unique identifier of the vehicle
+     * @param entryPosition - world-space position of the entry point
+     * @param entryKey - string key identifying an entry point
+     */
     commitVehicle(vehicleId: number, entryPosition?: THREE.Vector3, entryKey?: string): void {
         this.committed.add(vehicleId);
         if (entryPosition && entryKey) {
@@ -143,21 +201,43 @@ export class RoundaboutController {
         }
     }
 
+    /**
+     * Check whether a vehicle has been committed (cleared to enter).
+     *
+     * @param vehicleId - unique identifier of the vehicle
+     * @returns `true` if the vehicle has been committed to enter
+     */
     isCommitted(vehicleId: number): boolean {
         return this.committed.has(vehicleId);
     }
 
+    /**
+     * Revoke a vehicle's entry commitment.
+     *
+     * @param vehicleId - unique identifier of the vehicle
+     */
     clearCommitment(vehicleId: number): void {
         this.committed.delete(vehicleId);
         this.entering.delete(vehicleId);
     }
 
+    /**
+     * Remove a vehicle from all tracking maps (circulating, committed, entering).
+     *
+     * @param vehicleId - unique identifier of the vehicle
+     */
     clearVehicle(vehicleId: number): void {
         this.circulating.delete(vehicleId);
         this.committed.delete(vehicleId);
         this.entering.delete(vehicleId);
     }
 
+    /**
+     * Flag a circulating vehicle as currently exiting the roundabout.
+     *
+     * @param vehicleId - unique identifier of the vehicle
+     * @param isExiting - whether the vehicle is currently exiting
+     */
     setVehicleExiting(vehicleId: number, isExiting: boolean) {
         const veh = this.circulating.get(vehicleId);
         if (veh) {
@@ -165,6 +245,14 @@ export class RoundaboutController {
         }
     }
 
+    /**
+     * Check whether another vehicle from a different arm is already entering
+     * at an angular position too close to `entryPosition`.
+     *
+     * @param entryKey - string key identifying an entry point
+     * @param entryPosition - world-space position of the entry point
+     * @returns `true` if a conflicting entry exists
+     */
     private hasConflictingEntry(entryKey: string, entryPosition: THREE.Vector3): boolean {
 
 
@@ -173,12 +261,12 @@ export class RoundaboutController {
             if (this.now - info.time > this.ENTRY_TIMEOUT) continue;
 
             const angle1 = Math.atan2(
-                entryPosition.z - this.center.z,
-                entryPosition.x - this.center.x
+                entryPosition.z - this.centre.z,
+                entryPosition.x - this.centre.x
             );
             const angle2 = Math.atan2(
-                info.position.z - this.center.z,
-                info.position.x - this.center.x
+                info.position.z - this.centre.z,
+                info.position.x - this.centre.x
             );
 
             let angularDist = Math.abs(angle1 - angle2);
@@ -191,6 +279,14 @@ export class RoundaboutController {
         return false;
     }
 
+    /**
+     * Determine whether a vehicle may safely enter at the given world position,
+     * checking all circulating vehicles across every ring lane and detecting
+     * conflicting entries from other arms.
+     * @param entryPosition - world position where the vehicle would enter
+     * @param entryKey - entry-group key of the approaching arm
+     * @returns `true` if the gap is sufficient for safe entry
+     */
     canEnterSafelyAtPosition(
         entryPosition: THREE.Vector3,
         entryKey?: string
@@ -222,14 +318,14 @@ export class RoundaboutController {
             // inner-lane traffic).
             const laneRadius = this.laneMidRadii[info.laneIndex] ?? this.getOuterLaneRadius();
             const laneEntryPos = new THREE.Vector3(
-                this.center.x + Math.cos(Math.atan2(
-                    entryPosition.z - this.center.z,
-                    entryPosition.x - this.center.x
+                this.centre.x + Math.cos(Math.atan2(
+                    entryPosition.z - this.centre.z,
+                    entryPosition.x - this.centre.x
                 )) * laneRadius,
-                this.center.y,
-                this.center.z + Math.sin(Math.atan2(
-                    entryPosition.z - this.center.z,
-                    entryPosition.x - this.center.x
+                this.centre.y,
+                this.centre.z + Math.sin(Math.atan2(
+                    entryPosition.z - this.centre.z,
+                    entryPosition.x - this.centre.x
                 )) * laneRadius
             );
 
@@ -259,6 +355,14 @@ export class RoundaboutController {
         return true;
     }
 
+    /**
+     * Convenience wrapper around {@link canEnterSafelyAtPosition} that derives
+     * the entry position from an angle and the outer-lane radius.
+     * @param entryAngle - angle (radians) of the entry arm around the roundabout
+     * @param radius - fallback radius when lane geometry is unavailable
+     * @param entryKey - entry-group key of the approaching arm
+     * @returns `true` if the vehicle may enter without conflict
+     */
     canEnterSafely(
         entryAngle: number,
         radius: number,
@@ -269,41 +373,74 @@ export class RoundaboutController {
         const outerRadius = this.getOuterLaneRadius();
         const effectiveRadius = outerRadius > 0 ? outerRadius : radius;
         const entryPosition = new THREE.Vector3(
-            this.center.x + Math.cos(entryAngle) * effectiveRadius,
-            this.center.y,
-            this.center.z + Math.sin(entryAngle) * effectiveRadius
+            this.centre.x + Math.cos(entryAngle) * effectiveRadius,
+            this.centre.y,
+            this.centre.z + Math.sin(entryAngle) * effectiveRadius
         );
         return this.canEnterSafelyAtPosition(entryPosition, entryKey);
     }
 
+    /**
+     * Compute the world position of the entry point at the given angle and radius.
+     *
+     * @param entryAngle - angle of the entry point in radians
+     * @param radius - radius in world units
+     * @returns the computed position vector
+     */
     getEntryPosition(entryAngle: number, radius: number): THREE.Vector3 {
         return new THREE.Vector3(
-            this.center.x + Math.cos(entryAngle) * radius,
-            this.center.y,
-            this.center.z + Math.sin(entryAngle) * radius
+            this.centre.x + Math.cos(entryAngle) * radius,
+            this.centre.y,
+            this.centre.z + Math.sin(entryAngle) * radius
         );
     }
 
+    /**
+     * Register a vehicle as entering the roundabout (alias for {@link commitVehicle}).
+     *
+     * @param vehicleId - unique identifier of the vehicle
+     */
     registerVehicleEntering(vehicleId: number): void {
         this.commitVehicle(vehicleId);
     }
 
+    /**
+     * Register a vehicle as exiting the roundabout (alias for {@link clearVehicle}).
+     *
+     * @param vehicleId - unique identifier of the vehicle
+     */
     registerVehicleExiting(vehicleId: number): void {
         this.clearVehicle(vehicleId);
     }
 
+    /**
+     * Returns `true` when no vehicles are circulating.
+     * @returns `true` when no vehicles are circulating
+     */
     isGreen(): boolean {
         return this.circulating.size === 0;
     }
 
+    /**
+     * Return `"GREEN"` when the roundabout is empty, otherwise `"AMBER"`.
+     * @returns the signal colour string
+     */
     getLightColour(): LightColour {
         return this.circulating.size === 0 ? "GREEN" : "AMBER";
     }
 
+    /**
+     * Human-readable summary of the controller's current state.
+     * @returns a human-readable state summary
+     */
     getState(): string {
         return `ROUNDABOUT (${this.circulating.size} circulating, ${this.committed.size} committed)`;
     }
 
+    /**
+     * Return the first entry key that currently has a green signal, or `null`.
+     * @returns the first green entry key, or `null` if none
+     */
     getCurrentGreen(): string | null {
         for (const k of this.entryKeys) {
             if (this.isGreen()) return k;

@@ -1,3 +1,10 @@
+/**
+ * IntersectionComponent.tsx
+ *
+ * Renders a single intersection junction object in the R3F scene,
+ * including floor mesh, lane markings, stop lines, and exit geometry.
+ */
+
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
@@ -18,10 +25,22 @@ type IntersectionProps = {
     name: string;
     intersectionConfig: IntersectionConfig;
     index: number;
-    /** When provided (P2P client), position is applied directly instead of snapToValidPosition. */
+    /**
+     * When provided (P2P client), position is applied directly instead of snapToValidPosition.
+     */
     initialTransform?: ObjectTransform;
 };
 
+/**
+ * Renders a signalised intersection including floor, exits, lane markings,
+ * stop lines, and edge tubes. Registers/unregisters itself with the context.
+ *
+ * @param id - unique identifier for the junction object
+ * @param intersectionConfig - configuration for this intersection
+ * @param name - file name for the download
+ * @param initialTransform - optional initial world transform (P2P)
+ * @returns the rendered intersection group
+ */
 export const IntersectionComponent = ({ id, intersectionConfig, name, initialTransform }: IntersectionProps) => {
     const groupRef = useRef<THREE.Group>(null);
     const {

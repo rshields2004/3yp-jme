@@ -1,3 +1,12 @@
+/**
+ * vehicleManager.ts
+ *
+ * Core simulation engine. Orchestrates vehicle spawning, movement via the
+ * Intelligent Driver Model (IDM), junction controller updates, lane-based
+ * leader detection (including roundabout ring logic), and per-frame
+ * statistics collection.
+ */
+
 import * as THREE from "three";
 import { getRoutePoints, computeSegmentDistances } from "./routing/routeUtils";
 import { IntersectionController } from "./controllers/intersectionController";
@@ -10,14 +19,19 @@ import { nodeKeyOf, segmentId, laneKeyForSegment } from "./helpers/segmentHelper
 import { computeIdmAccel } from "./physics/idm";
 import { buildLaneBases } from "./routing/laneCoordinates";
 import { isRoundaboutLaneKey, roundaboutIdFromLaneKey } from "./helpers/roundaboutUtils";
-import { defaultSimConfig } from "../defaults";
+import { defaultSimConfig } from "../constants";
 import { SpawnState, createSpawnState, resetSpawnState, spawnTick } from "./vehicleSpawner";
 import { RoundaboutStructure } from "../types/roundabout";
 import { collectStats, defaultJunctionCounter, JunctionCounter } from "./statsCollector";
 
 
 
-// This class is the bulk of the simulation engine, it is responsible for moving all vehicles throughout junction
+// VEHICLE MANAGER
+
+/**
+ * Core simulation engine. Owns all active vehicles, manages route assignment,
+ * IDM car-following, traffic-light/roundabout entry logic, and per-tick updates.
+ */
 export class VehicleManager {
 
 
@@ -93,6 +107,7 @@ export class VehicleManager {
      * @param carModels Loaded models
      * @param routes Routes that cars can take
      * @param cfg Simulation config options
+     * @param junction - the junction configuration
      */
     constructor(scene: THREE.Scene, carModels: THREE.Group[], routes: Route[], junction: JunctionConfig, cfg?: Partial<SimConfig>) {
         
@@ -134,6 +149,12 @@ export class VehicleManager {
     }
 
 
+    /**
+     * Extract structure metadata (id, type, max stop-line distance) from a
+     * junction group's userData, checking both intersection and roundabout formats.
+     * @param group - Three.js group to inspect
+     * @returns structure data or `null` if the group holds neither type
+     */
     private getStructureData(group: THREE.Group): {
         id: string;
         type: string;
@@ -160,6 +181,9 @@ export class VehicleManager {
      * Extract the structure ID from a junction group, handling both the legacy
      * flat format (group.userData.id) and the current nested format
      * (group.userData.roundaboutStructure.id / group.userData.intersectionStructure.id).
+     *
+     * @param group - the Three.js group for the junction object
+     * @returns the structure ID, or `null` if no ID could be resolved
      */
     private getGroupId(group: THREE.Group): string | null {
         // New nested format — checked via getStructureData which already handles both types
@@ -175,6 +199,10 @@ export class VehicleManager {
 
     /**
      * Find a group in the refs array by its structure ID.
+     *
+     * @param groups - the groups value
+     * @param id - unique identifier for the junction object
+     * @returns the matching group, or `undefined` if not found
      */
     private findGroupById(
         groups: THREE.Group[],
@@ -189,10 +217,13 @@ export class VehicleManager {
 
     /**
      * Get roundabout data directly from the group's userData.
-     * Returns both the world-position center and the pre-computed structure.
+     * Returns both the world-position centre and the pre-computed structure.
+     *
+     * @param junctionKey - string key identifying a junction
+     * @returns the centre position and structure data, or `null` if not available
      */
     private getRoundaboutData(junctionKey: string): {
-        center: THREE.Vector3;
+        centre: THREE.Vector3;
         structure: RoundaboutStructure;
     } | null {
         const group = this.roundaboutGroups.get(junctionKey);
@@ -201,14 +232,17 @@ export class VehicleManager {
         const structure = group.userData.roundaboutStructure;
         if (!structure) return null;
         
-        const center = new THREE.Vector3();
-        group.getWorldPosition(center);
+        const centre = new THREE.Vector3();
+        group.getWorldPosition(centre);
         
-        return { center, structure };
+        return { centre, structure };
     }
 
     /**
      * Get the lane width for a roundabout from its structure.
+     *
+     * @param junctionId - the junctionId value
+     * @returns the lane width in world units
      */
     private roundaboutLaneWidth(junctionId: string): number {
         const data = this.getRoundaboutData(junctionId);
@@ -342,6 +376,9 @@ export class VehicleManager {
      * Returns a world-space position that lies `distance` metres ahead of
      * vehicle `v` along its route.  Returns null when the route is too
      * short or the vehicle has no route points.
+     * @param v - the vehicle instance
+     * @param distance - distance ahead in world units
+     * @returns the computed position vector
      */
     public getPositionAhead(v: Vehicle, distance: number): THREE.Vector3 | null {
         const cumDist = this.getRouteCumulativeDistances(v.route);
@@ -392,12 +429,12 @@ export class VehicleManager {
 
     /**
      * Main update loop of the simulation, handles all car movements.
-     * @param dt Time detla - change in time since last call
+     * @param dt Time delta — change in time since last call
      * @param junctionObjectRefs The refs of junction objects for controller construction
      */
     public update(dt: number, junctionObjectRefs: React.RefObject<THREE.Group<THREE.Object3DEventMap>[]>): void {
         
-        // If there are no routes available dont bother
+        // If there are no routes available, don't bother
         if (!this.routes.length) {
             return;
         }
@@ -545,7 +582,7 @@ export class VehicleManager {
 
     /**
      * Helper that calculates the distance remaining in the current segment
-     * @param v Vehicle to perform calcualtion on
+     * @param v Vehicle to perform calculation on
      * @returns Remaining distance in segment
      */
     private getDistToSegmentEnd(v: Vehicle): number {
@@ -703,7 +740,7 @@ export class VehicleManager {
 
                     if (isRoundaboutLaneKey(vehicle.laneKey) && !nearingExit) {
                         
-                        // USe roundabout leader function instead of below
+                        // Use roundabout leader function instead of below
                         const roundaboutLeader = this.findRoundaboutLeader(vehicle, laneOccs);
                         if (roundaboutLeader && roundaboutLeader.gap < leaderGap) {
                             leaderGap = roundaboutLeader.gap;
@@ -855,7 +892,7 @@ export class VehicleManager {
                         if (leader.route === vehicle.route) {
                             const leaderS = desiredS.get(leader) ?? leader.s;
 
-                            // Calcualte the absolute s coorindate where we would hit their read bumper
+                            // Calculate the absolute s coordinate where we would hit their rear bumper
                             const minSafeS = leaderS - 0.5 * (leader.length + vehicle.length) - this.cfg.spacing.minBumperGap;
                             
                             // If projected move crossed into their bumper
@@ -935,7 +972,7 @@ export class VehicleManager {
         const currentSeg = v.currentSegment;
         if (!currentSeg) return null;
 
-        // Doesnt run at end of route (not a segment is next)
+        // Doesn't run at end of route (no segment ahead)
         if (currentSeg.phase !== "link") return null;
 
         // Identify target lane
@@ -1007,7 +1044,7 @@ export class VehicleManager {
         const distToSegEnd = this.getDistToSegmentEnd(v);
         const cautionZone = this.stoppingDistance(v.preferredSpeed, v) + 5;
 
-        // Get car back down to preffered speed
+        // Get car back down to preferred speed
         if (distToSegEnd > cautionZone) {
             return v.preferredSpeed;
         }
@@ -1108,8 +1145,8 @@ export class VehicleManager {
 
         // Where is the vehicle on roundabout circle
         const myPos = v.model.position;
-        const myDx = myPos.x - rData.center.x;
-        const myDz = myPos.z - rData.center.z;
+        const myDx = myPos.x - rData.centre.x;
+        const myDz = myPos.z - rData.centre.z;
         const myR = Math.sqrt(myDx * myDx + myDz * myDz);
         const myAngle = Math.atan2(myDz, myDx);
 
@@ -1150,8 +1187,8 @@ export class VehicleManager {
             }
 
             const otherPos = other.model.position;
-            const otherDx = otherPos.x - rData.center.x;
-            const otherDz = otherPos.z - rData.center.z;
+            const otherDx = otherPos.x - rData.centre.x;
+            const otherDz = otherPos.z - rData.centre.z;
             const otherR = Math.sqrt(otherDx * otherDx + otherDz * otherDz);
 
             // Skip vehicles that have drifted off the ring
@@ -1218,10 +1255,10 @@ export class VehicleManager {
 
     
     /**
-     * Converts a world position into a distance coorindate along a roundabouts circumference
+     * Converts a world position into a distance coordinate along a roundabout's circumference
      * @param junctionId ID of the roundabout object
-     * @param pos 
-     * @returns 
+     * @param pos - the world-space position to convert
+     * @returns the circumferential distance coordinate
      */
     private roundaboutCoordFromWorldPos(junctionId: string, pos: THREE.Vector3): number {
         const rData = this.getRoundaboutData(junctionId);
@@ -1229,8 +1266,8 @@ export class VehicleManager {
             return 0;
         }
 
-        const dx = pos.x - rData.center.x;
-        const dz = pos.z - rData.center.z;
+        const dx = pos.x - rData.centre.x;
+        const dz = pos.z - rData.centre.z;
         const angle = Math.atan2(dz, dx);
         const TAU = Math.PI * 2;
         // Convert angle to appropriate range 0 -> 2pi
@@ -1242,6 +1279,10 @@ export class VehicleManager {
     /**
      * Find which discrete ring lane index a given radius falls into.
      * Returns the index into `laneMidRadii` whose value is closest to `radius`.
+     *
+     * @param laneMidRadii - mid-radius of each ring lane
+     * @param radius - radius in world units
+     * @returns the zero-based index of the closest ring lane
      */
     private nearestRingLaneIndex(laneMidRadii: number[], radius: number): number {
         if (laneMidRadii.length <= 1) {
@@ -1261,6 +1302,13 @@ export class VehicleManager {
         return bestIdx;
     }
 
+    /**
+     * Interpolates a world position along a route at the given s-coordinate.
+     *
+     * @param route - the route to sample
+     * @param sValue - distance along the route (metres)
+     * @returns the interpolated world position, or `null` if the route is too short
+     */
     private getPointAtS(route: Route, sValue: number): THREE.Vector3 | null {
         const pts = this.getRoutePointsCached(route);
         if (!pts || pts.length < 2) {
@@ -1280,6 +1328,14 @@ export class VehicleManager {
         return pA.clone().lerp(pB, t);
     }
 
+    /**
+     * Convert a vehicle's s-coordinate into an arc-length position on the
+     * roundabout circumference by projecting its world position.
+     * Falls back to the raw s value when the vehicle is not on a roundabout lane.
+     * @param v - vehicle whose position is resolved
+     * @param sValue - distance-along-route value
+     * @returns arc-length coordinate on the roundabout (or raw `sValue` fallback)
+     */
     private roundaboutCoordFromS(v: Vehicle, sValue: number): number {
         const laneKey = v.laneKey;
         if (!laneKey || !isRoundaboutLaneKey(laneKey)) {
@@ -1298,10 +1354,14 @@ export class VehicleManager {
         return this.roundaboutCoordFromWorldPos(junctionId, pos);
     }
 
-    // -----------------------
-    // Lane coordinate system
-    // -----------------------
-
+    /**
+     * Convert a vehicle's s-coordinate into a monotonic lane coordinate.
+     * For roundabout lanes the result is an arc-length; for straight segments
+     * it is a base-offset within the lane's coordinate space.
+     * @param v - vehicle to query
+     * @param sValue - raw distance-along-route
+     * @returns lane-local coordinate suitable for leader/follower comparisons
+     */
     private laneCoordFromS(v: Vehicle, sValue: number): number {
         const seg = v.currentSegment;
         if (!seg || !v.laneKey) {
@@ -1320,18 +1380,25 @@ export class VehicleManager {
         return base + (sValue - (segInfo?.s0 ?? 0));
     }
 
+    /**
+     * Rebuild the lane-base offset maps from the current route set.
+     */
     private buildLaneBases() {
         // Delegates to the standalone function in routing/laneCoordinates.ts
         this.laneBases = buildLaneBases(this.routes, this.roundaboutControllers);
         this.laneBasesBuilt = true;
     }
 
-    // -----------------------
-    // Segment / laneKey tracking
+    // SEGMENT AND LANE-KEY TRACKING
     // laneKeyForSegment removed — now using shared implementation from helpers/segmentHelpers.ts
     // Call site: laneKeyForSegment(seg, this.roundaboutControllers)
-    // -----------------------
 
+    /**
+     * Advance a vehicle's segment index to match its current s-coordinate,
+     * update its lane key, and sync roundabout controller tracking.
+     *
+     * @param v - the vehicle instance
+     */
     private updateVehicleSegment(v: Vehicle) {
         const segs = v.route.segments;
         if (!segs || segs.length === 0) {
@@ -1355,6 +1422,8 @@ export class VehicleManager {
 
     /**
      * Track vehicles on roundabout and manage commitment state
+     *
+     * @param v - the vehicle instance
      */
     private updateRoundaboutTracking(v: Vehicle) {
         const seg = v.currentSegment;
@@ -1381,7 +1450,7 @@ export class VehicleManager {
             heading.y = 0;
             heading.normalize();
 
-            // Determine actual lane index from vehicle's distance to center
+            // Determine actual lane index from vehicle's distance to centre
             const actualLaneIndex = controller.getLaneIndexForPosition(pos);
 
             // Determine which arm this vehicle entered from (for same-arm skip logic)
@@ -1397,7 +1466,7 @@ export class VehicleManager {
             }
 
             controller.updateCirculatingVehicle(v.id, pos, v.speed, actualLaneIndex, heading, vehicleEntryKey);
-            controller.setGeometry(rData.center, rData.structure.laneMidRadii);
+            controller.setGeometry(rData.centre, rData.structure.laneMidRadii);
         }
         // If vehicle has exited the roundabout, remove from tracking
         else if (seg.phase === "exit" || seg.phase === "link") {
@@ -1406,10 +1475,14 @@ export class VehicleManager {
         }
     }
 
-    // -----------------------
-    // Apply desired s -> pose
-    // -----------------------
-
+    /**
+     * Move the vehicle model to the world position corresponding to `targetS`,
+     * clamp within the route bounds, orient the model along the route tangent,
+     * and refresh the segment/lane-key tracking.
+     * @param v - vehicle to reposition
+     * @param targetS - desired distance along the route
+     * @returns `true` if the vehicle has reached (or passed) the end of its route
+     */
     private applySAndPose(v: Vehicle, targetS: number): boolean {
         const pts = this.getRoutePointsCached(v.route);
         if (!pts || pts.length < 2) return true;
@@ -1443,6 +1516,13 @@ export class VehicleManager {
         return v.s >= maxS - 1e-6;
     }
 
+    /**
+     * Lazily create roundabout and intersection controllers for every junction
+     * that appears as an approach target in the current route set.
+     * Only runs once per simulation initialisation.
+     *
+     * @param junctionObjectRefs - ref to the set of live junction Three.js groups
+     */
     private buildControllersIfNeeded(
         junctionObjectRefs: React.RefObject<THREE.Group<THREE.Object3DEventMap>[]>
     ) {
@@ -1486,10 +1566,10 @@ export class VehicleManager {
                 
 
                 const structure = junctionGroup.userData.roundaboutStructure;
-                const center = new THREE.Vector3();
-                junctionGroup.getWorldPosition(center);
+                const centre = new THREE.Vector3();
+                junctionGroup.getWorldPosition(centre);
                 
-                controller.setGeometry(center, structure.laneMidRadii);
+                controller.setGeometry(centre, structure.laneMidRadii);
             } 
             else {
                 this.intersectionControllers.set(
@@ -1506,6 +1586,12 @@ export class VehicleManager {
      * Handle force-stopping when a leader is inside a roundabout.
      * Checks radial distances and lane indices to determine if the leader is a threat,
      * then applies IDM braking if the bumper gap is too small.
+     *
+     * @param vehicle - the vehicle instance
+     * @param leader - the vehicle ahead (or null)
+     * @param newS - proposed new s-coordinate along the route
+     * @param dt - time delta in seconds since last frame
+     * @returns the updated speed and s-coordinate
      */
     private applyRoundaboutForceStop(
         vehicle: Vehicle, leader: Vehicle, newS: number, dt: number
@@ -1517,8 +1603,8 @@ export class VehicleManager {
             const rData = this.getRoundaboutData(jId);
             let shouldCheck = true;
             if (rData) {
-                const myR = Math.hypot(myPos.x - rData.center.x, myPos.z - rData.center.z);
-                const leadR = Math.hypot(leaderPos.x - rData.center.x, leaderPos.z - rData.center.z);
+                const myR = Math.hypot(myPos.x - rData.centre.x, myPos.z - rData.centre.z);
+                const leadR = Math.hypot(leaderPos.x - rData.centre.x, leaderPos.z - rData.centre.z);
                 const lw = this.roundaboutLaneWidth(jId);
                 const outerR = rData.structure.laneMidRadii.length > 0
                     ? rData.structure.laneMidRadii[rData.structure.laneMidRadii.length - 1]
@@ -1551,6 +1637,13 @@ export class VehicleManager {
     /**
      * Handle roundabout merge/give-way checks for a vehicle circulating inside a roundabout.
      * Iterates lane occupancies and applies give-way rules when another vehicle is too close.
+     *
+     * @param vehicle - the vehicle instance
+     * @param leader - the vehicle ahead (or null)
+     * @param lanes - lane occupancy map
+     * @param newS - proposed new s-coordinate along the route
+     * @param dt - time delta in seconds since last frame
+     * @returns the updated speed and s-coordinate
      */
     private applyRoundaboutMergeCheck(
         vehicle: Vehicle, leader: Vehicle | null,
@@ -1561,7 +1654,7 @@ export class VehicleManager {
         if (!rData) return { speed: vehicle.speed, newS };
 
         const myPos = this.getPointAtS(vehicle.route, newS) ?? vehicle.model.position;
-        const myAngle = Math.atan2(myPos.z - rData.center.z, myPos.x - rData.center.x);
+        const myAngle = Math.atan2(myPos.z - rData.centre.z, myPos.x - rData.centre.x);
         const laneOccs = lanes.get(vehicle.laneKey!) ?? [];
         const { recentlyEntered: iAmRecentlyEntered, entryKey: myEntryKey } = this.getRoundaboutEntryStatus(vehicle);
 
@@ -1576,8 +1669,8 @@ export class VehicleManager {
                 continue;
             }
 
-            const myR = Math.hypot(myPos.x - rData.center.x, myPos.z - rData.center.z);
-            const otherR = Math.hypot(other.model.position.x - rData.center.x, other.model.position.z - rData.center.z);
+            const myR = Math.hypot(myPos.x - rData.centre.x, myPos.z - rData.centre.z);
+            const otherR = Math.hypot(other.model.position.x - rData.centre.x, other.model.position.z - rData.centre.z);
             const myLane = this.nearestRingLaneIndex(rData.structure.laneMidRadii, myR);
             const otherLane = this.nearestRingLaneIndex(rData.structure.laneMidRadii, otherR);
             const dist = myPos.distanceTo(other.model.position);
@@ -1594,7 +1687,7 @@ export class VehicleManager {
                 } else if (!iAmRecentlyEntered && otherRecentlyEntered) {
                     shouldGiveWay = false;
                 } else {
-                    const otherAngle = Math.atan2(other.model.position.z - rData.center.z, other.model.position.x - rData.center.x);
+                    const otherAngle = Math.atan2(other.model.position.z - rData.centre.z, other.model.position.x - rData.centre.x);
                     const angDelta = THREE.MathUtils.euclideanModulo(otherAngle - myAngle, Math.PI * 2);
                     shouldGiveWay = (angDelta > 0.01 && angDelta < Math.PI) || (angDelta <= 0.01 && vehicle.id > other.id);
                 }
@@ -1616,6 +1709,12 @@ export class VehicleManager {
      * - If red: cap speed so we can stop at the stopline (existing behaviour)
      * - If green: ALSO require downstream space on exit lane, otherwise treat like red (prevents blocking the junction)
      * - Also look ahead from link segments to upcoming stop lines
+     *
+     * @param v - the vehicle instance
+     * @param targetSpeed - desired driving speed
+     * @param lanes - lane occupancy map
+     * @param desiredS - desired s-coordinate
+     * @returns the capped target speed
      */
     private applyStoplineAndDownstreamCap(
         v: Vehicle,
@@ -1648,6 +1747,17 @@ export class VehicleManager {
         return targetSpeed;
     }
 
+    /**
+     * Apply traffic-light / roundabout entry logic for an approach segment.
+     * Returns a (possibly reduced) target speed that decelerates the vehicle
+     * toward its stop line when the signal is not green.
+     * @param v - vehicle being evaluated
+     * @param targetSpeed - unconstrained desired speed
+     * @param seg - current route segment
+     * @param lanes - per-lane occupancy map
+     * @param desiredS - map of each vehicle's desired next s-value
+     * @returns adjusted target speed
+     */
     private applyStoplineLogic(
         v: Vehicle,
         targetSpeed: number,
@@ -1711,6 +1821,14 @@ export class VehicleManager {
      * arrives after the commitment is handled by the circulating
      * give-way rules (inside-roundabout merge logic), NOT by yanking
      * the entering vehicle back behind the stop line.
+     *
+     * @param v - the vehicle instance
+     * @param targetSpeed - desired driving speed
+     * @param seg - current route segment
+     * @param junctionKey - string key identifying a junction
+     * @param entryKey - string key identifying an entry point
+     * @param lanes - lane occupancy map
+     * @returns the capped target speed
      */
     private applyRoundaboutEntryLogic(
         v: Vehicle,
@@ -1731,7 +1849,7 @@ export class VehicleManager {
 
         const distToStopline = stopS - v.s;
 
-        // ── Already committed — proceed unconditionally ─────────────
+        // Already committed — proceed unconditionally.
         // Once committed the vehicle MUST continue into the roundabout.
         // Re-checking the gap would cause the vehicle to oscillate
         // (cross the line → brake → snap back) which is exactly the
@@ -1742,7 +1860,7 @@ export class VehicleManager {
             return targetSpeed;
         }
 
-        // ── Not yet committed — evaluate gap ────────────────────────
+        // Not yet committed — evaluate gap.────
         const entryAngle = this.getEntryAngleForRoundabout(junctionKey, entryKey);
         if (entryAngle === undefined) return targetSpeed;
 
@@ -1771,7 +1889,7 @@ export class VehicleManager {
             return targetSpeed;
         }
 
-        // ── Gap NOT clear — brake to stop at the line ───────────────
+        // Gap NOT clear — brake to stop at the line.
         if (distToStopline > 0) {
             const decel = v.maxDecel * 0.7;
             const stoppingSpeed = Math.sqrt(2 * decel * Math.max(0.1, distToStopline));
@@ -1787,6 +1905,12 @@ export class VehicleManager {
      * Lane-aware: checks proximity at each vehicle's current radius AND detects
      * vehicles that are changing lanes toward the entry path (radial movement
      * toward the outer lane where the entering vehicle will merge).
+     *
+     * @param v - the vehicle instance
+     * @param junctionKey - string key identifying a junction
+     * @param entryKey - string key identifying an entry point
+     * @param lanes - lane occupancy map
+     * @returns `true` if no circulating vehicle blocks the entry point
      */
     private isRoundaboutEntryClear(
         v: Vehicle,
@@ -1806,24 +1930,24 @@ export class VehicleManager {
 
         const clearanceGap = Math.max(v.length * 3, 6);
 
-        const { center, structure } = rData;
+        const { centre, structure } = rData;
 
         const outerR = structure.laneMidRadii.length > 0
             ? structure.laneMidRadii[structure.laneMidRadii.length - 1]
             : structure.avgRadius;
         const outerEntryPos = new THREE.Vector3(
-            center.x + Math.cos(entryAngle) * outerR,
-            center.y,
-            center.z + Math.sin(entryAngle) * outerR
+            centre.x + Math.cos(entryAngle) * outerR,
+            centre.y,
+            centre.z + Math.sin(entryAngle) * outerR
         );
 
         const innerR = structure.laneMidRadii.length > 0
             ? structure.laneMidRadii[0]
             : structure.avgRadius;
         const innerEntryPos = new THREE.Vector3(
-            center.x + Math.cos(entryAngle) * innerR,
-            center.y,
-            center.z + Math.sin(entryAngle) * innerR
+            centre.x + Math.cos(entryAngle) * innerR,
+            centre.y,
+            centre.z + Math.sin(entryAngle) * innerR
         );
 
         for (const occ of occs) {
@@ -1852,16 +1976,16 @@ export class VehicleManager {
             }
 
             const otherPos = other.model.position;
-            const otherDistFromCenter = Math.sqrt(
-                (otherPos.x - center.x) ** 2 +
-                (otherPos.z - center.z) ** 2
+            const otherDistFromCentre = Math.sqrt(
+                (otherPos.x - centre.x) ** 2 +
+                (otherPos.z - centre.z) ** 2
             );
 
             // Check 1: proximity at the vehicle's CURRENT radius
             const laneEntryPos = new THREE.Vector3(
-                center.x + Math.cos(entryAngle) * otherDistFromCenter,
-                center.y,
-                center.z + Math.sin(entryAngle) * otherDistFromCenter
+                centre.x + Math.cos(entryAngle) * otherDistFromCentre,
+                centre.y,
+                centre.z + Math.sin(entryAngle) * otherDistFromCentre
             );
             const distance = otherPos.distanceTo(laneEntryPos);
             if (distance < clearanceGap) {
@@ -1881,12 +2005,12 @@ export class VehicleManager {
             }
 
             // Check 4: is this vehicle lane-changing TOWARD the outer lane?
-            if (structure.laneMidRadii.length >= 2 && otherDistFromCenter < outerR) {
+            if (structure.laneMidRadii.length >= 2 && otherDistFromCentre < outerR) {
                 const otherFwd = new THREE.Vector3(
                     Math.sin(other.model.rotation.y), 0, Math.cos(other.model.rotation.y)
                 );
                 const radialOut = new THREE.Vector3(
-                    otherPos.x - center.x, 0, otherPos.z - center.z
+                    otherPos.x - centre.x, 0, otherPos.z - centre.z
                 ).normalize();
                 const radialComponent = otherFwd.dot(radialOut);
 
@@ -1908,6 +2032,12 @@ export class VehicleManager {
         return true;
     }
 
+    /**
+     * Clamp a vehicle's speed so it decelerates smoothly to zero at its stop line.
+     * @param v - vehicle to constrain
+     * @param targetSpeed - unconstrained speed
+     * @returns speed limited by stop-line proximity
+     */
     private capToStopline(v: Vehicle, targetSpeed: number): number {
         const stopS = this.getStoplineS(v);
         if (stopS === null) return targetSpeed;
@@ -1918,6 +2048,12 @@ export class VehicleManager {
         return Math.min(targetSpeed, Math.sqrt(2 * v.maxDecel * dist));
     }
 
+    /**
+     * Compute the s-coordinate of the effective stop line for the vehicle's
+     * current segment, accounting for vehicle length and the configured buffer.
+     * @returns stop-line s value, or `null` if segment data is unavailable
+     * @param v - the vehicle instance
+     */
     private getStoplineS(v: Vehicle): number | null {
         const frontOffset = 0.5 * v.length;
         const stopBuffer = this.cfg.spacing.stopLineOffset;
@@ -1929,6 +2065,14 @@ export class VehicleManager {
         return (segInfo.s1 ?? 0) - frontOffset - stopBuffer;
     }
 
+    /**
+     * Look ahead from a link segment to the next approach segment and determine
+     * the s-coordinate of the upcoming stop line and whether the vehicle should stop.
+     * Returns `null` when no applicable stop line exists ahead.
+     * @param v - the vehicle instance
+     * @param lanes - lane occupancy map
+     * @returns the stop-line s-coordinate and whether to stop, or `null` if no stop line applies
+     */
     private getUpcomingStoplineForLink(
         v: Vehicle,
         lanes: Map<string, LaneOcc[]>
@@ -1995,7 +2139,12 @@ export class VehicleManager {
 
 
 
-    /** Determine which *physical exit lane* this vehicle will go onto (first non-"inside" segment ahead). */
+    /**
+     * Determine which *physical exit lane* this vehicle will go onto (first non-"inside" segment ahead).
+     *
+     * @param v - the vehicle instance
+     * @returns the lane key of the vehicle's exit lane
+     */
     private getExitLaneKeyForVehicle(v: Vehicle): string {
         const segs = v.route.segments ?? [];
         if (!segs.length) return "";
@@ -2010,6 +2159,14 @@ export class VehicleManager {
         return "";
     }
 
+    /**
+     * Return the lane-coordinate start value for the first non-"inside" segment
+     * ahead of the vehicle (i.e. the exit lane it will enter).
+     *
+     * @param exitLaneKey - lane key for the target exit lane
+     * @param v - the vehicle instance
+     * @returns the lane-coordinate start value for the exit lane
+     */
     private laneStartCoordForExitLane(exitLaneKey: string, v: Vehicle): number {
         // If we can find the next non-inside segment, use its base
         const segs = v.route.segments ?? [];
@@ -2023,6 +2180,12 @@ export class VehicleManager {
         return 0;
     }
 
+    /**
+     * Check whether a vehicle on an "inside" segment is close enough to its end to reserve its exit lane.
+     *
+     * @param v - the vehicle instance
+     * @returns `true` if the vehicle should reserve its exit lane
+     */
     private shouldReserveExitLane(v: Vehicle): boolean {
         if (v.currentSegment?.phase !== "inside") return false;
 
@@ -2032,8 +2195,13 @@ export class VehicleManager {
         return distToSegEnd <= reserveThreshold;
     }
 
-    
-
+    /**
+     * Derive an entry-group key from a route-graph node key by stripping the
+     * trailing lane-index component and prepending `"entry:"`.
+     *
+     * @param nodeKey - node key in the junction graph
+     * @returns the entry-group key string
+     */
     private entryGroupKeyFromNodeKey(nodeKey: string): string {
         // nodeKey format: "${structureID}-${exitIndex}-${direction}-${laneIndex}"
         // entryGroupKey = "entry:${structureID}-${exitIndex}-${direction}"
@@ -2047,6 +2215,9 @@ export class VehicleManager {
      * Extract the exit index from an entryKey.
      * entryKey format: "entry:UUID-exitIndex-direction"
      * Since UUID contains dashes, we parse from the end.
+     *
+     * @param entryKey - string key identifying an entry point
+     * @returns the zero-based exit index, or `-1` on failure
      */
     private exitIndexFromEntryKey(entryKey: string): number {
         const afterPrefix = entryKey.replace("entry:", "");
@@ -2059,6 +2230,10 @@ export class VehicleManager {
 
     /**
      * Get the entry angle for a given entryKey on a roundabout, using structure data.
+     *
+     * @param junctionKey - string key identifying a junction
+     * @param entryKey - string key identifying an entry point
+     * @returns the entry angle in radians, or `undefined` if unknown
      */
     private getEntryAngleForRoundabout(
         junctionKey: string,
@@ -2074,6 +2249,10 @@ export class VehicleManager {
         return rData.structure.exitStructures[exitIndex].angle;
     }
 
+    /**
+     * Aggregate simulation statistics from all active vehicles and counters.
+     * @returns the aggregated statistics snapshot
+     */
     private updateStats(): SimulationStats {
         const result = collectStats({
             vehicles: this.vehicles,
@@ -2096,6 +2275,10 @@ export class VehicleManager {
     }
 
 
+    /**
+     * Return the latest simulation statistics snapshot, computing it lazily if needed.
+     * @returns the aggregated statistics snapshot
+     */
     public getStats(): SimulationStats {
         return this.statsSnapshot ?? this.updateStats();
     }

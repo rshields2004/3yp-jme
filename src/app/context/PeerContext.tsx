@@ -1,10 +1,28 @@
+/**
+ * PeerContext.tsx
+ *
+ * Provides peer-to-peer networking via PeerJS. Manages host creation,
+ * client joining, connection lifecycle, heartbeat pings, and message
+ * broadcasting to all connected peers.
+ */
+
 import Peer, { DataConnection } from "peerjs";
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { NetMessage, PeerContextType } from "../includes/types/peer";
+import { PEER_CONNECTION_TIMEOUT, PEER_PING_INTERVAL, PEER_DISCONNECT_THRESHOLD } from "../includes/constants";
 
 
+/**
+ * Internal React context for peer-to-peer session state.
+ */
 const PeerContext = createContext<PeerContextType>(null!);
 
+/**
+ * Context provider managing PeerJS connections, heartbeat, and data broadcast.
+ *
+ * @param children - child elements to render
+ * @returns the rendered provider wrapping its children
+ */
 export const PeerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
     const peerRef = useRef<Peer>(undefined);
@@ -110,7 +128,7 @@ export const PeerProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     setIsConnecting(false);
                     conn.close();
                 }
-            }, 8000);
+            }, PEER_CONNECTION_TIMEOUT);
 
             conn.on("open", () => {
                 clearTimeout(timeout);
@@ -167,12 +185,12 @@ export const PeerProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const interval = setInterval(() => {
             const now = Date.now();
             lastPingRef.current.forEach((lastSeen, peerId) => {
-                if (now - lastSeen > 8000) {  // missed 2 pings
+                if (now - lastSeen > PEER_DISCONNECT_THRESHOLD) {  // missed 2 pings
                     removePeer(peerId);
                     lastPingRef.current.delete(peerId);
                 }
             });
-        }, 5000);
+        }, PEER_PING_INTERVAL);
 
         return () => clearInterval(interval);
     }, [isHost]);
@@ -197,4 +215,8 @@ export const PeerProvider: React.FC<{ children: React.ReactNode }> = ({ children
     )
 };
 
+/**
+ * Convenience hook to access the PeerContext.
+ * @returns the peer context
+ */
 export const usePeer = () => useContext(PeerContext);

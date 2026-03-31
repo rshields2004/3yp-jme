@@ -1,22 +1,44 @@
-// ── Car class definitions ─────────────────────────────────────────────
+/**
+ * carTypes.ts
+ * Defines vehicle body types, their physical properties, spawn weights,
+ * model file mappings, and a seeded PRNG for deterministic simulation.
+ */
 
-/** Physical / kinematic properties for a vehicle body type. */
+// CAR CLASS DEFINITIONS
+
+/**
+ * Physical / kinematic properties for a vehicle body type
+ */
 export type CarClass = {
-    /** Human-readable body type name (matches model filename prefix) */
+    /**
+     * Human-readable body type name (matches model filename prefix)
+     */
     bodyType: string;
-    /** Typical vehicle length in world units */
+    /**
+     * Typical vehicle length in world units
+     */
     length: number;
-    /** Max speed multiplier relative to SimConfig.maxSpeed (1.0 = 100%) */
+    /**
+     * Max speed multiplier relative to SimConfig.maxSpeed (1.0 = 100%)
+     */
     speedFactor: number;
-    /** Max acceleration multiplier relative to SimConfig.maxAccel */
+    /**
+     * Max acceleration multiplier relative to SimConfig.maxAccel
+     */
     accelFactor: number;
-    /** Max deceleration multiplier relative to SimConfig.maxDecel */
+    /**
+     * Max deceleration multiplier relative to SimConfig.maxDecel
+     */
     decelFactor: number;
-    /** Spawn‐weight (higher = more common). Weights are normalised at runtime. */
+    /**
+     * Spawn‐weight (higher = more common). Weights are normalised at runtime.
+     */
     weight: number;
 };
 
-/** Overridable per-class values stored in SimConfig. */
+/**
+ * Overridable per-class values stored in SimConfig.
+ */
 export type CarClassOverride = {
     speedFactor: number;
     accelFactor: number;
@@ -44,12 +66,17 @@ export const carClasses: CarClass[] = [
     { bodyType: "van",            length: 2.16, speedFactor: 0.85, accelFactor: 0.70, decelFactor: 0.80, weight: 5 },
 ];
 
-/** Lookup map: bodyType -> CarClass */
+/**
+ * Lookup map: bodyType -> CarClass
+ */
 const classByBodyType = new Map<string, CarClass>(
     carClasses.map(c => [c.bodyType, c])
 );
 
-/** Build default overrides from the static carClasses array. */
+/**
+ * Build default overrides from the static carClasses array.
+ * @returns a record keyed by body type with default override values
+ */
 export function defaultCarClassOverrides(): Record<string, CarClassOverride> {
     const out: Record<string, CarClassOverride> = {};
     for (const c of carClasses) {
@@ -58,7 +85,12 @@ export function defaultCarClassOverrides(): Record<string, CarClassOverride> {
     return out;
 }
 
-/** Merge base carClasses with per-class overrides to produce effective classes. */
+/**
+ * Merge base carClasses with per-class overrides to produce effective classes.
+ *
+ * @param overrides - per-class override values
+ * @returns the generated array
+ */
 export function getEffectiveCarClasses(overrides: Record<string, CarClassOverride>): CarClass[] {
     return carClasses.map(c => {
         const o = overrides[c.bodyType];
@@ -69,6 +101,9 @@ export function getEffectiveCarClasses(overrides: Record<string, CarClassOverrid
 /**
  * Derive the body type string from a model index into `carFiles`.
  * Model filenames are `/models/car-<bodyType>-<color>.obj`.
+ *
+ * @param modelIndex - index into the loaded car model array
+ * @returns the body type string
  */
 export function bodyTypeForModelIndex(modelIndex: number): string {
     const entry = carFiles[modelIndex];
@@ -83,26 +118,39 @@ export function bodyTypeForModelIndex(modelIndex: number): string {
     return parts.join("-"); // "pickup-small"
 }
 
-/** Get the CarClass for a loaded model index (falls back to "normal"). */
+/**
+ * Get the CarClass for a loaded model index (falls back to "normal").
+ *
+ * @param modelIndex - index into the loaded car model array
+ * @returns the matched car class
+ */
 export function carClassForModelIndex(modelIndex: number): CarClass {
     const bt = bodyTypeForModelIndex(modelIndex);
     return classByBodyType.get(bt) ?? classByBodyType.get("normal")!;
 }
 
-// ── Seeded PRNG (mulberry32) ──────────────────────────────────────────
+// SEEDED PRNG
 
 /**
- * A simple, fast, seedable 32-bit PRNG.
- * Same seed ⇒ same sequence on every device / JS engine.
+ * A simple, fast, seedable 32-bit PRNG (Mulberry32).
+ * Same seed produces the same sequence on every device / JS engine.
  */
 export class SeededRNG {
     private state: number;
 
+    /**
+     * Create a new PRNG seeded with `seed` (truncated to 32-bit integer).
+     *
+     * @param seed - random seed value
+     */
     constructor(seed: number) {
         this.state = seed | 0;
     }
 
-    /** Return a float in [0, 1). */
+    /**
+     * Return a float in [0, 1).
+     * @returns a pseudorandom float in [0, 1)
+     */
     next(): number {
         let t = (this.state += 0x6d2b79f5);
         t = Math.imul(t ^ (t >>> 15), t | 1);
@@ -110,7 +158,12 @@ export class SeededRNG {
         return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     }
 
-    /** Return an integer in [0, max). */
+    /**
+     * Return an integer in [0, max).
+     *
+     * @param max - exclusive upper bound
+     * @returns a pseudorandom integer in [0, max)
+     */
     nextInt(max: number): number {
         return Math.floor(this.next() * max);
     }
@@ -119,6 +172,10 @@ export class SeededRNG {
      * Pick a CarClass based on weights using this RNG,
      * filtered to only the enabled body types.
      * Pass effectiveClasses to use config-overridden values.
+     *
+     * @param enabledBodyTypes - set of enabled body type names
+     * @param effectiveClasses - array of effective car class definitions
+     * @returns the selected car class
      */
     pickCarClass(enabledBodyTypes?: string[], effectiveClasses?: CarClass[]): CarClass {
         const base = effectiveClasses ?? carClasses;
@@ -137,11 +194,11 @@ export class SeededRNG {
 }
 
 /**
- * Build a per-entry seeded RNG.  Combines the global seed with a
- * deterministic hash of the entry-key string so every entry point
- * gets its own independent, reproducible sequence.
+ * Hash a string into a 32-bit integer (FNV-1a inspired).
+ *
+ * @param str - input string
+ * @returns a 32-bit hash integer
  */
-/** Hash a string into a 32-bit integer (FNV-1a inspired). */
 export function hashString(str: string): number {
     let h = 0x811c9dc5;
     for (let i = 0; i < str.length; i++) {
@@ -151,6 +208,14 @@ export function hashString(str: string): number {
     return h | 0;
 }
 
+/**
+ * Create a seeded RNG for a specific entry point by combining
+ * the global seed with a deterministic hash of the entry key.
+ *
+ * @param globalSeed - global random seed
+ * @param entryKey - string key identifying an entry point
+ * @returns a seeded PRNG instance
+ */
 export function rngForEntry(globalSeed: string, entryKey: string): SeededRNG {
     const baseSeed = hashString(globalSeed);
     let hash = baseSeed;
@@ -163,6 +228,9 @@ export function rngForEntry(globalSeed: string, entryKey: string): SeededRNG {
 
 /**
  * Return the indices into `carFiles` whose body type matches the given CarClass.
+ *
+ * @param cc - car class definition
+ * @returns the generated array
  */
 export function modelIndicesForClass(cc: CarClass): number[] {
     const out: number[] = [];
@@ -172,8 +240,16 @@ export function modelIndicesForClass(cc: CarClass): number[] {
     return out;
 }
 
-// Pre-compute index lists per class for fast lookup
+/**
+ * Pre-computed index list cache keyed by body type — avoids re-scanning on every call.
+ */
 const _modelIndicesCache = new Map<string, number[]>();
+/**
+ * Cached version of {@link modelIndicesForClass} — avoids re-scanning on every call.
+ *
+ * @param cc - car class definition
+ * @returns the generated array
+ */
 export function getModelIndicesForClass(cc: CarClass): number[] {
     let cached = _modelIndicesCache.get(cc.bodyType);
     if (!cached) {
@@ -185,6 +261,9 @@ export function getModelIndicesForClass(cc: CarClass): number[] {
 
 
 
+/**
+ * OBJ/MTL file path pairs for every car model variant (body type × colour).
+ */
 export const carFiles = [
     { obj: "/models/car-coupe-blue.obj", mtl: "/models/car-coupe-blue.mtl" },
     { obj: "/models/car-coupe-citrus.obj", mtl: "/models/car-coupe-citrus.mtl" },

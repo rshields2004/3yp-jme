@@ -1,10 +1,26 @@
+/**
+ * utils.ts
+ *
+ * Geometry generation utilities for junction objects. Builds stop lines,
+ * lane markings, floor meshes, edge tubes, ring lines, and exit structures
+ * for both intersections and roundabouts.
+ */
+
 import * as THREE from "three";
-import { defaultLaneProperties } from "./defaults";
+import { defaultLaneProperties } from "./constants";
 import { ExitStructure, IntersectionStructure } from "./types/intersection";
 import { JunctionObjectTypes, LaneStructure, LinkStructure } from "./types/types";
 import { RingLaneStructure, RoundaboutExitStructure, RoundaboutStructure } from "./types/roundabout";
 import { Tuple3 } from "./types/simulation";
 
+// HELPERS
+
+/**
+ * Compute the forward direction vector from an angle (radians, 0 = negative-Z).
+ *
+ * @param angle - angle in radians
+ * @returns the normalised direction vector in the XZ plane
+ */
 const getDirection = (
     angle: number
 ) => {
@@ -12,22 +28,34 @@ const getDirection = (
 };
 
 
-export function generateStopLine(
+// INTERSECTION GEOMETRY
+
+/**
+ * Generates the stop line for an intersection exit.
+ *
+ * @param laneCount - total number of lanes
+ * @param laneWidth - width of each lane in world units
+ * @param stopLineOffset - distance from origin to the stop line
+ * @param angle - angle in radians
+ * @param numLanesIn - number of inbound lanes
+ * @returns the stop-line lane structure
+ */
+export const generateStopLine = (
     laneCount: number, 
     laneWidth: number, 
     stopLineOffset: number, 
     angle: number, 
     numLanesIn: number
-): LaneStructure {
+): LaneStructure => {
     const origin = new THREE.Vector3(0, 0, 0);
     const direction = getDirection(angle);
     const perp = new THREE.Vector3(direction.z, 0, -direction.x);
 
-    const stopCenter = origin.clone().add(direction.clone().multiplyScalar(stopLineOffset));
+    const stopCentre = origin.clone().add(direction.clone().multiplyScalar(stopLineOffset));
 
     const totalExitWidth = laneCount * laneWidth;
 
-    const leftPoint = stopCenter.clone().add(perp.clone().multiplyScalar(-totalExitWidth / 2));
+    const leftPoint = stopCentre.clone().add(perp.clone().multiplyScalar(-totalExitWidth / 2));
 
     const rightPoint = leftPoint.clone().add(perp.clone().multiplyScalar(numLanesIn * laneWidth));
 
@@ -44,7 +72,19 @@ export function generateStopLine(
 }
 
 
-export function generateLaneLines(
+/**
+ * Generate dashed and solid lane-line geometries for an intersection exit arm.
+ *
+ * @param laneCount - total number of lanes
+ * @param laneWidth - width of each lane in world units
+ * @param stopLineOffset - distance from origin to the stop line
+ * @param angle - angle in radians
+ * @param length - length of the exit arm in world units
+ * @param numLanes - number of lane divisions
+ * @param numLanesIn - number of inbound lanes
+ * @returns the generated array
+ */
+export const generateLaneLines = (
     laneCount: number,
     laneWidth: number,
     stopLineOffset: number,
@@ -52,7 +92,7 @@ export function generateLaneLines(
     length: number, 
     numLanes: number, 
     numLanesIn: number
-): LaneStructure[] {
+): LaneStructure[] => {
     const origin = new THREE.Vector3(0, 0, 0);
     const direction = getDirection(angle);
     const perp = new THREE.Vector3(-direction.z, 0, direction.x);
@@ -60,9 +100,9 @@ export function generateLaneLines(
     const totalWidth = laneCount * laneWidth;
     const startOffset = -totalWidth / 2;
 
-    const stopCenter = origin.clone().add(direction.clone().multiplyScalar(stopLineOffset));
-    const leftPoint = stopCenter.clone().add(perp.clone().multiplyScalar(startOffset));
-    const rightPoint = stopCenter.clone().add(perp.clone().multiplyScalar(startOffset + totalWidth));
+    const stopCentre = origin.clone().add(direction.clone().multiplyScalar(stopLineOffset));
+    const leftPoint = stopCentre.clone().add(perp.clone().multiplyScalar(startOffset));
+    const rightPoint = stopCentre.clone().add(perp.clone().multiplyScalar(startOffset + totalWidth));
 
     const stopLine: LaneStructure = {
         line: new THREE.Line3(leftPoint.clone(), rightPoint.clone()),
@@ -105,11 +145,19 @@ export function generateLaneLines(
 
 
 
-export function generateEdgeTubes(
+/**
+ * Generate curved tube geometries connecting adjacent intersection exits at the kerb edges.
+ *
+ * @param exits - array of exit structures
+ * @param radius - radius in world units
+ * @param segments - number of subdivisions for the curve
+ * @returns the generated geometry
+ */
+export const generateEdgeTubes = (
     exits: ExitStructure[],
     radius = 0.1,
     segments = 500
-): THREE.TubeGeometry[] {
+): THREE.TubeGeometry[] => {
     const tubeGeometries: THREE.TubeGeometry[] = [];
 
     const exitCount = exits.length;
@@ -160,9 +208,15 @@ export function generateEdgeTubes(
 }
 
 
-export function generateFloorMesh(
+/**
+ * Build a flat ShapeGeometry covering the interior floor area of an intersection.
+ *
+ * @param exits - array of exit structures
+ * @returns the generated geometry
+ */
+export const generateFloorMesh = (
     exits: ExitStructure[]
-): THREE.ShapeGeometry {
+): THREE.ShapeGeometry => {
     const shape = new THREE.Shape();
     exits.forEach(exit => {
         const firstLane = exit.laneLines[0].line;
@@ -177,9 +231,15 @@ export function generateFloorMesh(
     return new THREE.ShapeGeometry(shape);
 };
 
-export function generateExitMesh(
+/**
+ * Build a flat ShapeGeometry for a single exit arm's road surface.
+ *
+ * @param exit - the exit structure
+ * @returns the generated geometry
+ */
+export const generateExitMesh = (
     exit: ExitStructure | RoundaboutExitStructure
-): THREE.ShapeGeometry {
+): THREE.ShapeGeometry => {
     
     const distanceFromEdge = 0.90;
     const shape = new THREE.Shape();
@@ -205,14 +265,27 @@ export function generateExitMesh(
 };
 
 
-export function generateLaneLinesRound(
+// ROUNDABOUT GEOMETRY
+
+/**
+ * Generates lane markings for a roundabout exit arm.
+ *
+ * @param outerRadius - outer radius of the roundabout
+ * @param laneCount - total number of lanes
+ * @param laneWidth - width of each lane in world units
+ * @param angle - angle in radians
+ * @param exitLength - length of the exit arm
+ * @param numLanesIn - number of inbound lanes
+ * @returns the generated array
+ */
+export const generateLaneLinesRound = (
     outerRadius: number,
     laneCount: number,
     laneWidth: number,
     angle: number,
     exitLength: number,
     numLanesIn: number
-): LaneStructure[] {
+): LaneStructure[] => {
     const start = new THREE.Vector3(Math.cos(angle) * outerRadius, 0, Math.sin(angle) * outerRadius);
     const endBase = start.clone().add(new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle)).multiplyScalar(exitLength));
     const right = new THREE.Vector3().subVectors(endBase, start).cross(new THREE.Vector3(0, 1, 0)).normalize();
@@ -264,10 +337,17 @@ export function generateLaneLinesRound(
     return laneLines;
 };
 
-function shortestAngleDiff(
+/**
+ * Return the shortest signed angular difference between two angles (radians).
+ *
+ * @param a - first angle in radians
+ * @param b - second angle in radians
+ * @returns the shortest signed angular difference in radians
+ */
+const shortestAngleDiff = (
     a: number, 
     b: number
-): number {
+): number => {
     let diff = b - a;
     while (diff > Math.PI) {
         diff -= 2 * Math.PI;
@@ -278,11 +358,19 @@ function shortestAngleDiff(
     return diff;
 }
 
-export function generateStopLineRound(
+/**
+ * Generate a curved stop-line arc for a roundabout exit spanning the inbound lanes.
+ *
+ * @param numLanesIn - number of inbound lanes
+ * @param laneLinesRound - lane line structures for roundabout arms
+ * @param outerRadius - outer radius of the roundabout
+ * @returns the curved stop-line ring-lane structure
+ */
+export const generateStopLineRound = (
     numLanesIn: number,
     laneLinesRound: LaneStructure[],
     outerRadius: number
-): RingLaneStructure {
+): RingLaneStructure => {
     const left = laneLinesRound[laneLinesRound.length - 1];
     const right = laneLinesRound[laneLinesRound.length - 1 - numLanesIn];
 
@@ -312,9 +400,15 @@ export function generateStopLineRound(
     };
 }
 
-export function generateRoundaboutFloorMesh(
+/**
+ * Build a circular ShapeGeometry for the roundabout carriageway floor.
+ *
+ * @param exitStructures - array of roundabout exit structures
+ * @returns the generated geometry
+ */
+export const generateRoundaboutFloorMesh = (
     exitStructures: RoundaboutExitStructure[]
-): THREE.ShapeGeometry {
+): THREE.ShapeGeometry => {
     
     const shape = new THREE.Shape();
 
@@ -332,10 +426,17 @@ export function generateRoundaboutFloorMesh(
     return new THREE.ShapeGeometry(shape);
 };
 
-export function generateEdgeTubesRound(
+/**
+ * Generate curved tube geometries connecting adjacent roundabout exits at the outer kerb.
+ *
+ * @param outerRadius - outer radius of the roundabout
+ * @param exitStructures - array of roundabout exit structures
+ * @returns the generated geometry
+ */
+export const generateEdgeTubesRound = (
     outerRadius: number,
     exitStructures: RoundaboutExitStructure[]
-): THREE.TubeGeometry[] {
+): THREE.TubeGeometry[] => {
     const tubeGeometries: THREE.TubeGeometry[] = [];
 
 
@@ -381,11 +482,19 @@ export function generateEdgeTubesRound(
     return tubeGeometries;
 };
 
-export function generateRingLines(
+/**
+ * Generate concentric ring-line point arrays for each roundabout lane boundary.
+ *
+ * @param maxLaneCount - maximum lane count across all exits
+ * @param islandRadius - radius of the central island
+ * @param maxLaneWidth - maximum lane width across all exits
+ * @returns the generated array
+ */
+export const generateRingLines = (
     maxLaneCount: number,
     islandRadius: number,
     maxLaneWidth: number
-): RingLaneStructure[] {
+): RingLaneStructure[] => {
 
     const ringLines: RingLaneStructure[] = [];
     for (let i = 0; i <= maxLaneCount; i++) {
@@ -404,9 +513,18 @@ export function generateRingLines(
     return ringLines;
 }
 
-export function generateTextPosition(
+
+// SHARED UTILITIES
+
+/**
+ * Generates the text label position for an exit.
+ *
+ * @param exit - the exit structure
+ * @returns the computed position vector
+ */
+export const generateTextPosition = (
     exit: ExitStructure | RoundaboutExitStructure
-): THREE.Vector3 {
+): THREE.Vector3 => {
     const end = exit.laneLines[0].line.end;
     const start = exit.laneLines[exit.laneLines.length - 1].line.end;
 
@@ -421,7 +539,15 @@ export function generateTextPosition(
     return position.clone();
 };
 
-export function getExitWorldPosition(junctionGroup: THREE.Group, exit: ExitStructure | RoundaboutExitStructure, position: string): THREE.Vector3 {
+/**
+ * Compute the world-space position of the start or end midpoint of an exit's lane lines.
+ *
+ * @param junctionGroup - the Three.js group for the junction
+ * @param exit - the exit structure
+ * @param position - position identifier or vector
+ * @returns the computed position vector
+ */
+export const getExitWorldPosition = (junctionGroup: THREE.Group, exit: ExitStructure | RoundaboutExitStructure, position: string): THREE.Vector3 => {
 
     const points = exit.laneLines.map(lane =>
         position === "start" ? lane.line.start : lane.line.end
@@ -437,7 +563,13 @@ export function getExitWorldPosition(junctionGroup: THREE.Group, exit: ExitStruc
 };
 
 
-export function numberToExcelColumn(n: number): string {
+/**
+ * Convert a zero-based index to an Excel-style column label (0 → "A", 25 → "Z", 26 → "AA").
+ *
+ * @param n - zero-based index
+ * @returns the Excel-style column label
+ */
+export const numberToExcelColumn = (n: number): string => {
     let result = "";
     n += 1;
 
@@ -450,7 +582,14 @@ export function numberToExcelColumn(n: number): string {
     return result;
 }
 
-export function getStructureData(group: THREE.Group): { id: string; type: JunctionObjectTypes; maxDistanceToStopLine: number } | null {
+/**
+ * Extract structure metadata from a junction group's userData.
+ * Handles intersection, roundabout, and link formats.
+ *
+ * @param group - the Three.js group for the junction object
+ * @returns the structure metadata, or `null` if unrecognised
+ */
+export const getStructureData = (group: THREE.Group): { id: string; type: JunctionObjectTypes; maxDistanceToStopLine: number } | null => {
 
     if (group.userData.intersectionStructure) {
         const data = group.userData.intersectionStructure as IntersectionStructure;

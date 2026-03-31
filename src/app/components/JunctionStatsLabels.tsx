@@ -1,3 +1,10 @@
+/**
+ * JunctionStatsLabels.tsx
+ *
+ * Renders floating stat labels above each junction object during
+ * simulation, showing throughput, queue length, and level of service.
+ */
+
 import { Billboard, Html } from "@react-three/drei";
 import { SimulationStats } from "../includes/types/simulation";
 import * as THREE from "three";
@@ -11,6 +18,14 @@ type JunctionStatsLabelsProps = {
     positionsCache: Map<string, THREE.Vector3>;
 };
 
+/**
+ * Floating HTML labels above each junction showing level-of-service and queue stats.
+ *
+ * @param junctionGroups - array of junction Three.js groups
+ * @param stats - aggregated simulation statistics
+ * @param positionsCache - cached world positions for exit labels
+ * @returns the rendered floating stat labels
+ */
 export const JunctionStatsLabels = ({ junctionGroups, stats, positionsCache}: JunctionStatsLabelsProps) => {
     
     const { junction } = useJModellerContext();

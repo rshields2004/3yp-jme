@@ -1,8 +1,15 @@
+/**
+ * SelectionPanel.tsx
+ *
+ * Side panel for editing the selected junction object or exit,
+ * including lane counts, exit lengths, and spawn rate overrides.
+ */
+
 "use client";
 
 import { useEffect, useState } from "react";
 import { useJModellerContext } from "../context/JModellerContext";
-import { defaultExitConfig } from "../includes/defaults";
+import { defaultExitConfig } from "../includes/constants";
 import { ExitConfig, ExitRef } from "../includes/types/types";
 import { ChevronDown, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,11 +17,19 @@ import { Slider } from "@/components/ui/slider";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { usePeer } from "../context/PeerContext";
+import { HEADER_HEIGHT } from "../includes/constants";
 
-const HEADER_H = 44;
-
-// ── SliderRow ─────────────────────────────────────────────────────────────────
-
+/**
+ * Labelled slider row for numeric config values in the selection panel.
+ * @param label - descriptive text
+ * @param min - slider minimum
+ * @param max - slider maximum
+ * @param step - slider step increment
+ * @param value - current value
+ * @param onChange - callback with the new value
+ * @param display - formatted string shown beside the label
+ * @returns the rendered slider row
+ */
 const SliderRow = ({
     label, min, max, step, value, onChange, display,
 }: {
@@ -37,9 +52,13 @@ const SliderRow = ({
     </div>
 );
 
-// ── per-object config panel ──────────────────────────────────────────────────
-
-function ObjectConfig({ objId }: { objId: string }) {
+/**
+ * Configuration sub-panel for a single selected junction object.
+ * Shows exit controls, lane counts, spawn rates, and a delete button.
+ * @param objId - ID of the junction object to configure
+ * @returns the rendered configuration panel for one junction object
+ */
+const ObjectConfig = ({ objId }: { objId: string }) => {
     const {
         junction, setJunction, removeObject,
         simIsRunning, isConfigConfirmed, simConfig,
@@ -48,8 +67,7 @@ function ObjectConfig({ objId }: { objId: string }) {
     const obj = junction.junctionObjects.find(o => o.id === objId);
     if (!obj) return null;
 
-    // ── handlers ─────────────────────────────────────────────────────────
-
+    // handlers
     const handleNumExits = (value: number) =>
         setJunction(prev => ({
             ...prev,
@@ -179,8 +197,7 @@ function ObjectConfig({ objId }: { objId: string }) {
             }),
         }));
 
-    // ── render ────────────────────────────────────────────────────────────
-
+    // render
     return (
         <fieldset disabled={simIsRunning} className="border-none p-0 m-0">
             {/* Header row */}
@@ -246,9 +263,20 @@ function ObjectConfig({ objId }: { objId: string }) {
     );
 }
 
-// ── exit row ─────────────────────────────────────────────────────────────────
-
-function ExitRow({ j, exit, obj, globalSpawnRate, onLaneCount, onExitLength, onNumLanesIn, onSpawnRate, onClearSpawnRate }: {
+/**
+ * Collapsible row displaying and editing the config for a single exit arm.
+ * @param j - zero-based exit index
+ * @param exit - current exit configuration
+ * @param obj - the parent junction object
+ * @param globalSpawnRate - fallback spawn rate used when no per-exit override is set
+ * @param onLaneCount - callback to change lane count
+ * @param onExitLength - callback to change exit length
+ * @param onNumLanesIn - callback to change inbound lane count
+ * @param onSpawnRate - callback to set a per-exit spawn rate override
+ * @param onClearSpawnRate - callback to remove the per-exit override
+ * @returns the rendered exit configuration row
+ */
+const ExitRow = ({ j, exit, obj, globalSpawnRate, onLaneCount, onExitLength, onNumLanesIn, onSpawnRate, onClearSpawnRate }: {
     j: number;
     exit: ExitConfig;
     obj: ReturnType<typeof useJModellerContext>["junction"]["junctionObjects"][number];
@@ -258,7 +286,7 @@ function ExitRow({ j, exit, obj, globalSpawnRate, onLaneCount, onExitLength, onN
     onNumLanesIn: (v: number) => void;
     onSpawnRate: (v: number) => void;
     onClearSpawnRate: () => void;
-}) {
+}) => {
     const [open, setOpen] = useState(true);
     return (
         <div className="mb-1.5 border border-white/[0.08] rounded overflow-hidden">
@@ -304,9 +332,11 @@ function ExitRow({ j, exit, obj, globalSpawnRate, onLaneCount, onExitLength, onN
     );
 }
 
-// ── main panel ───────────────────────────────────────────────────────────────
-
-export default function SelectionPanel() {
+/**
+ * Side panel listing configuration controls for every selected junction object.
+ * @returns the rendered side panel
+ */
+const SelectionPanel = () => {
     const {
         selectedObjects, junction, setJunction, setSelectedObjects,
         isConfigConfirmed, simIsRunning,
@@ -326,7 +356,7 @@ export default function SelectionPanel() {
         <div
             className="fixed left-0 flex flex-col overflow-hidden bg-zinc-950/97 border-r border-white/[0.08] font-mono text-white/95 backdrop-blur-xl shadow-[8px_0_32px_rgba(0,0,0,0.5)]"
             style={{
-                top: HEADER_H,
+                top: HEADER_HEIGHT,
                 bottom: 0,
                 width: "25vw",
                 zIndex: 45,
@@ -374,3 +404,5 @@ export default function SelectionPanel() {
         </div>
     );
 }
+
+export default SelectionPanel;

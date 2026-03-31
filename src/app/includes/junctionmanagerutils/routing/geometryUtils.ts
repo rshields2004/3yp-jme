@@ -1,143 +1,169 @@
 /**
- * routing/geometryUtils.ts
+ * geometryUtils.ts
  *
- * Low-level geometry and resampling utilities.
+ * Low-level geometry and resampling utilities used by the routing subsystem:
+ * type conversions, fixed-spacing polyline resampling, Catmull-Rom smoothing,
+ * point equality checks, and lane centreline computation.
  */
+
 import * as THREE from "three";
 import { Tuple3 } from "../../types/simulation";
 
 export { polylineLength } from "../helpers/segmentHelpers";
 
+// TYPE CONVERSIONS
 
 /**
- * Converts THREE.Vector3 to Tuple3 type (array of 3 numbers)
- * @param v The THREE.Vector3 to convert
- * @returns The array of values representing x, y and z
+ * Converts a {@link THREE.Vector3} to a {@link Tuple3} `[x, y, z]` array.
+ *
+ * @param vector - The vector to convert.
+ * @returns A three-element numeric array.
  */
-export function v3ToTuple(v: THREE.Vector3): Tuple3 {
-    return [v.x, v.y, v.z];
-}
-
+export const v3ToTuple = (vector: THREE.Vector3): Tuple3 => {
+    return [vector.x, vector.y, vector.z];
+};
 
 /**
- * Converts a Tuple3 [x, y, z] into a THREE.Vector3.
- * Small utility to avoid repetitive constructor calls.
- * @param p Point to convert
+ * Converts a {@link Tuple3} `[x, y, z]` into a {@link THREE.Vector3}.
+ *
+ * @param point - The tuple to convert.
+ * @returns the computed position vector
  */
-export function toV3(p: Tuple3) {
-    return new THREE.Vector3(p[0], p[1], p[2]);
-}
+export const toV3 = (point: Tuple3): THREE.Vector3 => {
+    return new THREE.Vector3(point[0], point[1], point[2]);
+};
+
+// POLYLINE RESAMPLING
 
 /**
- * Resamples a polyline so that consecutive output points are all exactly `spacing` apart.
- * Works by walking along each input segment and emitting a new point each time the
- * accumulated distance reaches `spacing`. This ensures vehicles that index into route
- * points by step always advance a consistent physical distance per step, regardless of
- * how the original points were distributed.
- * @param pts Input polyline as an array of THREE.Vector3
- * @param spacing Desired distance between consecutive output points
- * @returns New array of THREE.Vector3 with uniform spacing
+ * Resamples a polyline so that consecutive output points are all exactly
+ * `spacing` apart. Works by walking along each input segment and emitting a
+ * new point each time the accumulated distance reaches `spacing`.
+ *
+ * This ensures vehicles that index into route points by step always advance a
+ * consistent physical distance per step, regardless of how the original points
+ * were distributed.
+ *
+ * @param points - Input polyline as an array of {@link THREE.Vector3}.
+ * @param spacing - Desired distance between consecutive output points.
+ * @returns New array of {@link THREE.Vector3} with uniform spacing.
  */
-export function resamplePolylineFixedSpacing(pts: THREE.Vector3[], spacing: number) {
-    if (!pts || pts.length < 2) return pts?.map((p) => p.clone()) ?? [];
+export const resamplePolylineFixedSpacing = (
+    points: THREE.Vector3[],
+    spacing: number,
+): THREE.Vector3[] => {
+    if (!points || points.length < 2) return points?.map((p) => p.clone()) ?? [];
 
-    const out: THREE.Vector3[] = [];
-    out.push(pts[0].clone());
+    const output: THREE.Vector3[] = [];
+    output.push(points[0].clone());
 
-    // acc tracks how far we've travelled since the last emitted point
-    let acc = 0;
+    // accumulated tracks how far we've travelled since the last emitted point
+    let accumulated = 0;
 
-    for (let i = 1; i < pts.length; i++) {
-        let a = pts[i - 1].clone();
-        const b = pts[i].clone();
+    for (let i = 1; i < points.length; i++) {
+        let current = points[i - 1].clone();
+        const target = points[i].clone();
 
-        let segLen = a.distanceTo(b);
-        if (segLen < 1e-9) continue; // Skip degenerate zero-length segments
+        let segmentLen = current.distanceTo(target);
+        if (segmentLen < 1e-9) continue; // Skip degenerate zero-length segments
 
         // Emit as many evenly-spaced points as fit in this segment
-        while (acc + segLen >= spacing) {
-            const remain = spacing - acc;
-            const t = remain / Math.max(1e-9, segLen);
+        while (accumulated + segmentLen >= spacing) {
+            const remaining = spacing - accumulated;
+            const t = remaining / Math.max(1e-9, segmentLen);
 
-            const p = a.clone().lerp(b, t);
-            out.push(p);
+            const emitted = current.clone().lerp(target, t);
+            output.push(emitted);
 
             // Advance the start of the remaining segment to the newly emitted point
-            a = p;
-            segLen = a.distanceTo(b);
-            acc = 0;
+            current = emitted;
+            segmentLen = current.distanceTo(target);
+            accumulated = 0;
         }
 
-        acc += segLen;
+        accumulated += segmentLen;
     }
 
     // Always include the last point so the route endpoint is exact
-    const last = pts[pts.length - 1];
-    if (out[out.length - 1].distanceToSquared(last) > 1e-10) out.push(last.clone());
-    return out;
-}
+    const last = points[points.length - 1];
+    if (output[output.length - 1].distanceToSquared(last) > 1e-10) output.push(last.clone());
+    return output;
+};
+
+// SMOOTHING
 
 /**
- * Smooths a segment's raw control points using a Catmull-Rom spline, then resamples
- * the result to a fixed point spacing. The spline is oversampled at 3× the desired
- * density before resampling to ensure the curve is captured accurately.
- * @param points Raw control points for this segment as Tuple3 array
- * @param spacing Desired distance between consecutive output points in world units
- * @param tension Catmull-Rom tension (0 = loose/loopy, 1 = tight/straight)
- * @returns Smoothed and evenly-spaced Tuple3 array
+ * Smooths a segment's raw control points using a Catmull-Rom spline, then
+ * resamples the result to a fixed point spacing. The spline is oversampled at
+ * 3× the desired density before resampling to ensure the curve is captured
+ * accurately.
+ *
+ * @param points - Raw control points for this segment.
+ * @param spacing - Desired distance between consecutive output points (world units).
+ * @param tension - Catmull-Rom tension (0 = loose/loopy, 1 = tight/straight).
+ * @returns Smoothed and evenly-spaced {@link Tuple3} array.
  */
-export function smoothAndResampleSegment(
+export const smoothAndResampleSegment = (
     points: Tuple3[],
     spacing: number,
-    tension: number
-): Tuple3[] {
+    tension: number,
+): Tuple3[] => {
     const control = points.map(toV3);
     if (control.length < 2) return control.map(v3ToTuple);
 
     // Measure approximate polyline length to calculate how many points we need
-    let approxLen = 0;
-    for (let i = 1; i < control.length; i++) approxLen += control[i].distanceTo(control[i - 1]);
+    let approximateLength = 0;
+    for (let i = 1; i < control.length; i++) {
+        approximateLength += control[i].distanceTo(control[i - 1]);
+    }
 
     // 3× oversampling before resampling keeps the final curve accurate;
-    // clamped between 50 and 1500 to avoid degenerate or excessively costly cases
-    const targetPoints = Math.ceil(approxLen / Math.max(1e-6, spacing));
-    const denseN = Math.max(50, Math.min(1500, targetPoints * 3));
+    // clamped between 50 and 1 500 to avoid degenerate or excessively costly cases
+    const targetPoints = Math.ceil(approximateLength / Math.max(1e-6, spacing));
+    const denseCount = Math.max(50, Math.min(1500, targetPoints * 3));
 
     const curve = new THREE.CatmullRomCurve3(control, false, "centripetal", tension);
-    const dense = curve.getPoints(denseN);
+    const dense = curve.getPoints(denseCount);
     const sampled = resamplePolylineFixedSpacing(dense, spacing);
 
     return sampled.map(v3ToTuple);
-}
+};
 
+// POINT COMPARISON
 
 /**
- * Epsilon comparison for two Tuple3 points.
- * Returns true if the squared distance between them is less than 1e-10,
- * used to detect duplicate boundary points when joining route segments.
- * @param a First point
- * @param b Second point
+ * Epsilon comparison for two {@link Tuple3} points. Returns `true` if the
+ * squared distance between them is less than 1e-10, used to detect duplicate
+ * boundary points when joining route segments.
+ *
+ * @param a - First point.
+ * @param b - Second point.
+ * @returns `true` if the condition holds
  */
-export function pointsEqual(a: Tuple3, b: Tuple3) {
+export const pointsEqual = (a: Tuple3, b: Tuple3): boolean => {
     const dx = a[0] - b[0];
     const dy = a[1] - b[1];
     const dz = a[2] - b[2];
     return dx * dx + dy * dy + dz * dz < 1e-10;
-}
+};
 
+// LANE CENTRELINE
 
 /**
- * Computes the centreline of a lane by averaging two parallel boundary curves point-by-point.
- * Used for link roads where the LinkComponent has pre-computed the two edge curves of each lane.
+ * Computes the centreline of a lane by averaging two parallel boundary curves
+ * point-by-point. Used for link roads where the {@link LinkComponent} has
+ * pre-computed the two edge curves of each lane.
+ *
  * If the arrays are different lengths, only the shorter length is used.
- * @param curveA Left boundary curve as Tuple3 array
- * @param curveB Right boundary curve as Tuple3 array
- * @returns Midpoint curve between curveA and curveB
+ *
+ * @param curveA - Left boundary curve.
+ * @param curveB - Right boundary curve.
+ * @returns Midpoint curve between `curveA` and `curveB`.
  */
-export function getMidCurve(curveA: Tuple3[], curveB: Tuple3[]): Tuple3[] {
+export const getMidCurve = (curveA: Tuple3[], curveB: Tuple3[]): Tuple3[] => {
     if (!curveA || !curveB) return [];
     if (curveA.length !== curveB.length) {
-        console.warn("Curves have different lengths, using min length");
+        console.warn("Curves have different lengths, using minimum length");
     }
     const length = Math.min(curveA.length, curveB.length);
     const midCurve: Tuple3[] = [];
@@ -147,4 +173,4 @@ export function getMidCurve(curveA: Tuple3[], curveB: Tuple3[]): Tuple3[] {
         midCurve.push([(ax + bx) / 2, (ay + by) / 2, (az + bz) / 2]);
     }
     return midCurve;
-}
+};

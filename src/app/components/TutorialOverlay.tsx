@@ -1,10 +1,22 @@
+/**
+ * TutorialOverlay.tsx
+ *
+ * Full-screen tutorial overlay with spotlight highlighting, tooltip
+ * positioning, and step-by-step navigation controls.
+ */
+
 "use client";
 
 import React, { CSSProperties, FC, useRef, useEffect, useState } from "react";
 import { TutorialStep, TooltipPosition } from "../includes/tutorialSteps";
+import { TOOLTIP_GAP, TOOLTIP_WIDTH, VIEWPORT_MARGIN } from "../includes/constants";
 
-// ── Spotlight ────────────────────────────────────────────────────────────────
-
+/**
+ * SVG-based spotlight overlay that dims the viewport except for the highlighted element region.
+ *
+ * @param highlightRect - bounding rect of the highlighted element
+ * @returns the rendered spotlight overlay
+ */
 const TutorialSpotlight: FC<{ highlightRect: DOMRect | null }> = ({ highlightRect }) => (
     <svg
         style={{
@@ -41,12 +53,14 @@ const TutorialSpotlight: FC<{ highlightRect: DOMRect | null }> = ({ highlightRec
     </svg>
 );
 
-// ── Tooltip positioning ──────────────────────────────────────────────────────
-
-const TOOLTIP_GAP = 16;
-const TOOLTIP_WIDTH = 300;
-
-function getTooltipStyle(position: TooltipPosition, rect: DOMRect | null): CSSProperties {
+/**
+ * Compute absolute CSS positioning for the tutorial tooltip
+ * based on the desired placement and the highlighted element's rect.
+ * @param position - desired tooltip placement relative to the highlight
+ * @param rect - bounding rect of the highlighted element (null if none)
+ * @returns CSSProperties for the tooltip container
+ */
+const getTooltipStyle = (position: TooltipPosition, rect: DOMRect | null): CSSProperties => {
     if (position === "top-right") {
         return { top: TOOLTIP_GAP, right: TOOLTIP_GAP };
     }
@@ -67,10 +81,9 @@ function getTooltipStyle(position: TooltipPosition, rect: DOMRect | null): CSSPr
     }
 }
 
-// ── Tooltip ──────────────────────────────────────────────────────────────────
-
-const VIEWPORT_MARGIN = 12;
-
+/**
+ * Floating tooltip card that displays the current tutorial step's content, with navigation and skip controls.
+ */
 const TutorialTooltip: FC<{
     step: TutorialStep;
     stepIndex: number;
@@ -183,8 +196,7 @@ const TutorialTooltip: FC<{
     );
 };
 
-// ── Overlay (public) ─────────────────────────────────────────────────────────
-
+// Overlay (public)
 export interface TutorialOverlayProps {
     currentStep: TutorialStep | null;
     stepIndex: number;
@@ -194,6 +206,10 @@ export interface TutorialOverlayProps {
     onSkip: () => void;
 }
 
+/**
+ * Semi-transparent overlay with a spotlight cutout, tooltip, and navigation buttons for the guided tutorial.
+ * @returns the rendered tutorial overlay
+ */
 export const TutorialOverlay: FC<TutorialOverlayProps> = ({
     currentStep,
     stepIndex,

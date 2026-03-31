@@ -1,3 +1,10 @@
+/**
+ * CoverPage.tsx
+ *
+ * Landing page displayed before the modeller loads, with options
+ * to host/join a P2P session or load a saved junction file.
+ */
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -16,7 +23,15 @@ type CoverPageProps = {
     onLoadSaveAction: (save: SaveFile) => void;
 };
 
-export default function CoverPage({ onContinueAction, initialSessionCode = "", onLoadSaveAction }: CoverPageProps) {
+/**
+ * Landing page with session join/host controls, save-file loading, and version info.
+ *
+ * @param onContinueAction - callback when the user enters the app
+ * @param initialSessionCode - pre-filled session code (from URL)
+ * @param onLoadSaveAction - callback when a save file is loaded
+ * @returns the rendered landing page
+ */
+const CoverPage = ({ onContinueAction, initialSessionCode = "", onLoadSaveAction }: CoverPageProps) => {
     const [joinCode, setJoinCode] = useState<string>(initialSessionCode);
     const [mode, setMode] = useState<"idle" | "join">(initialSessionCode ? "join" : "idle");
     const { joinHost, isConnecting, connectionError, connections } = usePeer();
@@ -217,3 +232,5 @@ export default function CoverPage({ onContinueAction, initialSessionCode = "", o
         </div>
     );
 }
+
+export default CoverPage;

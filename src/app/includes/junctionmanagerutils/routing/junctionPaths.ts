@@ -1,10 +1,11 @@
 /**
- * routing/junctionPaths.ts
+ * junctionPaths.ts
  *
- * World-space path generation through junction objects.
- * Covers lane endpoint lookup, intersection path planning, and roundabout path
- * planning (including ring-lane selection and lane-change Bézier scheduling).
+ * World-space path generation through junction objects. Covers lane endpoint
+ * lookup, intersection path planning, and roundabout path planning (including
+ * ring-lane selection and lane-change Bézier scheduling).
  */
+
 import * as THREE from "three";
 import { RingLaneStructure } from "../../types/roundabout";
 import { ExitConfig } from "../../types/types";
@@ -12,27 +13,31 @@ import { Tuple3, InternalParts } from "../../types/simulation";
 import { getStructureData } from "../../utils";
 import { v3ToTuple } from "./geometryUtils";
 
+// LANE ENDPOINT LOOKUP
+
 
 /**
  * Returns the world-space midpoint of a specific lane strip at a junction exit.
- * Lane lines are boundary lines, so N lanes = N+1 boundary lines, meaning
- * strip `laneIndex` sits between boundary lines `laneIndex` and `laneIndex+1`.
- * Inbound lanes are indexed in reverse order relative to outbound lanes,
- * since they occupy the opposite side of the exit road.
- * @param group The THREE.Group of the junction object (intersection or roundabout)
- * @param exitIndex Which exit arm on the junction
- * @param laneIndex Which lane strip within that exit (0 = leftmost/nearside)
- * @param which Whether to return the "start" (junction-side) or "end" (road-side) of the lane
- * @param dir "in" for inbound lanes, "out" for outbound - affects which side of the road is indexed
- * @returns The world-space midpoint of the requested lane strip endpoint
+ *
+ * Lane lines are boundary lines, so N lanes = N + 1 boundary lines, meaning
+ * strip `laneIndex` sits between boundary lines `laneIndex` and `laneIndex + 1`.
+ * Inbound lanes are indexed in reverse order relative to outbound lanes since
+ * they occupy the opposite side of the exit road.
+ *
+ * @param group - The Three.js group of the junction object.
+ * @param exitIndex - Which exit arm on the junction.
+ * @param laneIndex - Which lane strip within that exit (0 = leftmost/nearside).
+ * @param which - `"start"` (junction-side) or `"end"` (road-side) of the lane.
+ * @param dir - `"in"` for inbound lanes, `"out"` for outbound.
+ * @returns The world-space midpoint of the requested lane strip endpoint.
  */
-export function getLaneWorldPoint(
+export const getLaneWorldPoint = (
     group: THREE.Group,
     exitIndex: number,
     laneIndex: number,
     which: "start" | "end",
-    dir: "in" | "out"
-) {
+    dir: "in" | "out",
+) => {
     const infoArray = getStructureData(group)?.type === "roundabout"
         ? group.userData.roundaboutStructure.exitStructures
         : group.userData.intersectionStructure.exitInfo;
@@ -60,21 +65,23 @@ export function getLaneWorldPoint(
 
     // Return the midpoint between the two boundary lines, converted to world space
     return group.localToWorld(leftPoint.clone().add(rightPoint.clone()).multiplyScalar(0.5));
-}
+};
 
+// INTERSECTION PATHS
 
 /**
  * Builds the three-phase path through an intersection (approach, inside, and exit).
- * @param intersection The intersection group
- * @param entry The entry exit and lane index
- * @param exit The exit exit and lane index
- * @returns Approach, inside, and exit point arrays
+ *
+ * @param intersection - The intersection group.
+ * @param entry - Entry exit and lane index.
+ * @param exit - Exit exit and lane index.
+ * @returns Approach, inside, and exit point arrays.
  */
-export function generateIntersectionPathParts(
+export const generateIntersectionPathParts = (
     intersection: THREE.Group,
     entry: { exitIndex: number; laneIndex: number },
-    exit: { exitIndex: number; laneIndex: number }
-): InternalParts {
+    exit: { exitIndex: number; laneIndex: number },
+): InternalParts => {
 
     // Extract the start and end point of the approach lane
     const startPoint = getLaneWorldPoint(intersection, entry.exitIndex, entry.laneIndex, "end", "in");
@@ -84,10 +91,10 @@ export function generateIntersectionPathParts(
     const midEnd = getLaneWorldPoint(intersection, exit.exitIndex, exit.laneIndex, "start", "out");
     const endPoint = getLaneWorldPoint(intersection, exit.exitIndex, exit.laneIndex, "end", "out");
 
-    // Entry tangent: direction car is traveling when entering junction
+    // Entry tangent: direction car is travelling when entering junction
     const dirEntry = midStart.clone().sub(startPoint).normalize();
 
-    // Exit tangent: direction car will be traveling when leaving junction
+    // Exit tangent: direction car will be travelling when leaving junction
     const dirExit = endPoint.clone().sub(midEnd).normalize();
 
     const approachVector: THREE.Vector3[] = [startPoint, midStart];
@@ -127,26 +134,28 @@ export function generateIntersectionPathParts(
         inside: insideV.map(v3ToTuple),
         exit: exitV.map(v3ToTuple),
     };
-}
+};
 
+// ROUNDABOUT PATHS
 
 /**
- * Builds the three-phase path through a roundabout, including ring-lane selection
- * and Bézier-based lane-change scheduling.
- * @param roundabout The roundabout group
- * @param entry The entry exit and lane index
- * @param exit The exit exit and lane index
- * @param laneWidth Lane width in world units, used for lane-change arc length
- * @param exitConfigs Exit configs for all arms of the roundabout
- * @returns Approach, inside, and exit point arrays
+ * Builds the three-phase path through a roundabout, including ring-lane
+ * selection and Bézier-based lane-change scheduling.
+ *
+ * @param roundabout - The roundabout group.
+ * @param entry - Entry exit and lane index.
+ * @param exit - Exit exit and lane index.
+ * @param laneWidth - Lane width in world units, used for lane-change arc length.
+ * @param exitConfigs - Exit configs for all arms of the roundabout.
+ * @returns Approach, inside, and exit point arrays.
  */
-export function generateRoundaboutPathParts(
+export const generateRoundaboutPathParts = (
     roundabout: THREE.Group,
     entry: { exitIndex: number; laneIndex: number },
     exit: { exitIndex: number; laneIndex: number },
     laneWidth: number,
-    exitConfigs: ExitConfig[]
-): InternalParts {
+    exitConfigs: ExitConfig[],
+): InternalParts => {
     // Get approach and exit information same as intersection function
     const startW = getLaneWorldPoint(roundabout, entry.exitIndex, entry.laneIndex, "end", "in");
     const midStartW = getLaneWorldPoint(roundabout, entry.exitIndex, entry.laneIndex, "start", "in");
@@ -175,7 +184,7 @@ export function generateRoundaboutPathParts(
     if (entry.exitIndex === exit.exitIndex) {
         deltaCW = TAU;
     }
-    // Angles nearly identical but different exits means we wrapped around - treat as full loop
+    // Angles nearly identical but different exits means we wrapped around — treat as full loop
     if (deltaCW < 0.05 && entry.exitIndex !== exit.exitIndex) {
         deltaCW = TAU;
     }
@@ -216,7 +225,7 @@ export function generateRoundaboutPathParts(
     const entryRadius = getStripMidRadius(entryStripIndex);
     const exitRadius = getStripMidRadius(exitStripIndex);
     const needsLaneChange = lanesCrossed > 0;
-    const y = midStartL.y; // Y coordinate stays flat - all ring travel is at road height
+    const y = midStartL.y; // Y coordinate stays flat — all ring travel is at road height
 
     const ringPoint = (angle: number, radius: number) =>
         new THREE.Vector3(Math.cos(angle) * radius, y, Math.sin(angle) * radius);
@@ -387,4 +396,4 @@ export function generateRoundaboutPathParts(
         inside: toWorld(insidePoints).map(v3ToTuple),
         exit: toWorld([midEndL, endL]).map(v3ToTuple),
     };
-}
+};

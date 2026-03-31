@@ -1,10 +1,17 @@
+/**
+ * JunctionComponents.tsx
+ *
+ * Container component that renders all junction objects from state
+ * and provides drag controls for repositioning them in build mode.
+ */
+
 "use client";
 
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { DragControls } from "three/examples/jsm/controls/DragControls.js";
 import { useJModellerContext } from "../context/JModellerContext";
-import { FLOOR_Y_OFFSET } from "../includes/defaults";
+import { FLOOR_Y_OFFSET } from "../includes/constants";
 import { useThree } from "@react-three/fiber";
 import { IntersectionComponent } from "./IntersectionComponent";
 import { RoundaboutComponent } from "./RoundaboutComponent";
@@ -12,6 +19,11 @@ import { LinkComponent } from "./LinkComponent";
 import { getStructureData } from "../includes/utils";
 
 
+/**
+ * Reads the junction config from context and renders the corresponding
+ * intersection, roundabout, and link components for every object.
+ * @returns the rendered junction object list
+ */
 export const JunctionComponents = () => {
 
     const { selectedObjects, junction, snapToValidPosition, setSelectedObjects, junctionObjectRefs, isConfigConfirmed, toolMode } = useJModellerContext();

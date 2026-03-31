@@ -1,3 +1,10 @@
+/**
+ * ThickLine.tsx
+ *
+ * Reusable R3F component for rendering wide lines using Line2,
+ * LineGeometry, and LineMaterial from the three.js addons.
+ */
+
 "use client";
 
 import React, { forwardRef, useRef, useImperativeHandle, useEffect } from "react";
@@ -27,6 +34,11 @@ type ThickLineProps = {
     gapSize?: number;
 };
 
+/**
+ * Renders a wide line using Three.js Line2 / LineGeometry / LineMaterial.
+ * Supports dashing and imperative colour changes via a forwarded ref.
+ * @returns the rendered wide line
+ */
 export const ThickLine = forwardRef<ThickLineHandle, ThickLineProps>(
     ({ points, colour, linewidth, dashed, worldUnits, dashSize = 0.5, gapSize = 0.5 }, ref) => {
         const groupRef = useRef<THREE.Group>(null);

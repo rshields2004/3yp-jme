@@ -1,3 +1,8 @@
+/**
+ * page.tsx
+ * Root page component — orchestrates the cover page, mobile gate,
+ * and main application content (canvas, header, panels).
+ */
 "use client";
 
 import { Canvas } from "@react-three/fiber";
@@ -13,8 +18,11 @@ import CoverPage from "./components/CoverPage";
 import { useTutorial } from "./context/useTutorial";
 import { TutorialOverlay } from "./components/TutorialOverlay";
 import { SaveFile } from "./includes/saveLoad";
-import { defaultJunctionConfig, defaultSimConfig } from "./includes/defaults";
+import { defaultJunctionConfig, defaultSimConfig, HEADER_HEIGHT } from "./includes/constants";
 
+/**
+ * Shared inline CSS for the floating zoom +/- buttons.
+ */
 const zoomBtnStyle: React.CSSProperties = {
     display: "flex", alignItems: "center", justifyContent: "center",
     width: 32, height: 32,
@@ -29,13 +37,19 @@ const zoomBtnStyle: React.CSSProperties = {
     transition: "color 0.15s, background 0.15s",
 };
 
-function AppContent({ onExit, loadedSave }: { onExit: () => void; loadedSave?: SaveFile | null }) {
+/**
+ * Main application shell rendered after the cover page.
+ * Composes the header, canvas, selection panel, tutorial overlay, and zoom controls.
+ * @param onExit - callback to return to the cover page
+ * @param loadedSave - optional save file to restore on mount
+ * @returns the rendered application shell
+ */
+const AppContent = ({ onExit, loadedSave }: { onExit: () => void; loadedSave?: SaveFile | null }) => {
     const { selectedObjects, setJunction, setSimConfig, haltSim, resetConfig, setSelectedObjects, setSelectedExits, setObjectCounter, junctionObjectRefs, unregisterJunctionObject } = useJModellerContext();
     const { disconnect, connections, isHost } = usePeer();
     const panelOpen = selectedObjects.length > 0;
     const [navDropdownHeight, setNavDropdownHeight] = useState(0);
-    const HEADER_H = 44;
-    const canvasTop = `${HEADER_H + navDropdownHeight}px`;
+    const canvasTop = `${HEADER_HEIGHT + navDropdownHeight}px`;
     const sceneRef = useRef<SceneHandle>(null);
     const tutorial = useTutorial();
 
@@ -122,7 +136,12 @@ function AppContent({ onExit, loadedSave }: { onExit: () => void; loadedSave?: S
     );
 }
 
-function MobileGate({ onProceed }: { onProceed: () => void }) {
+/**
+ * Full-screen overlay warning mobile users that the app is best used on desktop.
+ * @param onProceed - callback when the user elects to continue anyway
+ * @returns the rendered mobile warning overlay
+ */
+const MobileGate = ({ onProceed }: { onProceed: () => void }) => {
     return (
         <div className="fixed inset-0 bg-[#080808] flex flex-col items-center justify-center" style={{ zIndex: 200, fontFamily: "var(--font-mono), 'Courier New', monospace", overflow: "hidden" }}>
             {/* Grid background */}
@@ -170,7 +189,11 @@ function MobileGate({ onProceed }: { onProceed: () => void }) {
     );
 }
 
-export default function Page() {
+/**
+ * Top-level page component wrapping providers and routing between cover/app views.
+ * @returns the rendered page
+ */
+const Page = () => {
 
     const [entered, setEntered] = useState(false);
     const [sessionCode, setSessionCode] = useState("");
@@ -241,3 +264,5 @@ export default function Page() {
         </PeerProvider>
     );
 };
+
+export default Page;

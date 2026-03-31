@@ -1,3 +1,10 @@
+/**
+ * RouteDebug.tsx
+ *
+ * Debug visualisation of all computed vehicle routes, rendered as
+ * coloured lines with instanced sphere markers at waypoints.
+ */
+
 "use client";
 
 import { useEffect, useRef } from "react";
@@ -7,39 +14,72 @@ import { useJModellerContext } from "../context/JModellerContext";
 import { Route, Tuple3 } from "../includes/types/simulation";
 import { generateAllRoutes } from "../includes/junctionmanagerutils/routing/routeGeneration";
 import { getRoutePoints } from "../includes/junctionmanagerutils/routing/routeUtils";
+import { TRANSFORM_CHECK_INTERVAL } from "../includes/constants";
 
-function colorForIndex(i: number): THREE.Color {
+/**
+ * Return a deterministic colour for a route index using the golden-ratio hue spread.
+ * @param i - route index
+ * @returns THREE.Color with distinct hue
+ */
+const colourForIndex = (i: number): THREE.Color => {
     const c = new THREE.Color();
     c.setHSL((i * 0.61803398875) % 1, 0.7, 0.55);
     return c;
 }
 
-function disposeLine(line: THREE.Line) {
+/**
+ * Dispose the geometry and material(s) of a Three.js Line object.
+ * @param line - the Three.js Line object
+ */
+const disposeLine = (line: THREE.Line) => {
     (line.geometry as THREE.BufferGeometry)?.dispose();
     const mat = line.material as THREE.Material | THREE.Material[];
     if (Array.isArray(mat)) mat.forEach((m) => m.dispose());
     else mat?.dispose();
 }
 
-function disposeInstanced(mesh: THREE.InstancedMesh) {
+/**
+ * Dispose the geometry and material(s) of an InstancedMesh.
+ * @param mesh - the Three.js InstancedMesh
+ */
+const disposeInstanced = (mesh: THREE.InstancedMesh) => {
     (mesh.geometry as THREE.BufferGeometry)?.dispose();
     const mat = mesh.material as THREE.Material | THREE.Material[];
     if (Array.isArray(mat)) mat.forEach((m) => m.dispose());
     else mat?.dispose();
 }
 
-function keyForGroup(g: THREE.Object3D, fallbackIdx: number) {
+/**
+ * Return a stable string key for a Three.js group, falling back to its array index.
+ *
+ * @param g - the Three.js object/group
+ * @param fallbackIdx - index to use if the group has no userData.id
+ * @returns a string key for the group
+ */
+const keyForGroup = (g: THREE.Object3D, fallbackIdx: number) => {
     return (g as THREE.Object3D<THREE.Object3DEventMap>).userData?.id ?? `${fallbackIdx}`;
 }
 
-function matrixDifferent(a: Float32Array, b: ArrayLike<number>, eps = 1e-6) {
+/**
+ * Check whether two 4×4 matrices differ by more than a tolerance.
+ * @param a - first matrix as a Float32Array (16 elements)
+ * @param b - second matrix as an ArrayLike (16 elements)
+ * @param eps - per-element tolerance (default 1e-6)
+ * @returns `true` if any element differs by more than `eps`
+ */
+const matrixDifferent = (a: Float32Array, b: ArrayLike<number>, eps = 1e-6) => {
     for (let i = 0; i < 16; i++) {
         if (Math.abs(a[i] - b[i]) > eps) return true;
     }
     return false;
 }
 
-export function RouteDebug({
+/**
+ * Debug overlay that visualises all generated routes as coloured lines
+ * with instanced cube markers at segment boundaries. Toggle via keyboard.
+ * @returns the rendered debug route overlay
+ */
+export const RouteDebug = ({
     enabled = true,
     maxSteps = 30,
     disallowUTurn = true,
@@ -53,7 +93,7 @@ export function RouteDebug({
     yLift?: number;
     boxSize?: number;
     maxBoxes?: number;
-}) {
+}) => {
     const { scene } = useThree();
     const { junction, junctionObjectRefs } = useJModellerContext();
 
@@ -72,7 +112,6 @@ export function RouteDebug({
     const lastMatricesRef = useRef<Map<string, Float32Array>>(new Map());
     // Throttle transform checking to avoid performance issues
     const transformCheckAccumRef = useRef(0);
-    const TRANSFORM_CHECK_INTERVAL = 0.5; // Check only twice per second
 
     const setBoxesFromRoute = (route: Route, color: THREE.Color) => {
         const inst = boxesRef.current;
@@ -205,7 +244,7 @@ export function RouteDebug({
         const geom = new THREE.BufferGeometry();
         geom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
 
-        const col = colorForIndex(idx);
+        const col = colourForIndex(idx);
 
         const newMat = new THREE.LineBasicMaterial({
             color: col,

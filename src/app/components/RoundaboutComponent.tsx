@@ -1,3 +1,10 @@
+/**
+ * RoundaboutComponent.tsx
+ *
+ * Renders a single roundabout junction object in the R3F scene,
+ * including circular floor, ring lines, lane markings, and exits.
+ */
+
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
@@ -19,11 +26,23 @@ type RoundaboutProps = {
     name: string;
     roundaboutConfig: RoundaboutConfig;
     index: number;
-    /** When provided (P2P client), position is applied directly instead of snapToValidPosition. */
+    /**
+     * When provided (P2P client), position is applied directly instead of snapToValidPosition.
+     */
     initialTransform?: ObjectTransform;
 };
 
 
+/**
+ * Renders a roundabout including circular floor, ring lanes, exits, lane markings,
+ * stop lines, and edge tubes. Registers/unregisters itself with the context.
+ *
+ * @param id - unique identifier for the junction object
+ * @param roundaboutConfig - configuration for this roundabout
+ * @param name - file name for the download
+ * @param initialTransform - optional initial world transform (P2P)
+ * @returns the rendered roundabout group
+ */
 export const RoundaboutComponent = ({ id, roundaboutConfig, name, initialTransform }: RoundaboutProps) => {
 
     const groupRef = useRef<THREE.Group>(null);

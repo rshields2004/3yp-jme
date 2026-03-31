@@ -1,10 +1,11 @@
 ﻿/**
- * routing/routeGeneration.ts
+ * routeGeneration.ts
  *
- * Routing graph construction and DFS route enumeration.
- * Builds the full graph of lane-to-lane edges across the junction network, then
- * traces every valid path from spawn point to despawn point.
+ * Routing graph construction and DFS route enumeration. Builds the full graph
+ * of lane-to-lane edges across the junction network, then traces every valid
+ * path from spawn point to despawn point.
  */
+
 import * as THREE from "three";
 import { ExitConfig, JunctionConfig, JunctionObject, LinkStructure } from "../../types/types";
 import { Tuple3, NodeKey, Graph, Edge, RouteSegment, EdgePart, Route, Node } from "../../types/simulation";
@@ -13,41 +14,59 @@ import { getStructureData } from "../../utils";
 import { smoothAndResampleSegment, pointsEqual, getMidCurve } from "./geometryUtils";
 import { generateIntersectionPathParts, generateRoundaboutPathParts } from "./junctionPaths";
 
+// GRAPH HELPERS
 
 /**
  * Inserts an edge into the routing graph from a given node.
+ *
+ * @param graph - the junction graph to add the edge to
+ * @param from - source node key
+ * @param edge - edge descriptor
  */
-const addEdge = (graph: Graph, from: Node, e: Edge) => {
-    const k = nodeKeyOf(from);
-    const arr = graph.get(k);
-    if (arr) arr.push(e);
-    else graph.set(k, [e]);
+const addEdge = (graph: Graph, from: Node, edge: Edge) => {
+    const key = nodeKeyOf(from);
+    const arr = graph.get(key);
+    if (arr) arr.push(edge);
+    else graph.set(key, [edge]);
 };
 
-/** Returns the number of outbound lanes on an exit. */
+/**
+ * Returns the number of outbound lanes on an exit.
+ *
+ * @param config - the exit configuration
+ * @returns the number of outbound lanes
+ */
 const outCount = (config: ExitConfig) => config.laneCount - config.numLanesIn;
 
-/** Returns the number of inbound lanes on an exit. */
+/**
+ * Returns the number of inbound lanes on an exit.
+ *
+ * @param config - the exit configuration
+ * @returns the number of inbound lanes
+ */
 const inCount = (config: ExitConfig) => config.numLanesIn;
 
+// ROUTE ASSEMBLY
 
 /**
- * Assembles a final Route object from raw RouteSegments, smoothing and resampling
- * each segment independently. Strips any duplicate joining point at segment boundaries.
- * @param buildSegments Raw segments to process, in order
- * @param opts Optional smoothing and spacing settings
- * @returns A fully processed Route ready for vehicle use
+ * Assembles a final {@link Route} from raw segments, smoothing and resampling
+ * each segment independently. Strips any duplicate joining point at segment
+ * boundaries.
+ *
+ * @param buildSegments - Raw segments to process, in order.
+ * @param opts - Optional smoothing and spacing settings.
+ * @returns A fully processed route ready for vehicle use.
  */
-function buildRouteFromSegments(
+const buildRouteFromSegments = (
     buildSegments: RouteSegment[],
-    opts?: { spacing?: number; tension?: number; smoothPerSegment?: boolean }
-): Route {
+    opts?: { spacing?: number; tension?: number; smoothPerSegment?: boolean },
+): Route => {
     const spacing = opts?.spacing ?? 1.0;
     const tension = opts?.tension ?? 0.5;
     const smoothPerSegment = opts?.smoothPerSegment ?? true;
 
     const outSegments: RouteSegment[] = [];
-    let prevLast: Tuple3 | null = null;
+    let previousLast: Tuple3 | null = null;
 
     for (const seg of buildSegments) {
         const pts = seg.points;
@@ -58,48 +77,55 @@ function buildRouteFromSegments(
         let finalPts = resampled;
 
         // Strip the first point if it duplicates the last point of the previous segment
-        if (prevLast && finalPts.length && pointsEqual(prevLast, finalPts[0])) {
+        if (previousLast && finalPts.length && pointsEqual(previousLast, finalPts[0])) {
             finalPts = finalPts.slice(1);
         }
         if (!finalPts.length) continue;
 
         outSegments.push({ from: seg.from, to: seg.to, phase: seg.phase, points: finalPts });
-        prevLast = finalPts[finalPts.length - 1];
+        previousLast = finalPts[finalPts.length - 1];
     }
 
     return { segments: outSegments };
-}
+};
 
+// ROUTE GENERATION
 
 /**
  * Top-level function that builds the full routing graph for the junction network
  * and enumerates every possible route through it via depth-first search.
  *
  * Runs in four passes:
- *  1. Internal routing - edges between every in/out lane pair within each junction
- *  2. Link edges - connects junctions through JunctionLink road segments
- *  3. Start/end identification - finds spawn (unlinked in-lanes) and despawn (unlinked out-lanes) points
- *  4. DFS enumeration - traces every valid path from spawn to despawn, building Route objects
+ *  1. **Internal routing** — edges between every in/out lane pair within each junction.
+ *  2. **Link edges** — connects junctions through JunctionLink road segments.
+ *  3. **Start/end identification** — finds spawn (unlinked in-lanes) and despawn (unlinked out-lanes) points.
+ *  4. **DFS enumeration** — traces every valid path from spawn to despawn, building Route objects.
  *
- * @param junction The junction configuration containing all objects and links
- * @param junctionObjectRefs THREE.Group refs for each junction object
- * @param opts Optional tuning parameters
- * @returns All generated routes plus the raw graph, start nodes, and end node keys
+ * @param junction - The junction configuration containing all objects and links.
+ * @param junctionObjectRefs - Three.js group refs for each junction object.
+ * @param opts - Optional tuning parameters.
+ * @returns All generated routes plus the raw graph, start nodes, and end node keys.
  */
-export function generateAllRoutes(
+export const generateAllRoutes = (
     junction: JunctionConfig,
     junctionObjectRefs: THREE.Group[],
     opts?: {
         maxSteps?: number;
         disallowUTurn?: boolean;
-        /** Fixed spacing in metres for per-segment resample */
+        /**
+         * Fixed spacing in metres for per-segment resample.
+         */
         spacing?: number;
-        /** Catmull-Rom tension for per-segment smoothing (0 = loose, 1 = tight) */
+        /**
+         * Catmull-Rom tension for per-segment smoothing (0 = loose, 1 = tight).
+         */
         tension?: number;
-        /** If false, uses raw polylines with no smoothing or resampling */
+        /**
+         * If `false`, uses raw polylines with no smoothing or resampling.
+         */
         smoothPerSegment?: boolean;
-    }
-) {
+    },
+) => {
     const maxSteps = opts?.maxSteps ?? 30;
     const disallowUTurn = opts?.disallowUTurn ?? true;
     const spacing = opts?.spacing ?? 1.0;
@@ -120,6 +146,15 @@ export function generateAllRoutes(
     /**
      * Builds the three EdgeParts (approach, inside, exit) for a single in->out lane pair
      * within one junction object, delegating to the appropriate path generator.
+     *
+     * @param objType - junction object type
+     * @param group - the Three.js group for the junction object
+     * @param eIN - entry exit index
+     * @param lIN - entry lane index
+     * @param eOUT - exit exit index
+     * @param lOUT - exit lane index
+     * @param exitConfigs - per-exit configuration array
+     * @returns the generated array
      */
     const buildInternalParts = (
         objType: "intersection" | "roundabout",
@@ -172,7 +207,13 @@ export function generateAllRoutes(
 
             const totalOutgoingLanes = availableExitIndices.reduce((sum, e) => sum + outCount(exitConfigs[e]), 0);
 
-            /** Shorthand to create and register one internal graph edge */
+            /**
+             * Shorthand to create and register one internal graph edge
+             *
+             * @param lIN - entry lane index
+             * @param eOUT - exit exit index
+             * @param lOUT - exit lane index
+             */
             const addInternal = (lIN: number, eOUT: number, lOUT: number) => {
                 const from: Node = { structureID: obj.id, exitIndex: eIN, direction: "in", laneIndex: lIN };
                 const to: Node = { structureID: obj.id, exitIndex: eOUT, direction: "out", laneIndex: lOUT };
@@ -371,4 +412,4 @@ export function generateAllRoutes(
     }
 
     return { routes, graph: mainG, starts, ends };
-}
+};

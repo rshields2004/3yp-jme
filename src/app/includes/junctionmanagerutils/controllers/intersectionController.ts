@@ -1,14 +1,21 @@
+/**
+ * intersectionController.ts
+ *
+ * UK-style traffic signal controller for signalised intersections. Cycles
+ * through approaches using the standard RED → RED_AMBER → GREEN → AMBER →
+ * ALL_RED sequence.
+ *
+ * - While an approach is active, all other approaches are held at RED.
+ * - During ALL_RED, every approach is RED.
+ * - Zero lane keys → always GREEN (no control needed).
+ * - One lane key → GREEN continuously (no cycling).
+ */
+
 import { LightColour, SimConfig } from "../../types/simulation";
 
 /**
- * UK light sequence per approach (simplified but correct):
- *   RED -> RED+AMBER -> GREEN -> AMBER -> ALL_RED -> (next approach) RED+AMBER -> GREEN -> ...
- *
- * Notes:
- * - While an approach is active, all other approaches are held at RED.
- * - During ALL_RED, everyone is RED.
- * - If there is 0 laneKeys, we default to always GREEN (no control needed).
- * - If there is 1 laneKey, we keep it GREEN continuously (no cycling).
+ * UK-style traffic signal controller. Cycles through approaches using
+ * RED → RED_AMBER → GREEN → AMBER → ALL_RED.
  */
 export class IntersectionController {
     id: string;
@@ -27,6 +34,12 @@ export class IntersectionController {
 
     private state: "GREEN" | "AMBER" | "ALL_RED" | "RED_AMBER" = "GREEN";
 
+    /**
+     * Create a new intersection signal controller.
+     * @param id - junction ID
+     * @param laneKeys - distinct entry-group keys this intersection serves
+     * @param cfgGetter - accessor for the current simulation config
+     */
     constructor(
         id: string,
         laneKeys: string[],
@@ -37,6 +50,10 @@ export class IntersectionController {
         this.getCfg = cfgGetter;
     }
 
+    /**
+     * Advance the signal timer by `dt` seconds and transition states as needed.
+     * @param dt - time delta in seconds since last frame
+     */
     update(dt: number) {
         // If no control needed, keep green and exit
         if (this.laneKeys.length <= 1) {
@@ -82,15 +99,28 @@ export class IntersectionController {
         }
     }
 
-    /** True only during GREEN phase for the currently-served approach. */
+    /**
+     * True only during GREEN phase for the currently-served approach.
+     *
+     * @param laneKey - string key identifying a specific lane
+     * @returns `true` when no vehicles are circulating
+     */
     isGreen(laneKey: string): boolean {
         return this.getCurrentGreen() === laneKey;
     }
 
+    /**
+     * Return the current signal phase.
+     * @returns a human-readable state summary
+     */
     getState(): "GREEN" | "AMBER" | "ALL_RED" | "RED_AMBER" {
         return this.state;
     }
 
+    /**
+     * Return the lane key of the currently-green approach, or `null` if none.
+     * @returns the currently-green lane key, or `null` if none
+     */
     getCurrentGreen(): string | null {
         if (this.laneKeys.length === 0) return null;
         if (this.state !== "GREEN") return null;
@@ -104,6 +134,9 @@ export class IntersectionController {
      *  - RED_AMBER -> setRedAmber()
      *  - GREEN     -> setGreen()
      *  - AMBER     -> setAmber()
+     *
+     * @param laneKey - string key identifying a specific lane
+     * @returns the signal colour string
      */
     getLightColour(laneKey: string): LightColour {
         if (this.laneKeys.length === 0) return "GREEN"; // no controller => treat as green
@@ -131,6 +164,9 @@ export class IntersectionController {
      * Optional helper: if you want vehicles to be allowed on AMBER (some sims do),
      * keep using isGreen() for strict behaviour.
      * If you want "treat AMBER as proceed if already close", handle that in VehicleManager.
+     *
+     * @param laneKey - string key identifying a specific lane
+     * @returns `true` if the entry is permitted
      */
     canNewVehicleEnter(laneKey: string): boolean {
         return this.isGreen(laneKey);

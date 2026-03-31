@@ -1,21 +1,43 @@
+/**
+ * tutorialSteps.ts
+ *
+ * Defines the ordered sequence of interactive tutorial steps that guide
+ * new users through building, linking, and simulating a junction network.
+ */
+
 export type TooltipPosition = "top" | "bottom" | "left" | "right" | "center" | "top-right";
 
+/**
+ * Configuration for a single tutorial step.
+ */
 export type TutorialStep = {
     id: string;
     title: string;
     description: string;
-    /** CSS selector for the element to highlight / point at */
+    /**
+     * CSS selector for the element to highlight / point at
+     */
     target: string;
-    /** What the user must do: "click" a button, "drag" on the canvas, "right-click", etc. */
+    /**
+     * What the user must do: "click" a button, "drag" on the canvas, "right-click", etc.
+     */
     action: string;
-    /** Tooltip position relative to the target */
+    /**
+     * Tooltip position relative to the target
+     */
     position: TooltipPosition;
-    /** If true, advance automatically when the expected action is detected */
+    /**
+     * If true, advance automatically when the expected action is detected
+     */
     autoAdvance: boolean;
-    /** Custom label for the Next button (default: "Next →") */
+    /**
+     * Custom label for the Next button (default: "Next →")
+     */
     nextLabel?: string;
 };
-
+/**
+ * Ordered list of steps shown by the interactive tutorial overlay.
+ */
 export const TUTORIAL_STEPS: TutorialStep[] = [
     // ── 1. Switch to Build mode ───────────────────────────────────────
     {

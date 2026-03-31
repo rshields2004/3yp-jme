@@ -1,11 +1,23 @@
+/**
+ * useTutorial.ts
+ *
+ * Custom hook that drives an interactive step-by-step tutorial overlay.
+ * Tracks the current step, highlights the target element, and supports
+ * manual or auto-advance on user interaction.
+ */
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { TUTORIAL_STEPS, TutorialStep } from "../includes/tutorialSteps";
+import { TUTORIAL_STORAGE_KEY, TUTORIAL_HIGHLIGHT_PADDING } from "../includes/constants";
 
-const STORAGE_KEY = "tutorialCompleted";
-const HIGHLIGHT_PADDING = 8;
-
-function rectsEqual(a: DOMRect | null, b: DOMRect | null): boolean {
+/**
+ * Shallow equality check for two DOMRects (within 1 px tolerance).
+ *
+ * @param a - first angle in radians
+ * @param b - second angle in radians
+ * @returns `true` if the condition holds
+ */
+const rectsEqual = (a: DOMRect | null, b: DOMRect | null): boolean => {
     if (a === b) return true;
     if (!a || !b) return false;
     return (
@@ -14,7 +26,7 @@ function rectsEqual(a: DOMRect | null, b: DOMRect | null): boolean {
         Math.abs(a.width - b.width) < 1 &&
         Math.abs(a.height - b.height) < 1
     );
-}
+};
 
 export type UseTutorialReturn = {
     isActive: boolean;
@@ -28,7 +40,11 @@ export type UseTutorialReturn = {
     advanceIfMatch: (action: string) => void;
 };
 
-export function useTutorial(): UseTutorialReturn {
+/**
+ * Hook providing interactive tutorial state and navigation controls.
+ * @returns tutorial state, navigation functions, and highlight rect
+ */
+export const useTutorial = (): UseTutorialReturn => {
     const [isActive, setIsActive] = useState(false);
     const [stepIndex, setStepIndex] = useState(0);
     const [highlightRect, setHighlightRect] = useState<DOMRect | null>(null);
@@ -48,10 +64,10 @@ export function useTutorial(): UseTutorialReturn {
             if (el) {
                 const rect = el.getBoundingClientRect();
                 const next = new DOMRect(
-                    rect.left - HIGHLIGHT_PADDING,
-                    rect.top - HIGHLIGHT_PADDING,
-                    rect.width + HIGHLIGHT_PADDING * 2,
-                    rect.height + HIGHLIGHT_PADDING * 2,
+                    rect.left - TUTORIAL_HIGHLIGHT_PADDING,
+                    rect.top - TUTORIAL_HIGHLIGHT_PADDING,
+                    rect.width + TUTORIAL_HIGHLIGHT_PADDING * 2,
+                    rect.height + TUTORIAL_HIGHLIGHT_PADDING * 2,
                 );
                 if (!rectsEqual(next, lastRectRef.current)) {
                     lastRectRef.current = next;
@@ -86,7 +102,7 @@ export function useTutorial(): UseTutorialReturn {
     const next = useCallback(() => {
         if (stepIndex >= TUTORIAL_STEPS.length - 1) {
             setIsActive(false);
-            localStorage.setItem(STORAGE_KEY, "true");
+            localStorage.setItem(TUTORIAL_STORAGE_KEY, "true");
         } else {
             setStepIndex(i => i + 1);
         }
@@ -103,7 +119,7 @@ export function useTutorial(): UseTutorialReturn {
                 const nextIdx = i + 1;
                 if (nextIdx >= TUTORIAL_STEPS.length) {
                     setIsActive(false);
-                    localStorage.setItem(STORAGE_KEY, "true");
+                    localStorage.setItem(TUTORIAL_STORAGE_KEY, "true");
                     return i;
                 }
                 return nextIdx;
@@ -126,7 +142,7 @@ export function useTutorial(): UseTutorialReturn {
 
     const skip = useCallback(() => {
         setIsActive(false);
-        localStorage.setItem(STORAGE_KEY, "true");
+        localStorage.setItem(TUTORIAL_STORAGE_KEY, "true");
     }, []);
 
     const advanceIfMatch = useCallback(
@@ -149,4 +165,4 @@ export function useTutorial(): UseTutorialReturn {
         skip,
         advanceIfMatch,
     };
-}
+};

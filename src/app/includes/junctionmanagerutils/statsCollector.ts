@@ -1,9 +1,22 @@
+/**
+ * statsCollector.ts
+ *
+ * Aggregates per-junction and global simulation statistics each frame.
+ * Tracks vehicle entries/exits, queue lengths, wait times, Level of Service
+ * (LoS), and degree-of-saturation metrics.
+ */
+
 import { Vehicle } from "./vehicle";
 import { JunctionObjectTypes } from "../types/types";
 import { SimulationStats, JunctionStats, JunctionStatsGlobal, LevelOfService } from "../types/simulation";
 import { IntersectionController } from "./controllers/intersectionController";
 import { RoundaboutController } from "./controllers/roundaboutController";
 
+// TYPES
+
+/**
+ * Per-junction running counters accumulated over the simulation lifetime.
+ */
 export type JunctionCounter = {
     entered: number;
     exited: number;
@@ -14,10 +27,23 @@ export type JunctionCounter = {
     maxQueueLength: number;
 };
 
-export function defaultJunctionCounter(): JunctionCounter {
-    return { entered: 0, exited: 0, blockedDownstream: 0, totalWaitTime: 0, waitCount: 0, maxWaitTime: 0, maxQueueLength: 0 };
-}
+/**
+ * Returns a zeroed-out junction counter.
+ * @returns a zeroed-out junction counter
+ */
+export const defaultJunctionCounter = (): JunctionCounter => ({
+    entered: 0,
+    exited: 0,
+    blockedDownstream: 0,
+    totalWaitTime: 0,
+    waitCount: 0,
+    maxWaitTime: 0,
+    maxQueueLength: 0,
+});
 
+/**
+ * Everything the stats collector needs to read/mutate for one frame.
+ */
 export interface StatsContext {
     vehicles: Vehicle[];
     elapsedTime: number;
@@ -34,7 +60,17 @@ export interface StatsContext {
     getDistToSegmentEnd: (v: Vehicle) => number;
 }
 
-function computeLOS(avgDelay: number, type: JunctionObjectTypes): LevelOfService {
+// LEVEL OF SERVICE
+
+/**
+ * Computes the HCM Level of Service grade from average delay.
+ * Uses different thresholds for roundabouts vs signalised intersections.
+ *
+ * @param avgDelay - average delay in seconds
+ * @param type - junction type ("intersection" or "roundabout")
+ * @returns the level-of-service grade (A–F)
+ */
+const computeLOS = (avgDelay: number, type: JunctionObjectTypes): LevelOfService => {
     if (avgDelay <= 0) return "-";
     if (type === "roundabout") {
         if (avgDelay <= 10) return "A";
@@ -50,16 +86,19 @@ function computeLOS(avgDelay: number, type: JunctionObjectTypes): LevelOfService
     if (avgDelay <= 55) return "D";
     if (avgDelay <= 80) return "E";
     return "F";
-}
+};
+
+// STATS COLLECTION
 
 /**
  * Collects simulation statistics from the current frame state.
  * Mutates junctionCounters, lastVehJunctionTag, and roundabout controllers
- * as side effects (entered/exited detection + notification).
+ * as side effects (entered/exited detection and notification).
  *
- * Returns the snapshot AND the (possibly updated) globalMaxQueueLength.
+ * @returns The snapshot and the (possibly updated) globalMaxQueueLength.
+ * @param ctx - the canvas 2D rendering context
  */
-export function collectStats(ctx: StatsContext): { snapshot: SimulationStats; globalMaxQueueLength: number } {
+export const collectStats = (ctx: StatsContext): { snapshot: SimulationStats; globalMaxQueueLength: number } => {
     const byId: Record<string, JunctionStats> = {};
 
     const ensure = (jid: string, type: JunctionObjectTypes): JunctionStats => {
@@ -94,7 +133,7 @@ export function collectStats(ctx: StatsContext): { snapshot: SimulationStats; gl
     };
 
     // ---------
-    // 1) Per-vehicle snapshot counts + entered/exited detection
+    // 1) Per-vehicle snapshot counts and entered/exited detection
     // ---------
     for (const v of ctx.vehicles) {
         const seg = v.currentSegment;
@@ -275,4 +314,4 @@ export function collectStats(ctx: StatsContext): { snapshot: SimulationStats; gl
     };
 
     return { snapshot, globalMaxQueueLength: updatedGlobalMaxQueue };
-}
+};

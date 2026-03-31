@@ -1,10 +1,17 @@
+/**
+ * AppHeader.tsx
+ *
+ * Main application header bar with simulation controls, junction
+ * building tools, P2P session management, and configuration panels.
+ */
+
 "use client";
 
 import { useEffect, useRef, useState } from "react";
 import { useJModellerContext } from "../context/JModellerContext";
 import { usePeer } from "../context/PeerContext";
 import { NetMessage, SharedState } from "../includes/types/peer";
-import { defaultIntersectionConfig, defaultRoundaboutConfig, defaultJunctionConfig, defaultSimConfig } from "../includes/defaults";
+import { defaultIntersectionConfig, defaultRoundaboutConfig, defaultJunctionConfig, defaultSimConfig } from "../includes/constants";
 import { numberToExcelColumn } from "../includes/utils";
 import { carClasses } from "../includes/types/carTypes";
 import { generateReport } from "../includes/reportGenerator";
@@ -28,9 +35,16 @@ import { Kbd } from "@/components/ui/kbd";
 import { cn } from "@/lib/utils";
 import { downloadSave, loadSaveFromFile } from "../includes/saveLoad";
 
-// ─── small reusable sub-components ──────────────────────────────────────────
-
-function IconBtn({
+/**
+ * Small icon-only button wrapped in a tooltip.
+ * @param children - icon element to render inside the button
+ * @param title - tooltip text shown on hover
+ * @param onClick - click handler
+ * @param disabled - whether the button is disabled
+ * @param active - whether the button appears in its active/pressed state
+ * @returns the rendered icon button
+ */
+const IconBtn = ({
     children, title, onClick, disabled = false, active = false, ...rest
 }: {
     children: React.ReactNode;
@@ -39,7 +53,7 @@ function IconBtn({
     disabled?: boolean;
     active?: boolean;
     [key: string]: unknown;
-}) {
+}) => {
     return (
         <Tooltip>
             <TooltipTrigger asChild>
@@ -63,7 +77,15 @@ function IconBtn({
     );
 }
 
-function DropdownPanel({
+/**
+ * Sliding dropdown panel anchored to the top or bottom of the viewport.
+ * @param children - panel content
+ * @param anchor - edge the panel slides from (`"top"` or `"bottom"`)
+ * @param panelOpen - whether the selection panel is open (shifts left edge)
+ * @param fullHeight - whether the panel extends to fill the remaining viewport height
+ * @returns the rendered dropdown panel
+ */
+const DropdownPanel = ({
     children,
     anchor = "top",
     panelOpen = false,
@@ -73,7 +95,7 @@ function DropdownPanel({
     anchor?: "top" | "bottom";
     panelOpen?: boolean;
     fullHeight?: boolean;
-}) {
+}) => {
     const isBottom = anchor === "bottom";
     return (
         <div
@@ -98,18 +120,35 @@ function DropdownPanel({
     );
 }
 
+/**
+ * Uppercase label used to separate groups of controls within a dropdown panel.
+ *
+ * @param children - child elements to render
+ * @returns the rendered section title
+ */
 const SectionTitle = ({ children }: { children: React.ReactNode }) => (
     <div className="text-[11px] tracking-[0.18em] text-white/75 uppercase mb-2.5 mt-3.5 first:mt-0">
         {children}
     </div>
 );
 
-function SliderRowUi({
+/**
+ * Labelled slider row for numeric config values in the header dropdowns.
+ * @param label - descriptive text to the left of the slider
+ * @param min - slider minimum
+ * @param max - slider maximum
+ * @param step - slider step increment
+ * @param value - current value
+ * @param onChange - callback with the new value
+ * @param displayValue - formatted string shown to the right of the label
+ * @returns the rendered slider row
+ */
+const SliderRowUi = ({
     label, min, max, step, value, onChange, displayValue,
 }: {
     label: string; min: number; max: number; step: number;
     value: number; onChange: (v: number) => void; displayValue: string;
-}) {
+}) => {
     return (
         <div className="mb-1.5">
             <div className="flex justify-between text-[13px] mb-1 text-white/92">
@@ -128,7 +167,15 @@ function SliderRowUi({
     );
 }
 
-function ActionBtn({
+/**
+ * Styled action button used for primary actions (e.g. add object, confirm config).
+ * @param children - button label/icon content
+ * @param onClick - click handler
+ * @param disabled - whether the button is disabled
+ * @param variant - visual style (`"default"` or `"danger"`)
+ * @returns the rendered action button
+ */
+const ActionBtn = ({
     children, onClick, disabled = false, variant = "default", ...rest
 }: {
     children: React.ReactNode;
@@ -136,7 +183,7 @@ function ActionBtn({
     disabled?: boolean;
     variant?: "default" | "danger";
     [key: string]: unknown;
-}) {
+}) => {
     return (
         <Button
             size="sm"
@@ -154,11 +201,17 @@ function ActionBtn({
     );
 }
 
-// ─── main component ──────────────────────────────────────────────────────────
-
-type MenuId = "session" | "config" | "modes" | null;
-
-export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeightChangeAction, onStartTutorialAction }: { onExitAction?: () => void; panelOpen?: boolean; onMenuHeightChangeAction?: (height: number) => void; onStartTutorialAction?: () => void }) {
+/**
+ * Top navigation bar with dropdown menus for session, configuration, and
+ * simulation modes. Also displays real-time stats during a running simulation.
+ *
+ * @param onExitAction - callback when exit is clicked
+ * @param panelOpen - whether the selection panel is open
+ * @param onMenuHeightChangeAction - callback reporting the dropdown height
+ * @param onStartTutorialAction - callback to start the tutorial
+ * @returns the rendered header bar
+ */
+const AppHeader = ({ onExitAction, panelOpen = false, onMenuHeightChangeAction, onStartTutorialAction }: { onExitAction?: () => void; panelOpen?: boolean; onMenuHeightChangeAction?: (height: number) => void; onStartTutorialAction?: () => void }) => {
     const [openMenu, setOpenMenu] = useState<MenuId>(null);
     const [joinCode, setJoinCode] = useState("");
     const [statsCollapsed, setStatsCollapsed] = useState(false);
@@ -204,7 +257,7 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
         isConnecting, connectionError, connectedPeerIds,
     } = usePeer();
 
-    // ── peer effects ──────────────────────────────────────────────────────
+    // peer effects
     const clientHandlerRef = useRef<(data: unknown) => void>(null!);
     clientHandlerRef.current = (data: unknown) => {
         const msg = data as NetMessage;
@@ -289,7 +342,7 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
         }
     }, [isHost, connections.length]);
 
-    // ── junction helpers ──────────────────────────────────────────────────
+    // junction helpers
     const addNewIntersection = () => {
         if (junction.junctionObjects.filter(o => o.type === "intersection").length >= 10) return;
         setObjectCounter(prev => prev + 1);
@@ -349,7 +402,7 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
         setJunction(prev => ({ ...prev, junctionLinks: prev.junctionLinks.filter(l => l.id !== linkID) }));
     };
 
-    // ── sim config helper ─────────────────────────────────────────────────
+    // sim config helper
     type ConfigPath = readonly (string | number)[];
     const setByPath = <T extends object>(obj: T, path: ConfigPath, value: number): T => {
         const [head, ...rest] = path;
@@ -359,7 +412,7 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
     const handleN = (path: ConfigPath, value: number) =>
         setSimConfig(prev => setByPath(prev, path, value));
 
-    // ── misc ──────────────────────────────────────────────────────────────
+    // misc
     const toggleMenu = (id: MenuId) => setOpenMenu(prev => prev === id ? null : id);
     const isConnected = connections.length > 0;
     const isClientConnected = !isHost && isConnected;
@@ -371,7 +424,7 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
         idle: "bg-zinc-700",
     };
 
-    // ── render ────────────────────────────────────────────────────────────
+    // render
     return (
         <>
             <style>{`
@@ -1183,3 +1236,5 @@ export default function AppHeader({ onExitAction, panelOpen = false, onMenuHeigh
         </>
     );
 }
+
+export default AppHeader;

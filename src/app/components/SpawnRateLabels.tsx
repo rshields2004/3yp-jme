@@ -1,3 +1,10 @@
+/**
+ * SpawnRateLabels.tsx
+ *
+ * Renders floating labels above each exit showing the effective
+ * spawn rate when the simulation configuration panel is open.
+ */
+
 import { Billboard, Html } from "@react-three/drei";
 import { Route, SimConfig, SimulationStats } from "../includes/types/simulation";
 import * as THREE from "three";
@@ -14,6 +21,16 @@ type SpawnRateLabelsProps = {
     simConfig: SimConfig;
 };
 
+/**
+ * Floating HTML labels at each spawn point showing the current spawn rate and demand.
+ *
+ * @param junctionGroups - array of junction Three.js groups
+ * @param stats - aggregated simulation statistics
+ * @param positionsCache - cached world positions for exit labels
+ * @param routes - array of computed routes
+ * @param simConfig - the simulation configuration
+ * @returns the rendered floating spawn-rate labels
+ */
 export const SpawnRateLabels = ({ junctionGroups, stats, positionsCache, routes, simConfig }: SpawnRateLabelsProps) => {
     const isSpawnPoint = (structureID: string, exitIndex: number): boolean => {
         if (!routes || routes.length === 0) return true;

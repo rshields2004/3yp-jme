@@ -1,3 +1,10 @@
+/**
+ * LinkComponent.tsx
+ *
+ * Renders the road link between two junction exits as a bezier
+ * curve with lane markings, edge lines, and lane dividers.
+ */
+
 "use client";
 
 import { useRef, useMemo, useEffect } from "react";
@@ -25,6 +32,16 @@ type LinkInfo = {
     numLanesIn: number,
 }
 
+/**
+ * Renders the road surface, lane markings, edge tubes, and dashed centre line
+ * for a link connecting two junction exits.
+ *
+ * @param link - the link connecting two exit arms
+ * @param config1 - exit config for the first arm
+ * @param config2 - exit config for the second arm
+ * @param yOffset - vertical offset for the link geometry
+ * @returns the rendered link geometry
+ */
 export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkComponentProps) => {
     const { junctionObjectRefs, registerJunctionObject, junction } = useJModellerContext();
     const groupRef = useRef<THREE.Group>(null);
@@ -84,6 +101,15 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
         return offsets;
     }, [linkInfo]);
 
+    /**
+     * Compute the perpendicular direction (in the XZ plane) between two points.
+     * Returns a unit vector pointing "left" of the a→b direction.
+     * Falls back to (1,0,0) when the points are coincident.
+     *
+     * @param a - first angle in radians
+     * @param b - second angle in radians
+     * @returns a unit vector perpendicular to the input direction
+     */
     const safePerp = (a: THREE.Vector3, b: THREE.Vector3) => {
         const d = b.clone().sub(a).setY(0);
         if (d.lengthSq() < 1e-6) return new THREE.Vector3(1, 0, 0);

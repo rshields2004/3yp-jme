@@ -1,3 +1,11 @@
+/**
+ * vehicleSpawner.ts
+ *
+ * Deterministic vehicle spawning system. Manages spawn rates per junction
+ * entry, demand accumulation, and seeded-RNG-based vehicle creation to ensure
+ * reproducible simulations across sessions.
+ */
+
 import * as THREE from "three";
 import React from "react";
 import { Vehicle } from "./vehicle";
@@ -6,25 +14,35 @@ import { SimConfig, Route, Tuple3 } from "../types/simulation";
 import { RoundaboutController } from "./controllers/roundaboutController";
 import { SeededRNG, rngForEntry, CarClass, bodyTypeForModelIndex, hashString, getEffectiveCarClasses } from "../types/carTypes";
 import { laneKeyForSegment } from "./helpers/segmentHelpers";
+import { SPAWN_TICK } from "../constants";
 
-
-// ─── State ────────────────────────────────────────────────────────────────────
+// SPAWN STATE
 
 export type SpawnState = {
     spawned: number;
     spawnRatesPerEntry: Map<string, number>;
     spawnDemandPerEntry: Map<string, number>;
-    /** Routes grouped by "<structureID>-<exitIndex>" */
+    /**
+     * Routes grouped by "<structureID>-<exitIndex>"
+     */
     routesByEntry: Map<string, Route[]>;
     spawnAccumulator: number;
     entryRNGs: Map<string, SeededRNG>;
-    /** Stable, seed-reproducible key per entry point */
+    /**
+     * Stable, seed-reproducible key per entry point
+     */
     entryRngKeys: Map<string, string>;
     junctionStableKeys: Map<string, string>;
     junctionStableKeysBuilt: boolean;
 };
 
-export function createSpawnState(routes: Route[]): SpawnState {
+/**
+ * Creates a fresh spawn state, pre-populating entry-to-route mappings.
+ *
+ * @param routes - array of computed routes
+ * @returns a freshly initialised spawn state
+ */
+export const createSpawnState = (routes: Route[]): SpawnState => {
     const state: SpawnState = {
         spawned: 0,
         spawnRatesPerEntry: new Map(),
@@ -38,9 +56,15 @@ export function createSpawnState(routes: Route[]): SpawnState {
     };
     buildRoutesByEntry(state, routes);
     return state;
-}
+};
 
-export function resetSpawnState(state: SpawnState, routes: Route[]): void {
+/**
+ * Resets an existing spawn state and rebuilds entry-to-route mappings.
+ *
+ * @param state - the spawn state to update
+ * @param routes - array of computed routes
+ */
+export const resetSpawnState = (state: SpawnState, routes: Route[]): void => {
     state.spawned = 0;
     state.spawnRatesPerEntry.clear();
     state.spawnDemandPerEntry.clear();
@@ -51,17 +75,33 @@ export function resetSpawnState(state: SpawnState, routes: Route[]): void {
     state.junctionStableKeys.clear();
     state.junctionStableKeysBuilt = false;
     buildRoutesByEntry(state, routes);
-}
+};
 
 
 
-// ─── Main per-frame entry point ───────────────────────────────────────────────
+// MAIN PER-FRAME ENTRY POINT
 
 /**
- * Run one simulation tick of the spawning system.
+ * Runs one simulation tick of the spawning system.
  * Called from VehicleManager.update() once per frame.
+ *
+ * @param state - the mutable spawn state
+ * @param dt - delta time since last frame (seconds)
+ * @param junctionObjectRefs - ref to the array of registered junction groups
+ * @param cfg - current simulation configuration
+ * @param vehicles - live vehicle array (mutated on spawn)
+ * @param carModels - loaded car model templates
+ * @param scene - the Three.js scene to spawn into
+ * @param junction - the junction layout configuration
+ * @param roundaboutControllers - map of active roundabout controllers
+ * @param nextId - callback that returns the next unique vehicle ID
+ * @param getRoutePointsCached - cached route-point resolver
+ * @param findGroupById - helper to locate a group by its structure ID
+ * @param getStructureData - extracts structure metadata from a group
+ * @param getGroupId - extracts the structure ID from a group
+ * @param updateVehicleSegment - callback to refresh a vehicle's current segment
  */
-export function spawnTick(
+export const spawnTick = (
     state: SpawnState,
     dt: number,
     junctionObjectRefs: React.RefObject<THREE.Group<THREE.Object3DEventMap>[]>,
@@ -77,7 +117,7 @@ export function spawnTick(
     getStructureData: (group: THREE.Group) => { id: string; type: string; maxDistanceToStopLine: number } | null,
     getGroupId: (group: THREE.Group) => string | null,
     updateVehicleSegment: (v: Vehicle) => void,
-): void {
+): void => {
     buildJunctionStableKeys(state, junctionObjectRefs, junction, findGroupById, getStructureData);
     updateSpawnRatesFromJunctions(state, junctionObjectRefs, junction, cfg, getGroupId);
 
@@ -89,7 +129,6 @@ export function spawnTick(
             : cfg.spawning.maxSpawnQueue;
 
     // Accumulate demand at fixed tick rate for determinism
-    const SPAWN_TICK = 1 / 60;
     state.spawnAccumulator += dt;
     const spawnTicks = Math.floor(state.spawnAccumulator / SPAWN_TICK);
     state.spawnAccumulator -= spawnTicks * SPAWN_TICK;
@@ -136,12 +175,18 @@ export function spawnTick(
             }
         }
     }
-}
+};
 
 
-// ─── Internal helpers ─────────────────────────────────────────────────────────
+// INTERNAL HELPERS
 
-function buildRoutesByEntry(state: SpawnState, routes: Route[]): void {
+/**
+ * Groups routes by their entry key ("<structureID>-<exitIndex>").
+ *
+ * @param state - the spawn state to update
+ * @param routes - array of computed routes
+ */
+const buildRoutesByEntry = (state: SpawnState, routes: Route[]): void => {
     state.routesByEntry.clear();
 
     for (const route of routes) {
@@ -155,7 +200,7 @@ function buildRoutesByEntry(state: SpawnState, routes: Route[]): void {
         }
         state.routesByEntry.get(entryKey)!.push(route);
     }
-}
+};
 
 /**
  * Build stable, config-hash-based keys for every entry point.
@@ -167,14 +212,20 @@ function buildRoutesByEntry(state: SpawnState, routes: Route[]): void {
  * with the same config hash are sub-indexed by their world-position
  * sort order (x then z). This relative ordering is robust even if
  * positions have small floating-point differences between tabs.
+ *
+ * @param state - the mutable spawn state
+ * @param junctionObjectRefs - ref to the array of registered junction groups
+ * @param junction - the junction layout configuration
+ * @param findGroupById - helper to locate a group by its structure ID
+ * @param getStructureData - extracts structure metadata from a group
  */
-function buildJunctionStableKeys(
+const buildJunctionStableKeys = (
     state: SpawnState,
     junctionObjectRefs: React.RefObject<THREE.Group<THREE.Object3DEventMap>[]>,
     junction: JunctionConfig,
     findGroupById: (groups: THREE.Group[], id: string) => THREE.Group | undefined,
     getStructureData: (group: THREE.Group) => { id: string; type: string; maxDistanceToStopLine: number } | null,
-): void {
+): void => {
     if (state.junctionStableKeysBuilt) return;
 
     const groups = junctionObjectRefs.current;
@@ -245,16 +296,24 @@ function buildJunctionStableKeys(
     }
 
     state.junctionStableKeysBuilt = true;
-}
+};
 
-/** Refresh spawn rates from live junction config; leaves accumulated demand untouched */
-function updateSpawnRatesFromJunctions(
+/**
+ * Refreshes spawn rates from live junction config; leaves accumulated demand untouched.
+ *
+ * @param state - the mutable spawn state
+ * @param junctionObjectRefs - ref to the array of registered junction groups
+ * @param junction - the junction layout configuration
+ * @param cfg - current simulation configuration
+ * @param getGroupId - extracts the structure ID from a group
+ */
+const updateSpawnRatesFromJunctions = (
     state: SpawnState,
     junctionObjectRefs: React.RefObject<THREE.Group<THREE.Object3DEventMap>[]>,
     junction: JunctionConfig,
     cfg: SimConfig,
     getGroupId: (group: THREE.Group) => string | null,
-): void {
+): void => {
     if (!junctionObjectRefs.current) return;
 
     state.spawnRatesPerEntry.clear();
@@ -290,10 +349,10 @@ function updateSpawnRatesFromJunctions(
             state.spawnDemandPerEntry.delete(entryKey);
         }
     }
-}
+};
 
 /**
- * Try to spawn a vehicle from a specific entry point.
+ * Tries to spawn a vehicle from a specific entry point.
  *
  * IMPORTANT FOR SEED REPRODUCIBILITY:
  * The seeded RNG is always advanced by the same number of values per
@@ -301,8 +360,20 @@ function updateSpawnRatesFromJunctions(
  * This guarantees the Nth spawn attempt at a given entry always produces
  * the same vehicle type / colour / stats, even when earlier attempts were
  * blocked at different times due to frame-rate differences.
+ *
+ * @param state - the mutable spawn state
+ * @param entryKey - the entry point key ("structureID-exitIndex")
+ * @param cfg - current simulation configuration
+ * @param vehicles - live vehicle array (mutated on spawn)
+ * @param carModels - loaded car model templates
+ * @param scene - the Three.js scene to spawn into
+ * @param roundaboutControllers - map of active roundabout controllers
+ * @param nextId - callback that returns the next unique vehicle ID
+ * @param getRoutePointsCached - cached route-point resolver
+ * @param updateVehicleSegment - callback to refresh a vehicle's current segment
+ * @returns `true` if a vehicle was spawned, `false` otherwise
  */
-function trySpawnFromEntry(
+const trySpawnFromEntry = (
     state: SpawnState,
     entryKey: string,
     cfg: SimConfig,
@@ -313,7 +384,7 @@ function trySpawnFromEntry(
     nextId: () => number,
     getRoutePointsCached: (route: Route) => Tuple3[],
     updateVehicleSegment: (v: Vehicle) => void,
-): boolean {
+): boolean => {
     const routesForEntry = state.routesByEntry.get(entryKey);
     if (!routesForEntry || routesForEntry.length === 0 || !carModels.length) return false;
 
@@ -411,13 +482,21 @@ function trySpawnFromEntry(
     state.spawned += 1;
 
     return true;
-}
+};
 
-function spawnKeyForRoute(
+/**
+ * Builds a stable cache key for a route's spawn point.
+ *
+ * @param route - the route to key
+ * @param roundaboutControllers - map of active roundabout controllers
+ * @param getRoutePointsCached - cached route-point resolver
+ * @returns a stable cache key for the spawn point
+ */
+const spawnKeyForRoute = (
     route: Route,
     roundaboutControllers: Map<string, RoundaboutController>,
     getRoutePointsCached: (route: Route) => Tuple3[],
-): string {
+): string => {
     const firstSeg = route.segments?.[0];
     const lk = firstSeg ? laneKeyForSegment(firstSeg, roundaboutControllers) : "";
     if (lk) return `spawn:${lk}`;
@@ -425,16 +504,27 @@ function spawnKeyForRoute(
     const points = getRoutePointsCached(route);
     const p0 = points[0];
     return `spawnPoint:${p0[0].toFixed(3)},${p0[1].toFixed(3)},${p0[2].toFixed(3)}`;
-}
+};
 
-function hasSpawnSpace(
+/**
+ * Checks whether there is enough clearance at the route's spawn point for a new vehicle.
+ *
+ * @param route - the route to check the spawn zone on
+ * @param newLen - length of the vehicle to be spawned
+ * @param vehicles - live vehicle array
+ * @param cfg - current simulation configuration
+ * @param roundaboutControllers - map of active roundabout controllers
+ * @param getRoutePointsCached - cached route-point resolver
+ * @returns `true` if there is enough clearance to spawn
+ */
+const hasSpawnSpace = (
     route: Route,
     newLen: number,
     vehicles: Vehicle[],
     cfg: SimConfig,
     roundaboutControllers: Map<string, RoundaboutController>,
     getRoutePointsCached: (route: Route) => Tuple3[],
-): boolean {
+): boolean => {
     const spawnKey = spawnKeyForRoute(route, roundaboutControllers, getRoutePointsCached);
 
     let nearest: Vehicle | null = null;
@@ -457,4 +547,4 @@ function hasSpawnSpace(
     const required     = newLen + cfg.spacing.minBumperGap + safetyBuffer;
 
     return nearestS >= required;
-}
+};

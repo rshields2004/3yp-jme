@@ -1,19 +1,40 @@
+/**
+ * carModelLoaders.ts
+ *
+ * Asynchronously loads OBJ/MTL car models from the public assets folder and
+ * caches them for reuse. Falls back to simple box geometry when models cannot
+ * be fetched.
+ */
+
 import * as THREE from "three";
 import { MTLLoader, OBJLoader } from "three/examples/jsm/Addons.js";
 import { carFiles } from "../../types/carTypes";
 
-// Below is concerned with loading the car models from the server
-
-let cachedCarModels: THREE.Group[] | null = null;
-let carModelsLoading: Promise<THREE.Group[]> | null = null;
-
+// MODULE-LEVEL CACHE
 
 /**
- * Asynchronous function that loads the car models from the server onto the client as three groups
- * 
- * @returns A promise for the car models as a three group
+ * Resolved car model groups, populated after the first successful load.
  */
-export async function loadCarModels(): Promise<THREE.Group[]> {
+let cachedCarModels: THREE.Group[] | null = null;
+
+/**
+ * In-flight loading promise — prevents duplicate parallel fetches.
+ */
+let carModelsLoading: Promise<THREE.Group[]> | null = null;
+
+// MODEL LOADING
+
+/**
+ * Loads every car model listed in {@link carFiles} using MTL + OBJ loaders.
+ * Results are cached so subsequent calls return immediately.
+ *
+ * Each loaded group stores its original `carFiles` index in
+ * `model.userData.carFileIndex` so the mapping survives even when some
+ * models fail to load.
+ *
+ * @returns A promise resolving to an array of Three.js groups.
+ */
+export const loadCarModels = async (): Promise<THREE.Group[]> => {
     if (cachedCarModels && cachedCarModels.length > 0) {
         return cachedCarModels;
     }
@@ -38,7 +59,7 @@ export async function loadCarModels(): Promise<THREE.Group[]> {
                 objLoader.setMaterials(materials);
                 const model = await objLoader.loadAsync(car.obj);
                 model.scale.set(1, 1, 1);
-                // Store the original carFiles index so model ↔ carFiles mapping
+                // Store the original carFiles index so model-to-carFiles mapping
                 // survives even when some models fail to load.
                 model.userData.carFileIndex = i;
 
@@ -59,19 +80,24 @@ export async function loadCarModels(): Promise<THREE.Group[]> {
     })();
 
     return carModelsLoading;
-}
+};
+
+// FALLBACK GEOMETRY
 
 /**
- * Create fallback box cars when OBJ models can't be loaded
+ * Creates simple coloured box-car groups as a fallback when the OBJ/MTL
+ * assets cannot be loaded.
+ *
+ * @returns An array of Six box-car groups in distinct colours.
  */
-function createFallbackCarModels(): THREE.Group[] {
-    const colors = [0xff0000, 0x0000ff, 0x00ff00, 0xffff00, 0xff00ff, 0x00ffff];
+const createFallbackCarModels = (): THREE.Group[] => {
+    const colours = [0xff0000, 0x0000ff, 0x00ff00, 0xffff00, 0xff00ff, 0x00ffff];
 
-    return colors.map((color) => {
+    return colours.map((colour) => {
         const group = new THREE.Group();
 
         const bodyGeometry = new THREE.BoxGeometry(2, 1.5, 4.5);
-        const bodyMaterial = new THREE.MeshStandardMaterial({ color });
+        const bodyMaterial = new THREE.MeshStandardMaterial({ color: colour });
         const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
         body.castShadow = true;
         body.receiveShadow = true;
@@ -80,7 +106,7 @@ function createFallbackCarModels(): THREE.Group[] {
 
         const roofGeometry = new THREE.BoxGeometry(1.8, 1, 2.5);
         const roofMaterial = new THREE.MeshStandardMaterial({
-            color: new THREE.Color(color).multiplyScalar(0.8),
+            color: new THREE.Color(colour).multiplyScalar(0.8),
         });
         const roof = new THREE.Mesh(roofGeometry, roofMaterial);
         roof.position.y = 2;
@@ -89,4 +115,4 @@ function createFallbackCarModels(): THREE.Group[] {
 
         return group;
     });
-}
+};

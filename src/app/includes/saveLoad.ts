@@ -1,7 +1,18 @@
+/**
+ * saveLoad.ts
+ *
+ * Handles downloading and uploading .jme save files, which contain
+ * the junction configuration and simulation config as serialised JSON.
+ */
+
 import { JunctionConfig } from "./types/types";
 import { SimConfig } from "./types/simulation";
 
+// TYPES
 
+/**
+ * Shape of the persisted save file.
+ */
 export type SaveFile = {
     version: 1;
     name: string;
@@ -10,11 +21,20 @@ export type SaveFile = {
     simConfig: SimConfig;
 };
 
-export function downloadSave(
+// SAVE AND LOAD
+
+/**
+ * Serialises the current config and triggers a browser download as a .jme file.
+ *
+ * @param junctionConfig - the junction configuration to save
+ * @param simConfig - the simulation configuration
+ * @param name - file name for the download
+ */
+export const downloadSave = (
     junctionConfig: JunctionConfig,
     simConfig: SimConfig,
     name = "junction"
-) {
+): void => {
     const save: SaveFile = {
         version: 1,
         name,
@@ -30,10 +50,13 @@ export function downloadSave(
     a.download = `${name}-${Date.now()}.jme`;
     a.click();
     URL.revokeObjectURL(url);
-}
+};
 
-
-export function loadSaveFromFile(): Promise<SaveFile> {
+/**
+ * Opens a file picker and parses the selected .jme/.json save file.
+ * @returns the parsed save-file contents
+ */
+export const loadSaveFromFile = (): Promise<SaveFile> => {
     return new Promise((resolve, reject) => {
         const input = document.createElement("input");
         input.type = "file";
@@ -60,4 +83,4 @@ export function loadSaveFromFile(): Promise<SaveFile> {
         };
         input.click();
     });
-}
+};

@@ -1,8 +1,16 @@
+/**
+ * JModellerContext.tsx
+ *
+ * Central state provider for the junction modeller. Exposes junction
+ * configuration, selection state, simulation lifecycle, and Three.js
+ * object registration/disposal via React context.
+ */
+
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode, useRef, useEffect } from "react";
 import { ExitRef, JModellerState, JunctionConfig, JunctionObjectTypes } from "../includes/types/types";
-import { defaultJunctionConfig, defaultSimConfig, FLOOR_Y_OFFSET } from "../includes/defaults";
+import { defaultJunctionConfig, defaultSimConfig, FLOOR_Y_OFFSET } from "../includes/constants";
 import * as THREE from "three";
 import { SimulationStats } from "../includes/types/simulation";
 import { FollowedVehicleStats } from "../includes/types/simulation";
@@ -13,8 +21,17 @@ import { usePeer } from "./PeerContext";
 import { NetMessage } from "../includes/types/peer";
 
 
+/**
+ * Internal React context holding the full JModeller state (undefined until provided).
+ */
 const JModellerContext = createContext<JModellerState | undefined>(undefined);
 
+/**
+ * Context provider that holds all junction configuration, simulation lifecycle, and selection state.
+ *
+ * @param children - child elements to render
+ * @returns the rendered provider wrapping its children
+ */
 export const JModellerProvider = ({ children }: { children: ReactNode }) => {
 
 
@@ -32,7 +49,7 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
     const [toolMode, setToolMode] = useState<"view" | "build">("view");
     const [showOverlayLabels, setShowOverlayLabels] = useState(true);
 
-    // ── P2P: receive config from host ─────────────────────────────────────
+    // P2P: receive config from host
     const { connections, isHost } = usePeer();
     useEffect(() => {
         if (isHost) return;
@@ -322,6 +339,10 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
     );
 };
 
+/**
+ * Retrieves the JModeller context. Must be used within a {@link JModellerProvider}.
+ * @returns the context state and actions
+ */
 export const useJModellerContext = () => {
     const context = useContext(JModellerContext);
     if (!context) {

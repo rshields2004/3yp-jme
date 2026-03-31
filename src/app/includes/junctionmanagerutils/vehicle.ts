@@ -1,44 +1,78 @@
+/**
+ * vehicle.ts
+ *
+ * Core vehicle entity used by the traffic simulation. Each vehicle holds a
+ * Three.js model, a route, kinematic state (`s`, `speed`), and per-vehicle
+ * driving characteristics that provide natural variation between drivers.
+ */
+
 import * as THREE from "three";
 import { Route, RouteSegment } from "../types/simulation";
 
-
+/**
+ * Represents a single simulated vehicle travelling along a pre-computed route.
+ * Holds kinematic state (position, speed, s-coordinate) and per-vehicle driving characteristics.
+ */
 export class Vehicle {
     id: number;
     model: THREE.Group;
     route: Route;
 
+    /**
+     * Roundabout the vehicle is currently inside (if any).
+     */
     roundaboutId?: string;
     roundaboutEntryKey?: string;
     roundaboutEntryCoord?: number;
 
-    // Route distance (world-ish units)
+    /**
+     * Distance travelled along the route (world units).
+     */
     s = 0;
 
-    // Pose interpolation on route.points
+    /**
+     * Current index into the route point array.
+     */
     routeIndex = 0;
+    /**
+     * Interpolation parameter between `routeIndex` and `routeIndex + 1`.
+     */
     t = 0;
 
     speed: number;
     length: number;
 
-    // Segment semantics
+    // SEGMENT TRACKING
+
     segmentIndex = 0;
     currentSegment: RouteSegment | null = null;
     laneKey = "";
 
-    // stable start-lane identifier for spawn spacing (NOT route-dependent)
+    /**
+     * Stable start-lane identifier for spawn spacing (NOT route-dependent).
+     */
     spawnKey = "";
 
-    // Timestamp when this vehicle was spawned (simulation elapsed time)
+    /**
+     * Simulation elapsed time when this vehicle was spawned.
+     */
     spawnTime = 0;
 
-    // Per-vehicle driving characteristics (adds natural variation)
+    // PER-VEHICLE DRIVING CHARACTERISTICS
+
     maxAccel: number;
     maxDecel: number;
     preferredSpeed: number;
     reactionTime: number;
     timeHeadway: number;
-    
+
+    /**
+     * @param id - unique numeric vehicle identifier
+     * @param model - Three.js group (car mesh) placed in the scene
+     * @param route - pre-computed route the vehicle will follow
+     * @param length - bumper-to-bumper length of this vehicle
+     * @param initialSpeed - speed at spawn (default 0)
+     */
     constructor(id: number, model: THREE.Group, route: Route, length: number, initialSpeed = 0) {
         this.id = id;
         this.model = model;
@@ -58,6 +92,5 @@ export class Vehicle {
         this.preferredSpeed = 10.0;
         this.reactionTime = 0.25;
         this.timeHeadway = 1.5;
-        
     }
 }

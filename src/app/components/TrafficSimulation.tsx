@@ -1,3 +1,10 @@
+/**
+ * TrafficSimulation.tsx
+ *
+ * Orchestrates the traffic simulation loop: spawns vehicles,
+ * advances physics via VehicleManager, and syncs 3D meshes each frame.
+ */
+
 "use client";
 
 import { useThree, useFrame } from "@react-three/fiber";
@@ -13,11 +20,18 @@ import { SpawnRateLabels } from "./SpawnRateLabels";
 import { loadCarModels } from "../includes/junctionmanagerutils/helpers/carModelLoaders";
 import { getRoutePoints } from "../includes/junctionmanagerutils/routing/routeUtils";
 import { generateAllRoutes } from "../includes/junctionmanagerutils/routing/routeGeneration";
+import { FIXED_DT, MAX_TICKS_PER_FRAME } from "../includes/constants";
 
-function buildSegmentLabel(
+/**
+ * Build a human-readable label describing a route segment's role.
+ * @param seg - the route segment to describe
+ * @param junctionObjects - list of junction objects (id, name, type) for name look-ups
+ * @returns descriptive string, e.g. "approaching Roundabout A exit 2"
+ */
+const buildSegmentLabel = (
     seg: RouteSegment,
     junctionObjects: { id: string; name: string; type: string }[]
-): string {
+): string => {
     const findName = (id: string) => {
         const obj = junctionObjects.find(o => o.id === id);
         return obj ? `${obj.type} ${obj.name}` : id.slice(0, 8);
@@ -36,23 +50,12 @@ function buildSegmentLabel(
     }
 }
 
-/**
- * Fixed simulation timestep in seconds.
- * Every device advances the simulation by exactly this amount per tick,
- * guaranteeing identical results regardless of display frame rate.
- */
-export const FIXED_DT = 1 / 144;
 
-/**
- * Maximum ticks to drain per rendered frame.
- * Prevents the "spiral of death" on slow devices while keeping the sim
- * from desynchronising when a few frames are expensive (e.g. GC pauses).
- */
-const MAX_TICKS_PER_FRAME = 5;
 
 /**
  * Traffic Simulation Component
  * Drop this into your Scene component to enable traffic simulation
+ * @returns the rendered traffic simulation overlay
  */
 export const TrafficSimulation = () => {
     const { junction, junctionObjectRefs, simIsRunning, stats, setStats, carsReady, setCarsReady, followedVehicleId, setFollowedVehicleId, setFollowedVehicleStats, simIsPaused, simConfig, showOverlayLabels } = useJModellerContext();
@@ -406,7 +409,7 @@ export const TrafficSimulation = () => {
         const vm = vehicleManagerRef.current;
         if (!vm) return;
 
-        // ── Camera follow (visual only, not part of sim state) ─────────────
+        // Camera follow (visual only, not part of sim state)
         if (followedVehicleId !== null) {
             const vehicle = vm.getVehicleById(followedVehicleId);
             if (vehicle) {
@@ -489,7 +492,7 @@ export const TrafficSimulation = () => {
 
         if (simIsPausedRef.current) return;
 
-        // ── Fixed-step simulation advance ───────────────────────────────────
+        // Fixed-step simulation advance
         // Accumulate real elapsed time, then drain it in exact FIXED_DT steps.
         // Both a 60 Hz and a 144 Hz device will execute the same integer number
         // of ticks over any given simulated time period, producing bit-identical
@@ -503,7 +506,7 @@ export const TrafficSimulation = () => {
             ticks++;
         }
 
-        // ── Visual-only updates (after all ticks for this frame) ────────────
+        // Visual-only updates (after all ticks for this frame)
         // Colouring stop lines is purely cosmetic — done once per rendered
         // frame rather than once per sim tick for performance.
         applyIntersectionStopLineColours(junctionObjectRefs.current, vm);

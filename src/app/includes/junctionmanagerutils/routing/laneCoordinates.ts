@@ -1,24 +1,34 @@
+/**
+ * laneCoordinates.ts
+ *
+ * Builds a lane-based coordinate system for collision detection. Each unique
+ * lane is assigned a monotonically increasing base distance so that vehicles
+ * sharing a lane can be compared on a single linear axis regardless of which
+ * route they are following.
+ */
+
 import { Route, RouteSegment } from "../../types/simulation";
 import { RoundaboutController } from "../controllers/roundaboutController";
-import { laneKeyForSegment, nodeKeyOf, segmentId, segmentLen } from "../helpers/segmentHelpers";
+import { laneKeyForSegment, nodeKeyOf, segmentId, segmentLength } from "../helpers/segmentHelpers";
 
+// LANE BASE CONSTRUCTION
 
 /**
  * Builds the lane base coordinate system used for collision detection.
  *
- * For each unique lane (identified by laneKey), performs a topological sort of
- * route segments that share that lane key. Each segment is assigned a monotonically
+ * For each unique lane (identified by lane key), performs a topological sort of
+ * route segments that share that key. Each segment is assigned a monotonically
  * increasing base distance so that all vehicles on that lane can be compared
  * using a single linear coordinate regardless of which route they are on.
  *
- * @param routes All routes in the simulation
- * @param roundaboutControllers Used by laneKeyForSegment to classify roundabout lanes
- * @returns A nested Map: laneKey → (segmentId → base distance)
+ * @param routes - All routes in the simulation.
+ * @param roundaboutControllers - Used by {@link laneKeyForSegment} to classify roundabout lanes.
+ * @returns A nested `Map`: `laneKey → (segmentId → base distance)`.
  */
-export function buildLaneBases(
+export const buildLaneBases = (
     routes: Route[],
-    roundaboutControllers: Map<string, RoundaboutController>
-): Map<string, Map<string, number>> {
+    roundaboutControllers: Map<string, RoundaboutController>,
+): Map<string, Map<string, number>> => {
     const laneBases = new Map<string, Map<string, number>>();
 
     const perLane = new Map<string, Map<string, RouteSegment>>();
@@ -72,7 +82,7 @@ export function buildLaneBases(
             const id = q.shift()!;
             const seg = segMap.get(id)!;
             const base = bases.get(id) ?? 0;
-            const len = segmentLen(seg);
+            const len = segmentLength(seg);
 
             for (const nid of next.get(id) ?? []) {
                 if (!bases.has(nid)) {
@@ -92,4 +102,4 @@ export function buildLaneBases(
     }
 
     return laneBases;
-}
+};
