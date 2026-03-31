@@ -1,12 +1,12 @@
-# JME — Junction Modeller Expanded
+# JME - Junction Modeller Expanded
 
-A 3D traffic simulation platform for designing, analysing, and visualising junction networks. Build intersections and roundabouts, connect them with road links, run realistic traffic simulations, and evaluate performance with industry-standard metrics — all in the browser.
+A 3D traffic simulation platform for designing, analysing, and visualising junction networks. Build intersections and roundabouts, connect them with road links, run realistic traffic simulations, and evaluate performance with industry-standard metrics - all in the browser.
 
 ![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
 ![Three.js](https://img.shields.io/badge/Three.js-0.182-black?logo=three.js)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript)
 ![PeerJS](https://img.shields.io/badge/PeerJS-P2P-green)
-[![Documentation](https://img.shields.io/badge/API%20Docs-TypeDoc-3178c6)](https://rshields.xyz/docs)
+[![Documentation](https://img.shields.io/badge/API%20Docs-TypeDoc-3178c6)](https://rshields.xyz/docs/index.html)
 ---
 
 ## Table of Contents
@@ -80,7 +80,7 @@ Each exit can be individually tuned:
 | Num Lanes In | 1–3 | Inbound lanes entering the junction |
 | Lane Count | 1–4 | Outbound lanes leaving the junction |
 | Exit Length | 10–60 | Length of the exit arm (world units) |
-| Spawn Rate | — | Optional per-exit spawn rate override |
+| Spawn Rate | - | Optional per-exit spawn rate override |
 
 Select a junction object by double-clicking it in Build mode to open the **Selection Panel** with these options.
 
@@ -88,7 +88,7 @@ Select a junction object by double-clicking it in Build mode to open the **Selec
 
 ## Linking Exits
 
-1. In **Build mode**, click on an exit of one junction — it highlights red.
+1. In **Build mode**, click on an exit of one junction - it highlights red.
 2. Click an exit on a different junction.
 3. Press the **Link Exits** button that appears in the header.
 
@@ -165,10 +165,10 @@ Real-time statistics are available in the **Stats** panel and the popout statist
 | Max Wait Time | Longest individual delay recorded |
 | Max Queue Length | Peak queue depth observed |
 | Throughput | Vehicles per minute |
-| **DoS** | Degree of Saturation — demand ÷ capacity ratio |
-| **PRC** | Practical Reserve Capacity — how much additional traffic the junction can handle (%) |
-| **MMQ** | Mean Maximum Queue — average of per-arm peak queues |
-| **LOS** | Level of Service — HCM-based A–F grade |
+| **DoS** | Degree of Saturation - demand ÷ capacity ratio |
+| **PRC** | Practical Reserve Capacity - how much additional traffic the junction can handle (%) |
+| **MMQ** | Mean Maximum Queue - average of per-arm peak queues |
+| **LOS** | Level of Service - HCM-based A–F grade |
 
 ### Level of Service Thresholds
 
@@ -193,9 +193,9 @@ Click the **Report** button (available after stopping a simulation that has reco
 
 | Page | Content |
 |------|---------|
-| **1 — Junction Diagram** | High-resolution rendered diagram of your layout with numbered exits, lane markings, link curves, and a colour-coded legend. |
-| **2 — Configuration** | Global settings, per-object exit/lane tables, spawning & motion parameters, controller timings, and car class weights. Overflows to additional pages if needed. |
-| **3 — Simulation Summary** | Overview tiles (spawned, completed, elapsed, avg speed, avg travel time), all-junction aggregate table, and per-junction breakdown with DoS, PRC, MMQ, and LOS pills. Overflows to additional pages for large networks. |
+| **1 - Junction Diagram** | High-resolution rendered diagram of your layout with numbered exits, lane markings, link curves, and a colour-coded legend. |
+| **2 - Configuration** | Global settings, per-object exit/lane tables, spawning & motion parameters, controller timings, and car class weights. Overflows to additional pages if needed. |
+| **3 - Simulation Summary** | Overview tiles (spawned, completed, elapsed, avg speed, avg travel time), all-junction aggregate table, and per-junction breakdown with DoS, PRC, MMQ, and LOS pills. Overflows to additional pages for large networks. |
 
 ---
 
@@ -226,7 +226,7 @@ JME supports real-time peer-to-peer collaboration via WebRTC (PeerJS).
 ### Hosting
 
 1. Open the **Session** dropdown.
-2. Click **Create Host** — a 6-digit connection code is generated.
+2. Click **Create Host** - a 6-digit connection code is generated.
 3. Share the code with others.
 
 ### Joining
@@ -309,7 +309,7 @@ Vehicles are rendered as 3D models with 12 body types and 7 colour variants. Eac
 | Microtransport | 1.82 | 0.80× | 0.85× | 3 |
 | Van | 2.16 | 0.85× | 0.70× | 3 |
 
-**Weight** determines spawn probability — higher weight = more common. All classes can be individually enabled/disabled and their speed, acceleration, deceleration, and weight overridden in the Sim Config panel.
+**Weight** determines spawn probability - higher weight = more common. All classes can be individually enabled/disabled and their speed, acceleration, deceleration, and weight overridden in the Sim Config panel.
 
 **Colours:** Blue, Citrus, Green, Orange, Red, Silver, Violet (randomly assigned at spawn).
 
@@ -325,8 +325,8 @@ All parameters are adjustable in the **Sim Config** dropdown.
 |-----------|---------|-------|-------------|
 | Spawn Rate | 0.5 v/s | 0–5 | Vehicles per second per entry |
 | Max Vehicles | 100 | 10–500 | Simultaneous vehicle limit |
-| Max Spawn Queue | 25 | — | Per-entry demand cap |
-| Max Spawn Attempts/Frame | 20 | — | Spawn loop limit |
+| Max Spawn Queue | 25 | - | Per-entry demand cap |
+| Max Spawn Attempts/Frame | 20 | - | Spawn loop limit |
 
 ### Motion
 
@@ -335,7 +335,7 @@ All parameters are adjustable in the **Sim Config** dropdown.
 | Preferred Speed | 10 m/s | 1–30 | Target cruising speed |
 | Max Acceleration | 4 m/s² | 0.5–15 | Acceleration cap |
 | Max Deceleration | 8 m/s² | 0.5–15 | Emergency braking cap |
-| Comfort Deceleration | 4 m/s² | — | Preferred smooth braking |
+| Comfort Deceleration | 4 m/s² | - | Preferred smooth braking |
 
 ### Spacing
 

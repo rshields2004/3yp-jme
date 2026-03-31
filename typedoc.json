@@ -2,5 +2,7 @@
   "entryPoints": ["src/app/"],
   "entryPointStrategy": "expand",
   "out": "public/docs",
-  "readme": "README.md"
+  "readme": "README.md",
+  "name": "JME",
+  "title": "Junction Modeller Expanded Documentation"
 }
