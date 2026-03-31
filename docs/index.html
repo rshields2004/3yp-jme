@@ -1,65 +1,718 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <title>JSDoc: Home</title>
+<!DOCTYPE html><html class="default" lang="en" data-base="./"><head><meta charset="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>jme</title><meta name="description" content="Documentation for jme"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="assets/style.css"/><link rel="stylesheet" href="assets/highlight.css"/><script defer src="assets/main.js"></script><script async src="assets/icons.js" id="tsd-icons-script"></script><script async src="assets/search.js" id="tsd-search-script"></script><script async src="assets/navigation.js" id="tsd-nav-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os";document.body.style.display="none";setTimeout(() => window.app?app.showPage():document.body.style.removeProperty("display"),500)</script><header class="tsd-page-toolbar"><div class="tsd-toolbar-contents container"><a href="index.html" class="title">jme</a><div id="tsd-toolbar-links"></div><button id="tsd-search-trigger" class="tsd-widget" aria-label="Search"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-search"></use></svg></button><dialog id="tsd-search" aria-label="Search"><input role="combobox" id="tsd-search-input" aria-controls="tsd-search-results" aria-autocomplete="list" aria-expanded="true" autocapitalize="off" autocomplete="off" placeholder="Search the docs" maxLength="100"/><ul role="listbox" id="tsd-search-results"></ul><div id="tsd-search-status" aria-live="polite" aria-atomic="true"><div>Preparing search index...</div></div></dialog><a href="#" class="tsd-widget menu" id="tsd-toolbar-menu-trigger" data-toggle="menu" aria-label="Menu"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-menu"></use></svg></a></div></header><div class="container container-main"><div class="col-content"><div class="tsd-page-title"><h1>jme</h1></div><div class="tsd-panel tsd-typography"><h1 id="jme-junction-modeller-expanded" class="tsd-anchor-link">JME — Junction Modeller Expanded<a href="#jme-junction-modeller-expanded" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h1>
+<p>A 3D traffic simulation platform for designing, analysing, and visualising junction networks. Build intersections and roundabouts, connect them with road links, run realistic traffic simulations, and evaluate performance with industry-standard metrics — all in the browser.</p>
+<p><img src="https://img.shields.io/badge/Next.js-16-black?logo=next.js" alt="Next.js">
+<img src="https://img.shields.io/badge/Three.js-0.182-black?logo=three.js" alt="Three.js">
+<img src="https://img.shields.io/badge/TypeScript-5-blue?logo=typescript" alt="TypeScript">
+<img src="https://img.shields.io/badge/PeerJS-P2P-green" alt="PeerJS"></p>
+<hr>
+<h2 id="table-of-contents" class="tsd-anchor-link">Table of Contents<a href="#table-of-contents" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<ul>
+<li><a href="#getting-started">Getting Started</a></li>
+<li><a href="#modes">Modes</a></li>
+<li><a href="#building-junctions">Building Junctions</a></li>
+<li><a href="#linking-exits">Linking Exits</a></li>
+<li><a href="#simulation">Simulation</a></li>
+<li><a href="#traffic-controllers">Traffic Controllers</a></li>
+<li><a href="#statistics--metrics">Statistics &amp; Metrics</a></li>
+<li><a href="#pdf-reports">PDF Reports</a></li>
+<li><a href="#save--load">Save &amp; Load</a></li>
+<li><a href="#multiplayer-p2p">Multiplayer (P2P)</a></li>
+<li><a href="#tutorial">Tutorial</a></li>
+<li><a href="#camera-controls">Camera Controls</a></li>
+<li><a href="#car-classes">Car Classes</a></li>
+<li><a href="#simulation-config-reference">Simulation Config Reference</a></li>
+</ul>
+<hr>
+<h2 id="getting-started" class="tsd-anchor-link">Getting Started<a href="#getting-started" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<pre><code class="bash"><span class="hl-0"># Install dependencies</span><br/><span class="hl-1">npm</span><span class="hl-2"> </span><span class="hl-3">install</span><br/><br/><span class="hl-0"># Start the development server</span><br/><span class="hl-1">npm</span><span class="hl-2"> </span><span class="hl-3">run</span><span class="hl-2"> </span><span class="hl-3">dev</span><br/><br/><span class="hl-0"># Production build</span><br/><span class="hl-1">npm</span><span class="hl-2"> </span><span class="hl-3">run</span><span class="hl-2"> </span><span class="hl-3">build</span><br/><span class="hl-1">npm</span><span class="hl-2"> </span><span class="hl-3">run</span><span class="hl-2"> </span><span class="hl-3">start</span>
+</code><button type="button">Copy</button></pre>
 
-    <script src="scripts/prettify/prettify.js"> </script>
-    <script src="scripts/prettify/lang-css.js"> </script>
-    <!--[if lt IE 9]>
-      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
-    <![endif]-->
-    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
-    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
-</head>
-
-<body>
-
-<div id="main">
-
-    <h1 class="page-title">Home</h1>
-
-    
-
-
-
-    
-
-
-    <h3> </h3>
-
-
-
-
-
-
-
-
-
-
-    
-
-
-
-
-
-
-
-
-
-</div>
-
-<nav>
-    <h2><a href="index.html">Home</a></h2>
-</nav>
-
-<br class="clear">
-
-<footer>
-    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Tue Mar 31 2026 02:10:01 GMT+0100 (British Summer Time)
-</footer>
-
-<script> prettyPrint(); </script>
-<script src="scripts/linenumber.js"> </script>
-</body>
-</html>
+<p>Open <code>http://localhost:3000</code> in a modern browser.</p>
+<hr>
+<h2 id="modes" class="tsd-anchor-link">Modes<a href="#modes" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>View</strong></td>
+<td>Free-orbit 3D camera. Watch simulations, follow vehicles in first-person, and inspect statistics.</td>
+</tr>
+<tr>
+<td><strong>Build</strong></td>
+<td>Top-down orthographic view. Place junction objects, drag to position, configure exits, and create links.</td>
+</tr>
+</tbody>
+</table>
+<p>Switch between modes using the <strong>Modes</strong> dropdown in the header.</p>
+<hr>
+<h2 id="building-junctions" class="tsd-anchor-link">Building Junctions<a href="#building-junctions" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<h3 id="intersection-traffic-light-controlled" class="tsd-anchor-link">Intersection (Traffic-Light Controlled)<a href="#intersection-traffic-light-controlled" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<ul>
+<li>Polygonal junction body with configurable exit arms (3–6 exits).</li>
+<li>Traffic light phases cycle through GREEN → AMBER → RED-AMBER → RED for each arm.</li>
+<li>Vehicles obey stop lines, respect signal colours, and detect queue build-up.</li>
+</ul>
+<h3 id="roundabout-give-way-controlled" class="tsd-anchor-link">Roundabout (Give-Way Controlled)<a href="#roundabout-give-way-controlled" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<ul>
+<li>Circular island with radiating exit arms (3–6 exits).</li>
+<li>Vehicles give way to ring traffic, enter when a safe gap is detected, and exit from the ring.</li>
+<li>Includes timeout-based forced entry to prevent infinite queueing.</li>
+</ul>
+<h3 id="per-exit-configuration" class="tsd-anchor-link">Per-Exit Configuration<a href="#per-exit-configuration" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<p>Each exit can be individually tuned:</p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Range</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Num Lanes In</td>
+<td>1–3</td>
+<td>Inbound lanes entering the junction</td>
+</tr>
+<tr>
+<td>Lane Count</td>
+<td>1–4</td>
+<td>Outbound lanes leaving the junction</td>
+</tr>
+<tr>
+<td>Exit Length</td>
+<td>10–60</td>
+<td>Length of the exit arm (world units)</td>
+</tr>
+<tr>
+<td>Spawn Rate</td>
+<td>—</td>
+<td>Optional per-exit spawn rate override</td>
+</tr>
+</tbody>
+</table>
+<p>Select a junction object by double-clicking it in Build mode to open the <strong>Selection Panel</strong> with these options.</p>
+<hr>
+<h2 id="linking-exits" class="tsd-anchor-link">Linking Exits<a href="#linking-exits" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<ol>
+<li>In <strong>Build mode</strong>, click on an exit of one junction — it highlights red.</li>
+<li>Click an exit on a different junction.</li>
+<li>Press the <strong>Link Exits</strong> button that appears in the header.</li>
+</ol>
+<p>Links are bidirectional. Vehicles can traverse them in either direction. They are rendered as Bézier curves with solid and dashed lane markings matching lane configuration.</p>
+<hr>
+<h2 id="simulation" class="tsd-anchor-link">Simulation<a href="#simulation" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<p>Press the <strong>Confirm</strong> button to lock your layout, then press <strong>Play</strong> to start the simulation.</p>
+<h3 id="vehicle-spawning" class="tsd-anchor-link">Vehicle Spawning<a href="#vehicle-spawning" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<ul>
+<li>Vehicles spawn at entry exits based on the global spawn rate (default 0.5 vehicles/second).</li>
+<li>Demand is distributed across available routes and balanced by per-entry spawn queues.</li>
+<li>Per-exit spawn rate overrides are supported.</li>
+</ul>
+<h3 id="vehicle-physics" class="tsd-anchor-link">Vehicle Physics<a href="#vehicle-physics" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<p>Vehicles follow the <strong>Intelligent Driver Model (IDM)</strong> with:</p>
+<ul>
+<li>Smooth acceleration and deceleration curves per car class.</li>
+<li>Leader-follower spacing with configurable bumper gap and time headway.</li>
+<li>Comfort braking and emergency braking thresholds.</li>
+<li>Speed adaptation near stop lines and junctions.</li>
+</ul>
+<h3 id="simulation-controls" class="tsd-anchor-link">Simulation Controls<a href="#simulation-controls" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<table>
+<thead>
+<tr>
+<th>Button</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Play</td>
+<td>Start simulation</td>
+</tr>
+<tr>
+<td>Pause</td>
+<td>Pause (vehicles freeze in place)</td>
+</tr>
+<tr>
+<td>Stop</td>
+<td>Halt and reset simulation</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="traffic-controllers" class="tsd-anchor-link">Traffic Controllers<a href="#traffic-controllers" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<h3 id="intersection-controller" class="tsd-anchor-link">Intersection Controller<a href="#intersection-controller" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Green Time</td>
+<td>8 s</td>
+<td>Duration of green phase per arm</td>
+</tr>
+<tr>
+<td>Amber Time</td>
+<td>1 s</td>
+<td>Warning phase before red</td>
+</tr>
+<tr>
+<td>Red-Amber Time</td>
+<td>1 s</td>
+<td>Transition phase before green</td>
+</tr>
+<tr>
+<td>All-Red Time</td>
+<td>2 s</td>
+<td>Safety gap between phase changes</td>
+</tr>
+</tbody>
+</table>
+<h3 id="roundabout-controller" class="tsd-anchor-link">Roundabout Controller<a href="#roundabout-controller" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Min Gap</td>
+<td>2 m</td>
+<td>Minimum distance on ring for safe entry</td>
+</tr>
+<tr>
+<td>Min Time Gap</td>
+<td>1.5 s</td>
+<td>Time since last vehicle exited ring</td>
+</tr>
+<tr>
+<td>Safe Entry Distance</td>
+<td>20 m</td>
+<td>Look-ahead distance for gap detection</td>
+</tr>
+<tr>
+<td>Entry Timeout</td>
+<td>1.0 s</td>
+<td>Force entry after this queue wait</td>
+</tr>
+<tr>
+<td>Min Angular Separation</td>
+<td>30°</td>
+<td>Vehicles must be spaced at least this far apart on the ring</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="statistics-metrics" class="tsd-anchor-link">Statistics &amp; Metrics<a href="#statistics-metrics" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<p>Real-time statistics are available in the <strong>Stats</strong> panel and the popout statistics window.</p>
+<h3 id="per-junction-metrics" class="tsd-anchor-link">Per-Junction Metrics<a href="#per-junction-metrics" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Approaching</td>
+<td>Vehicles on approach segments</td>
+</tr>
+<tr>
+<td>Waiting</td>
+<td>Vehicles stopped at stop lines</td>
+</tr>
+<tr>
+<td>Inside</td>
+<td>Vehicles currently crossing the junction</td>
+</tr>
+<tr>
+<td>Exiting</td>
+<td>Vehicles on exit segments</td>
+</tr>
+<tr>
+<td>Entered / Exited</td>
+<td>Cumulative flow counters</td>
+</tr>
+<tr>
+<td>Avg Wait Time</td>
+<td>Mean delay per vehicle (seconds)</td>
+</tr>
+<tr>
+<td>Max Wait Time</td>
+<td>Longest individual delay recorded</td>
+</tr>
+<tr>
+<td>Max Queue Length</td>
+<td>Peak queue depth observed</td>
+</tr>
+<tr>
+<td>Throughput</td>
+<td>Vehicles per minute</td>
+</tr>
+<tr>
+<td><strong>DoS</strong></td>
+<td>Degree of Saturation — demand ÷ capacity ratio</td>
+</tr>
+<tr>
+<td><strong>PRC</strong></td>
+<td>Practical Reserve Capacity — how much additional traffic the junction can handle (%)</td>
+</tr>
+<tr>
+<td><strong>MMQ</strong></td>
+<td>Mean Maximum Queue — average of per-arm peak queues</td>
+</tr>
+<tr>
+<td><strong>LOS</strong></td>
+<td>Level of Service — HCM-based A–F grade</td>
+</tr>
+</tbody>
+</table>
+<h3 id="level-of-service-thresholds" class="tsd-anchor-link">Level of Service Thresholds<a href="#level-of-service-thresholds" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<table>
+<thead>
+<tr>
+<th>Grade</th>
+<th>Signalised (s)</th>
+<th>Roundabout (s)</th>
+<th>Interpretation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A</td>
+<td>≤ 10</td>
+<td>≤ 10</td>
+<td>Free flow</td>
+</tr>
+<tr>
+<td>B</td>
+<td>≤ 20</td>
+<td>≤ 15</td>
+<td>Stable flow</td>
+</tr>
+<tr>
+<td>C</td>
+<td>≤ 35</td>
+<td>≤ 25</td>
+<td>Stable, acceptable delays</td>
+</tr>
+<tr>
+<td>D</td>
+<td>≤ 55</td>
+<td>≤ 35</td>
+<td>Approaching instability</td>
+</tr>
+<tr>
+<td>E</td>
+<td>≤ 80</td>
+<td>≤ 50</td>
+<td>Unstable flow</td>
+</tr>
+<tr>
+<td>F</td>
+<td>&gt; 80</td>
+<td>&gt; 50</td>
+<td>Forced / breakdown</td>
+</tr>
+</tbody>
+</table>
+<h3 id="global-aggregates" class="tsd-anchor-link">Global Aggregates<a href="#global-aggregates" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<p>Throughput, Avg Wait, Max Queue, PRC, and MMQ are also computed network-wide across all junctions.</p>
+<hr>
+<h2 id="pdf-reports" class="tsd-anchor-link">PDF Reports<a href="#pdf-reports" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<p>Click the <strong>Report</strong> button (available after stopping a simulation that has recorded data) to generate a 3-page landscape A4 PDF:</p>
+<table>
+<thead>
+<tr>
+<th>Page</th>
+<th>Content</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>1 — Junction Diagram</strong></td>
+<td>High-resolution rendered diagram of your layout with numbered exits, lane markings, link curves, and a colour-coded legend.</td>
+</tr>
+<tr>
+<td><strong>2 — Configuration</strong></td>
+<td>Global settings, per-object exit/lane tables, spawning &amp; motion parameters, controller timings, and car class weights. Overflows to additional pages if needed.</td>
+</tr>
+<tr>
+<td><strong>3 — Simulation Summary</strong></td>
+<td>Overview tiles (spawned, completed, elapsed, avg speed, avg travel time), all-junction aggregate table, and per-junction breakdown with DoS, PRC, MMQ, and LOS pills. Overflows to additional pages for large networks.</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="save-load" class="tsd-anchor-link">Save &amp; Load<a href="#save-load" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<h3 id="saving" class="tsd-anchor-link">Saving<a href="#saving" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<p>Click the <strong>Download</strong> button to export your junction layout and simulation configuration as a <code>.jme</code> JSON file.</p>
+<p>The save file contains:</p>
+<ul>
+<li>All junction objects (type, position, exit configuration)</li>
+<li>All links between exits</li>
+<li>Full simulation config (spawn rates, vehicle physics, controller timings, car class overrides)</li>
+</ul>
+<h3 id="loading" class="tsd-anchor-link">Loading<a href="#loading" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<p>Click the <strong>Upload</strong> button and select a <code>.jme</code> file. The current layout is replaced with the saved configuration. You can immediately confirm and run a simulation.</p>
+<hr>
+<h2 id="multiplayer-p2p" class="tsd-anchor-link">Multiplayer (P2P)<a href="#multiplayer-p2p" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<p>JME supports real-time peer-to-peer collaboration via WebRTC (PeerJS).</p>
+<blockquote>
+<p><strong>Note:</strong> P2P works out of the box over a <strong>local network (LAN)</strong>. For connections across the internet, you will need to configure <strong>port forwarding</strong> and set up a <strong>TURN server</strong> and <strong>PeerJS signalling server</strong>.</p>
+</blockquote>
+<h3 id="hosting" class="tsd-anchor-link">Hosting<a href="#hosting" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<ol>
+<li>Open the <strong>Session</strong> dropdown.</li>
+<li>Click <strong>Create Host</strong> — a 6-digit connection code is generated.</li>
+<li>Share the code with others.</li>
+</ol>
+<h3 id="joining" class="tsd-anchor-link">Joining<a href="#joining" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<ol>
+<li>Open the <strong>Session</strong> dropdown.</li>
+<li>Enter the host's 6-digit code and click <strong>Join</strong>.</li>
+<li>The host's junction layout and simulation config are synced automatically.</li>
+</ol>
+<h3 id="how-it-works" class="tsd-anchor-link">How It Works<a href="#how-it-works" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<ul>
+<li>The <strong>host</strong> controls the layout and simulation (start, pause, stop).</li>
+<li><strong>Clients</strong> receive real-time updates and can observe but not modify the configuration.</li>
+<li>Connection status and latency are shown in the Session panel.</li>
+<li>Disconnect at any time using the exit button.</li>
+</ul>
+<hr>
+<h2 id="tutorial" class="tsd-anchor-link">Tutorial<a href="#tutorial" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<p>Click the <strong>? Tutorial</strong> button to start an interactive 21-step guided walkthrough that covers:</p>
+<ol>
+<li>Switching to Build mode</li>
+<li>Adding an intersection and a roundabout</li>
+<li>Positioning objects by dragging</li>
+<li>Configuring exits and lanes</li>
+<li>Linking two junctions together</li>
+<li>Confirming the layout</li>
+<li>Adjusting simulation parameters</li>
+<li>Running the simulation</li>
+<li>Stopping the simulation</li>
+<li>Downloading a save file</li>
+<li>Generating a PDF report</li>
+</ol>
+<p>Each step highlights the relevant UI element and auto-advances when you complete the required action. Starting the tutorial resets the workspace to a clean state.</p>
+<hr>
+<h2 id="camera-controls" class="tsd-anchor-link">Camera Controls<a href="#camera-controls" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<h3 id="view-mode" class="tsd-anchor-link">View Mode<a href="#view-mode" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Left-click drag</td>
+<td>Orbit around scene</td>
+</tr>
+<tr>
+<td>Right-click drag</td>
+<td>Pan</td>
+</tr>
+<tr>
+<td>Scroll wheel</td>
+<td>Zoom in/out</td>
+</tr>
+<tr>
+<td>Double-click junction</td>
+<td>Centre and zoom to that object</td>
+</tr>
+<tr>
+<td>Click a vehicle (during sim)</td>
+<td>Follow in first-person view</td>
+</tr>
+<tr>
+<td>Backspace</td>
+<td>Exit first-person view</td>
+</tr>
+</tbody>
+</table>
+<h3 id="build-mode" class="tsd-anchor-link">Build Mode<a href="#build-mode" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Scroll wheel</td>
+<td>Zoom (height adjustment)</td>
+</tr>
+<tr>
+<td>Left-click drag on object</td>
+<td>Move junction</td>
+</tr>
+<tr>
+<td>Double-click object</td>
+<td>Open config panel</td>
+</tr>
+<tr>
+<td>Click exit arm</td>
+<td>Select exit (for linking)</td>
+</tr>
+</tbody>
+</table>
+<p>The default camera position is an isometric view at (20, 35, 20) with a 60° field of view.</p>
+<hr>
+<h2 id="car-classes" class="tsd-anchor-link">Car Classes<a href="#car-classes" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<p>Vehicles are rendered as 3D models with 12 body types and 7 colour variants. Each class has distinct physical characteristics:</p>
+<table>
+<thead>
+<tr>
+<th>Class</th>
+<th>Length (m)</th>
+<th>Speed</th>
+<th>Accel</th>
+<th>Default Weight</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Normal</td>
+<td>1.82</td>
+<td>1.00×</td>
+<td>1.00×</td>
+<td>25</td>
+</tr>
+<tr>
+<td>Hatchback</td>
+<td>1.81</td>
+<td>1.00×</td>
+<td>1.00×</td>
+<td>20</td>
+</tr>
+<tr>
+<td>Coupe</td>
+<td>1.99</td>
+<td>1.10×</td>
+<td>1.15×</td>
+<td>10</td>
+</tr>
+<tr>
+<td>Station</td>
+<td>2.10</td>
+<td>1.00×</td>
+<td>0.95×</td>
+<td>10</td>
+</tr>
+<tr>
+<td>MPV</td>
+<td>2.00</td>
+<td>0.95×</td>
+<td>0.90×</td>
+<td>8</td>
+</tr>
+<tr>
+<td>Pickup</td>
+<td>1.97</td>
+<td>0.95×</td>
+<td>0.85×</td>
+<td>6</td>
+</tr>
+<tr>
+<td>Pickup (Small)</td>
+<td>1.92</td>
+<td>0.95×</td>
+<td>0.90×</td>
+<td>6</td>
+</tr>
+<tr>
+<td>Minibus</td>
+<td>2.16</td>
+<td>0.90×</td>
+<td>0.75×</td>
+<td>5</td>
+</tr>
+<tr>
+<td>Micro</td>
+<td>1.42</td>
+<td>0.85×</td>
+<td>1.05×</td>
+<td>5</td>
+</tr>
+<tr>
+<td>Microcargo</td>
+<td>1.82</td>
+<td>0.80×</td>
+<td>0.90×</td>
+<td>3</td>
+</tr>
+<tr>
+<td>Microtransport</td>
+<td>1.82</td>
+<td>0.80×</td>
+<td>0.85×</td>
+<td>3</td>
+</tr>
+<tr>
+<td>Van</td>
+<td>2.16</td>
+<td>0.85×</td>
+<td>0.70×</td>
+<td>3</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Weight</strong> determines spawn probability — higher weight = more common. All classes can be individually enabled/disabled and their speed, acceleration, deceleration, and weight overridden in the Sim Config panel.</p>
+<p><strong>Colours:</strong> Blue, Citrus, Green, Orange, Red, Silver, Violet (randomly assigned at spawn).</p>
+<hr>
+<h2 id="simulation-config-reference" class="tsd-anchor-link">Simulation Config Reference<a href="#simulation-config-reference" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<p>All parameters are adjustable in the <strong>Sim Config</strong> dropdown.</p>
+<h3 id="spawning" class="tsd-anchor-link">Spawning<a href="#spawning" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Default</th>
+<th>Range</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Spawn Rate</td>
+<td>0.5 v/s</td>
+<td>0–5</td>
+<td>Vehicles per second per entry</td>
+</tr>
+<tr>
+<td>Max Vehicles</td>
+<td>100</td>
+<td>10–500</td>
+<td>Simultaneous vehicle limit</td>
+</tr>
+<tr>
+<td>Max Spawn Queue</td>
+<td>25</td>
+<td>—</td>
+<td>Per-entry demand cap</td>
+</tr>
+<tr>
+<td>Max Spawn Attempts/Frame</td>
+<td>20</td>
+<td>—</td>
+<td>Spawn loop limit</td>
+</tr>
+</tbody>
+</table>
+<h3 id="motion" class="tsd-anchor-link">Motion<a href="#motion" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Default</th>
+<th>Range</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Preferred Speed</td>
+<td>10 m/s</td>
+<td>1–30</td>
+<td>Target cruising speed</td>
+</tr>
+<tr>
+<td>Max Acceleration</td>
+<td>4 m/s²</td>
+<td>0.5–15</td>
+<td>Acceleration cap</td>
+</tr>
+<tr>
+<td>Max Deceleration</td>
+<td>8 m/s²</td>
+<td>0.5–15</td>
+<td>Emergency braking cap</td>
+</tr>
+<tr>
+<td>Comfort Deceleration</td>
+<td>4 m/s²</td>
+<td>—</td>
+<td>Preferred smooth braking</td>
+</tr>
+</tbody>
+</table>
+<h3 id="spacing" class="tsd-anchor-link">Spacing<a href="#spacing" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Default</th>
+<th>Range</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Min Bumper Gap</td>
+<td>0.5 m</td>
+<td>0–5</td>
+<td>Safety distance between vehicles</td>
+</tr>
+<tr>
+<td>Time Headway</td>
+<td>0.5 s</td>
+<td>0.1–5</td>
+<td>Speed-proportional following distance</td>
+</tr>
+<tr>
+<td>Stop Line Offset</td>
+<td>0.01 m</td>
+<td>0–2</td>
+<td>Where vehicles stop relative to lines</td>
+</tr>
+</tbody>
+</table>
+<h3 id="seed" class="tsd-anchor-link">Seed<a href="#seed" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Sim Seed</td>
+<td><code>&quot;default&quot;</code></td>
+<td>String seed for deterministic, reproducible simulations</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="tech-stack" class="tsd-anchor-link">Tech Stack<a href="#tech-stack" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<ul>
+<li><strong>Next.js 16</strong> (App Router, Turbopack)</li>
+<li><strong>React 19</strong> + <strong>TypeScript 5</strong></li>
+<li><strong>Three.js</strong> + <strong>React Three Fiber</strong> + <strong>Drei</strong> (3D rendering)</li>
+<li><strong>PeerJS</strong> (WebRTC peer-to-peer networking)</li>
+<li><strong>jsPDF</strong> (PDF report generation)</li>
+<li><strong>Tailwind CSS 4</strong> + <strong>shadcn/ui</strong> (interface components)</li>
+<li><strong>Lucide React</strong> (icons)</li>
+</ul>
+</div></div><div class="col-sidebar"><div class="page-menu"><div class="tsd-navigation settings"><details class="tsd-accordion"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-chevronDown"></use></svg><h3>Settings</h3></summary><div class="tsd-accordion-details"><div class="tsd-filter-visibility"><span class="settings-label">Member Visibility</span><ul id="tsd-filter-options"><li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-protected" name="protected"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Protected</span></label></li><li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-inherited" name="inherited" checked/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Inherited</span></label></li><li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-external" name="external"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>External</span></label></li></ul></div><div class="tsd-theme-toggle"><label class="settings-label" for="tsd-theme">Theme</label><select id="tsd-theme"><option value="os">OS</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></details></div><details open class="tsd-accordion tsd-page-navigation"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-chevronDown"></use></svg><h3>On This Page</h3></summary><div class="tsd-accordion-details"><a href="#jme-junction-modeller-expanded"><span>JME — <wbr/>Junction <wbr/>Modeller <wbr/>Expanded</span></a><ul><li><a href="#table-of-contents"><span>Table of <wbr/>Contents</span></a></li><li><a href="#getting-started"><span>Getting <wbr/>Started</span></a></li><li><a href="#modes"><span>Modes</span></a></li><li><a href="#building-junctions"><span>Building <wbr/>Junctions</span></a></li><li><ul><li><a href="#intersection-traffic-light-controlled"><span>Intersection (<wbr/>Traffic-<wbr/>Light <wbr/>Controlled)</span></a></li><li><a href="#roundabout-give-way-controlled"><span>Roundabout (<wbr/>Give-<wbr/>Way <wbr/>Controlled)</span></a></li><li><a href="#per-exit-configuration"><span>Per-<wbr/>Exit <wbr/>Configuration</span></a></li></ul></li><li><a href="#linking-exits"><span>Linking <wbr/>Exits</span></a></li><li><a href="#simulation"><span>Simulation</span></a></li><li><ul><li><a href="#vehicle-spawning"><span>Vehicle <wbr/>Spawning</span></a></li><li><a href="#vehicle-physics"><span>Vehicle <wbr/>Physics</span></a></li><li><a href="#simulation-controls"><span>Simulation <wbr/>Controls</span></a></li></ul></li><li><a href="#traffic-controllers"><span>Traffic <wbr/>Controllers</span></a></li><li><ul><li><a href="#intersection-controller"><span>Intersection <wbr/>Controller</span></a></li><li><a href="#roundabout-controller"><span>Roundabout <wbr/>Controller</span></a></li></ul></li><li><a href="#statistics-metrics"><span>Statistics &amp; <wbr/>Metrics</span></a></li><li><ul><li><a href="#per-junction-metrics"><span>Per-<wbr/>Junction <wbr/>Metrics</span></a></li><li><a href="#level-of-service-thresholds"><span>Level of <wbr/>Service <wbr/>Thresholds</span></a></li><li><a href="#global-aggregates"><span>Global <wbr/>Aggregates</span></a></li></ul></li><li><a href="#pdf-reports"><span>PDF <wbr/>Reports</span></a></li><li><a href="#save-load"><span>Save &amp; <wbr/>Load</span></a></li><li><ul><li><a href="#saving"><span>Saving</span></a></li><li><a href="#loading"><span>Loading</span></a></li></ul></li><li><a href="#multiplayer-p2p"><span>Multiplayer (<wbr/>P2<wbr/>P)</span></a></li><li><ul><li><a href="#hosting"><span>Hosting</span></a></li><li><a href="#joining"><span>Joining</span></a></li><li><a href="#how-it-works"><span>How <wbr/>It <wbr/>Works</span></a></li></ul></li><li><a href="#tutorial"><span>Tutorial</span></a></li><li><a href="#camera-controls"><span>Camera <wbr/>Controls</span></a></li><li><ul><li><a href="#view-mode"><span>View <wbr/>Mode</span></a></li><li><a href="#build-mode"><span>Build <wbr/>Mode</span></a></li></ul></li><li><a href="#car-classes"><span>Car <wbr/>Classes</span></a></li><li><a href="#simulation-config-reference"><span>Simulation <wbr/>Config <wbr/>Reference</span></a></li><li><ul><li><a href="#spawning"><span>Spawning</span></a></li><li><a href="#motion"><span>Motion</span></a></li><li><a href="#spacing"><span>Spacing</span></a></li><li><a href="#seed"><span>Seed</span></a></li></ul></li><li><a href="#tech-stack"><span>Tech <wbr/>Stack</span></a></li></ul></div></details></div><div class="site-menu"><nav class="tsd-navigation"><a href="modules.html">jme</a><ul class="tsd-small-nested-navigation" id="tsd-nav-container"><li>Loading...</li></ul></nav></div></div></div><footer><p class="tsd-generator">Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p></footer><div class="overlay"></div></body></html>
