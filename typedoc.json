@@ -1,5 +1,6 @@
 {
-  "entryPoints": ["src"],
+  "entryPoints": ["src/app/"],
   "entryPointStrategy": "expand",
-  "out": "docs"
+  "out": "public/docs",
+  "readme": "README.md"
 }

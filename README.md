@@ -6,7 +6,7 @@ A 3D traffic simulation platform for designing, analysing, and visualising junct
 ![Three.js](https://img.shields.io/badge/Three.js-0.182-black?logo=three.js)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript)
 ![PeerJS](https://img.shields.io/badge/PeerJS-P2P-green)
-
+[![Documentation](https://img.shields.io/badge/API%20Docs-TypeDoc-3178c6)](https://rshields.xyz/docs)
 ---
 
 ## Table of Contents
