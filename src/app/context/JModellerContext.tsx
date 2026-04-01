@@ -8,7 +8,7 @@
 
 "use client";
 
-import React, { createContext, useContext, useState, ReactNode, useRef, useEffect } from "react";
+import React, { createContext, useContext, useState, ReactNode, useRef, useEffect, useCallback } from "react";
 import { ExitRef, JModellerState, JunctionConfig, JunctionObjectTypes } from "../includes/types/types";
 import { defaultJunctionConfig, defaultSimConfig, FLOOR_Y_OFFSET } from "../includes/constants";
 import * as THREE from "three";
@@ -43,13 +43,15 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
     const [carsReady, setCarsReady] = useState<boolean>(false);
     const [followedVehicleId, setFollowedVehicleId] = useState<number | null>(null);
     const [followedVehicleStats, setFollowedVehicleStats] = useState<FollowedVehicleStats | null>(null);
+    const [fpvLookResetKey, setFpvLookResetKey] = useState(0);
+    const resetFpvLook = useCallback(() => setFpvLookResetKey(k => k + 1), []);
     const [isConfigConfirmed, setIsConfigConfirmed] = useState<boolean>(false);
     const [simConfig, setSimConfig] = useState(defaultSimConfig);
     const [objectCounter, setObjectCounter] = useState(0);
     const [toolMode, setToolMode] = useState<"view" | "build">("view");
     const [showOverlayLabels, setShowOverlayLabels] = useState(true);
 
-    // P2P: receive config from host
+    // P2P: receive config from host and apply junction/sim settings as a client
     const { connections, isHost } = usePeer();
     useEffect(() => {
         if (isHost) return;
@@ -324,6 +326,8 @@ export const JModellerProvider = ({ children }: { children: ReactNode }) => {
             setFollowedVehicleId,
             followedVehicleStats,
             setFollowedVehicleStats,
+            fpvLookResetKey,
+            resetFpvLook,
             isConfigConfirmed,
             confirmConfig,
             resetConfig,

@@ -95,6 +95,7 @@ const TutorialTooltip: FC<{
     const ref = useRef<HTMLDivElement>(null);
     const [clamped, setClamped] = useState<CSSProperties>({});
 
+    // Clamp the tooltip position so it stays within the viewport margins
     useEffect(() => {
         const el = ref.current;
         if (!el) return;

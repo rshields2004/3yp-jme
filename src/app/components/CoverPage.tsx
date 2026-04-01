@@ -37,6 +37,7 @@ const CoverPage = ({ onContinueAction, initialSessionCode = "", onLoadSaveAction
     const { joinHost, isConnecting, connectionError, connections } = usePeer();
     const [loadError, setLoadError] = useState<string | null>(null);
 
+    // Auto-join the session if a session code was provided in the URL
     useEffect(() => {
         if (initialSessionCode) {
             setJoinCode(initialSessionCode);
@@ -52,6 +53,7 @@ const CoverPage = ({ onContinueAction, initialSessionCode = "", onLoadSaveAction
         joinHost(joinCode.trim());
     };
 
+    // Remove the session code from the URL when a connection error occurs
     useEffect(() => {
         if (connectionError) {
             const url = new URL(window.location.href);
@@ -62,6 +64,7 @@ const CoverPage = ({ onContinueAction, initialSessionCode = "", onLoadSaveAction
 
     const isConnected = connections.length > 0;
 
+    // Automatically proceed to the app once a peer connection is established
     useEffect(() => {
         if (isConnected) {
             onContinueAction();

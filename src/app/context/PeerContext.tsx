@@ -179,6 +179,7 @@ export const PeerProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
     };
 
+    // Periodically check for disconnected peers by comparing last-seen timestamps (host only)
     useEffect(() => {
         if (!isHost) return;
 

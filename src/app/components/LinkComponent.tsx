@@ -49,7 +49,7 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
     const prevLinkInfoRef = useRef<LinkInfo>(null);
 
 
-    // Precompute lane info
+    // Precompute lane info (width, count, inbound lanes) from the two linked exit configs
     const linkInfo: LinkInfo | null = useMemo(() => {
         if (!config1 || !config2) {
             return null;
@@ -78,6 +78,7 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
 
     const laneRefsPool = useRef<React.RefObject<ThickLineHandle | null>[]>([]);
 
+    // Create or reuse refs for each lane line's ThickLine handle, expanding the pool as needed
     const laneRefs = useMemo(() => {
         if (!linkInfo) return [];
 
@@ -92,7 +93,7 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
         return laneRefsPool.current.slice(0, count);
     }, [linkInfo]);
 
-    // Precompute lane offsets once
+    // Precompute lateral offsets for each lane divider line
     const laneOffsets = useMemo(() => {
         if (!linkInfo) return [];
         const offsets: number[] = [];
@@ -119,6 +120,7 @@ export const LinkComponent = ({ link, config1, config2, yOffset = 0 }: LinkCompo
         return new THREE.Vector3().crossVectors(up, d).normalize();
     };
 
+    // Flag that geometry needs rebuilding on every render (consumed by useFrame)
     useEffect(() => {
         needsUpdateRef.current = true;
     });

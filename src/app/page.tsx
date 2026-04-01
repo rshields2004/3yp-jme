@@ -77,6 +77,7 @@ const AppContent = ({ onExit, loadedSave }: { onExit: () => void; loadedSave?: S
         tutorial.start();
     };
 
+    // Apply a loaded save file by halting the simulation and restoring junction/sim config
     useEffect(() => {
         if (!loadedSave) {
             return;
@@ -201,6 +202,7 @@ const Page = () => {
     const [mobileBypass, setMobileBypass] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
 
+    // Read the session code from the URL query parameter on initial mount
     useEffect(() => {
         const code = new URLSearchParams(window.location.search).get("s") ?? "";
         setSessionCode(code);
@@ -210,6 +212,7 @@ const Page = () => {
         setIsMobile(window.innerWidth < 768);
     }, []);
 
+    // Check viewport width on mount and on resize to detect mobile devices
     useEffect(() => {
         checkMobile();
         window.addEventListener("resize", checkMobile);

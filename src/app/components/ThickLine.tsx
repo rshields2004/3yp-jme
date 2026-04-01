@@ -75,7 +75,7 @@ export const ThickLine = forwardRef<ThickLineHandle, ThickLineProps>(
             setAmber: () => { if (!materialRef.current) return; materialRef.current.color.set("yellow"); },
         }));
 
-        // Create line once on mount, never recreate
+        // Create the Line2 object (geometry + material) once on mount and dispose on unmount
         useEffect(() => {
             if (!groupRef.current) return;
 
@@ -101,8 +101,7 @@ export const ThickLine = forwardRef<ThickLineHandle, ThickLineProps>(
             };
         }, []); // Only run once on mount
 
-        // Update all properties whenever they change
-        // 1) Geometry update (depends ONLY on points)
+        // Update line geometry whenever the points array changes, recomputing line distances
         useEffect(() => {
             if (!geometryRef.current || !lineRef.current) return;
 
@@ -124,7 +123,7 @@ export const ThickLine = forwardRef<ThickLineHandle, ThickLineProps>(
             lineRef.current.computeLineDistances();
             }, [points]);
 
-            // 2) Material update (does NOT depend on points)
+            // Update material properties (colour, width, dash settings) when any visual prop changes
             useEffect(() => {
             if (!materialRef.current) return;
 

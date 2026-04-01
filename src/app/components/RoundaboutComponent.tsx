@@ -57,6 +57,7 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, name, initialTransfo
         toolMode
     } = useJModellerContext();
 
+    // Compute roundabout geometry (island, ring lanes, exits, floor, edge tubes) whenever config changes
     const roundaboutMemo: RoundaboutStructure = useMemo(() => {
         const { numExits, exitConfig } = roundaboutConfig;
 
@@ -109,6 +110,7 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, name, initialTransfo
         };
     }, [roundaboutConfig, id]);
 
+    // Register the group with the context and apply its initial transform when geometry is rebuilt
     useEffect(() => {
         const group = groupRef.current;
         if (!group) { 

@@ -58,7 +58,7 @@ const buildSegmentLabel = (
  * @returns the rendered traffic simulation overlay
  */
 export const TrafficSimulation = () => {
-    const { junction, junctionObjectRefs, simIsRunning, stats, setStats, carsReady, setCarsReady, followedVehicleId, setFollowedVehicleId, setFollowedVehicleStats, simIsPaused, simConfig, showOverlayLabels } = useJModellerContext();
+    const { junction, junctionObjectRefs, simIsRunning, stats, setStats, carsReady, setCarsReady, followedVehicleId, setFollowedVehicleId, setFollowedVehicleStats, simIsPaused, simConfig, showOverlayLabels, fpvLookResetKey, resetFpvLook } = useJModellerContext();
     const { scene, camera, gl } = useThree();
     const simIsPausedRef = useRef(simIsPaused);
     const [isInitialised, setisInitialised] = useState(false);
@@ -72,6 +72,12 @@ export const TrafficSimulation = () => {
     const prevDtRef = useRef(FIXED_DT);
     const raycasterRef = useRef(new THREE.Raycaster());
     const smoothedYawRef = useRef<number | null>(null);
+
+    // Drag-to-look state for FPV
+    const fpvYawOffsetRef = useRef(0);
+    const fpvPitchOffsetRef = useRef(0);
+    const fpvDraggingRef = useRef(false);
+    const fpvLastMouseRef = useRef({ x: 0, y: 0 });
 
     /**
      * Fixed-step accumulator.
@@ -87,6 +93,7 @@ export const TrafficSimulation = () => {
     const wasRunningRef = useRef(false);
     const vehicleManagerRef = useRef<VehicleManager | null>(null);
 
+    // Sync the paused flag into a ref so the frame loop can read it without re-rendering
     useEffect(() => {
         simIsPausedRef.current = simIsPaused;
     }, [simIsPaused]);
@@ -291,7 +298,7 @@ export const TrafficSimulation = () => {
         console.log("Traffic simulation cleaned up");
     }, [scene, setStats]);
 
-    // Handle simulation start/stop
+    // Initialise or clean up the simulation when simIsRunning toggles
     useEffect(() => {
         if (simIsRunning && !wasRunningRef.current) {
             initialiseSimulation();
@@ -302,7 +309,7 @@ export const TrafficSimulation = () => {
         wasRunningRef.current = simIsRunning;
     }, [simIsRunning, initialiseSimulation, cleanupSimulation]);
 
-    // Toggle debug routes visibility
+    // Show or hide debug route lines when the toggle or initialisation state changes
     useEffect(() => {
         if (debugRoutesGroupRef.current) {
             debugRoutesGroupRef.current.visible = showDebugRoutes;
@@ -311,14 +318,14 @@ export const TrafficSimulation = () => {
         }
     }, [showDebugRoutes, isInitialised, createDebugRoutes]);
 
-    // Update simulation config when it changes in the UI
+    // Push updated simulation config to the VehicleManager when settings change in the UI
     useEffect(() => {
         if (vehicleManagerRef.current) {
             vehicleManagerRef.current.updateConfig(simConfig);
         }
     }, [simConfig]);
 
-    // Double-click handler for selecting a vehicle to follow
+    // Attach a double-click handler on the canvas to raycast and follow a clicked vehicle
     useEffect(() => {
         if (!simIsRunning) return;
 
@@ -366,13 +373,17 @@ export const TrafficSimulation = () => {
         };
     }, [simIsRunning, camera, gl, setFollowedVehicleId]);
 
-    // Keyboard handler for exiting first-person view (Backspace)
+    // Keyboard handler for exiting first-person view (Backspace) and resetting camera look (C)
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.key === "Backspace" && followedVehicleId !== null) {
                 event.preventDefault();
                 setFollowedVehicleId(null);
                 console.log("Exited first-person view");
+            }
+            if ((event.key === "c" || event.key === "C") && followedVehicleId !== null) {
+                fpvYawOffsetRef.current = 0;
+                fpvPitchOffsetRef.current = 0;
             }
         };
 
@@ -381,6 +392,44 @@ export const TrafficSimulation = () => {
             window.removeEventListener("keydown", handleKeyDown);
         };
     }, [followedVehicleId, setFollowedVehicleId]);
+
+    // Reset look offsets when entering/exiting FPV or when resetFpvLook is triggered
+    useEffect(() => {
+        fpvYawOffsetRef.current = 0;
+        fpvPitchOffsetRef.current = 0;
+    }, [followedVehicleId, fpvLookResetKey]);
+
+    // Drag-to-look mouse handlers for FPV
+    useEffect(() => {
+        if (followedVehicleId === null) return;
+
+        const canvas = gl.domElement;
+        const onPointerDown = (e: PointerEvent) => {
+            fpvDraggingRef.current = true;
+            fpvLastMouseRef.current = { x: e.clientX, y: e.clientY };
+        };
+        const onPointerMove = (e: PointerEvent) => {
+            if (!fpvDraggingRef.current) return;
+            const dx = e.clientX - fpvLastMouseRef.current.x;
+            const dy = e.clientY - fpvLastMouseRef.current.y;
+            fpvLastMouseRef.current = { x: e.clientX, y: e.clientY };
+            fpvYawOffsetRef.current -= dx * 0.003;
+            fpvPitchOffsetRef.current -= dy * 0.003;
+            fpvPitchOffsetRef.current = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, fpvPitchOffsetRef.current));
+        };
+        const onPointerUp = () => {
+            fpvDraggingRef.current = false;
+        };
+
+        canvas.addEventListener("pointerdown", onPointerDown);
+        window.addEventListener("pointermove", onPointerMove);
+        window.addEventListener("pointerup", onPointerUp);
+        return () => {
+            canvas.removeEventListener("pointerdown", onPointerDown);
+            window.removeEventListener("pointermove", onPointerMove);
+            window.removeEventListener("pointerup", onPointerUp);
+        };
+    }, [followedVehicleId, gl]);
 
     // Clear followed vehicle when simulation stops
     useEffect(() => {
@@ -415,10 +464,13 @@ export const TrafficSimulation = () => {
             if (vehicle) {
                 const carPos = vehicle.model.position.clone();
 
-                // Derive heading from a point 8 m ahead on the route rather
+                // Derive heading from a point ahead on the route rather
                 // than from model.rotation.y, which jumps at sharp waypoint
                 // corners inside intersections.
-                const lookAheadPt = vm.getPositionAhead(vehicle, 8);
+                // Scale look-ahead distance by speed so the camera doesn't
+                // swing around corners before the car actually turns.
+                const headingLookAhead = Math.min(8, vehicle.speed * 1.0);
+                const lookAheadPt = headingLookAhead > 0.5 ? vm.getPositionAhead(vehicle, headingLookAhead) : null;
                 let rawYaw: number | null = null;
                 if (lookAheadPt) {
                     const dx = lookAheadPt.x - carPos.x;
@@ -461,8 +513,15 @@ export const TrafficSimulation = () => {
                     carPos.z + forward.z * forwardOffset
                 );
 
-                const lookAt = carPos.clone().add(forward.multiplyScalar(lookAheadDistance));
-                lookAt.y = carPos.y + 1;
+                // Apply user drag-to-look yaw/pitch offsets
+                const totalYaw = carRotation + fpvYawOffsetRef.current;
+                const pitch = fpvPitchOffsetRef.current;
+                const lookDir = new THREE.Vector3(
+                    Math.sin(totalYaw) * Math.cos(pitch),
+                    Math.sin(pitch),
+                    Math.cos(totalYaw) * Math.cos(pitch)
+                );
+                const lookAt = camera.position.clone().add(lookDir.multiplyScalar(lookAheadDistance));
                 camera.lookAt(lookAt);
 
                 // Sample vehicle telemetry (throttled with main stats sampler)
@@ -533,7 +592,7 @@ export const TrafficSimulation = () => {
         }
     });
 
-    // Sync stats to React state outside the render loop
+    // Periodically sync simulation stats from the ref into React state (outside the render loop)
     useEffect(() => {
         const id = window.setInterval(() => {
             const s = statsRef.current;
@@ -546,7 +605,7 @@ export const TrafficSimulation = () => {
         return () => window.clearInterval(id);
     }, [setStats]);
 
-    // Sync followed vehicle stats to React state outside the render loop
+    // Periodically sync followed-vehicle telemetry from the ref into React state
     useEffect(() => {
         const id = window.setInterval(() => {
             startTransition(() => {

@@ -346,6 +346,7 @@ const SelectionPanel = () => {
     const [collapsed, setCollapsed] = useState(false);
     const isOpen = selectedObjects.length > 0;
 
+    // Expand the panel whenever a new selection is made
     useEffect(() => {
         if (isOpen) setCollapsed(false);
     }, [isOpen]);

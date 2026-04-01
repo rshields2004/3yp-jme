@@ -13,6 +13,7 @@ function Slider({
   max = 100,
   ...props
 }: React.ComponentProps<typeof SliderPrimitive.Root>) {
+  // Derive the slider thumb values from controlled value, defaultValue, or fallback to full range
   const _values = React.useMemo(
     () =>
       Array.isArray(value)

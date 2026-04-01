@@ -54,6 +54,7 @@ export const IntersectionComponent = ({ id, intersectionConfig, name, initialTra
     } = useJModellerContext();
 
 
+    // Compute the intersection geometry (exits, stop lines, floor, edge tubes) whenever config changes
     const intersectionMemo: IntersectionStructure = useMemo(() => {
 
         const exitInfo = intersectionConfig.exitConfig.map((exitConfig, exitIndex) => {
@@ -83,6 +84,7 @@ export const IntersectionComponent = ({ id, intersectionConfig, name, initialTra
 
     
 
+    // Register the group with the context and apply its initial transform when geometry is rebuilt
     useEffect(() => {
         const group = groupRef.current;
         if (!group) {
@@ -114,17 +116,17 @@ export const IntersectionComponent = ({ id, intersectionConfig, name, initialTra
 
 
 
+    // Create a stable array of refs for stop-line ThickLine handles, one per exit
     const stopLineRefs: React.RefObject<ThickLineHandle | null>[] = useMemo(
         () => intersectionMemo.exitInfo.map(() => React.createRef<ThickLineHandle>()),
         [intersectionMemo.exitInfo]
     );
 
 
+    // Map stop-line refs into userData so the simulation can colour them by entry key
     useEffect(() => {
         const group = groupRef.current;
         if (!group) return;
-
-        // This will be read by the simulation tick to colour stop lines
         if (!group.userData.stopLineRefsByEntryKey) {
             group.userData.stopLineRefsByEntryKey = {};
         }

@@ -167,6 +167,8 @@ export type JModellerState = {
     setFollowedVehicleId: React.Dispatch<React.SetStateAction<number | null>>;
     followedVehicleStats: FollowedVehicleStats | null;
     setFollowedVehicleStats: React.Dispatch<React.SetStateAction<FollowedVehicleStats | null>>;
+    fpvLookResetKey: number;
+    resetFpvLook: () => void;
     
     isConfigConfirmed: boolean;
     confirmConfig: () => void;

@@ -227,7 +227,7 @@ const AppHeader = ({ onExitAction, panelOpen = false, onMenuHeightChangeAction, 
         selectedExits, setSelectedExits,
         selectedObjects, setSelectedObjects,
         objectCounter, setObjectCounter,
-        followedVehicleId, followedVehicleStats,
+        followedVehicleId, setFollowedVehicleId, followedVehicleStats, resetFpvLook,
         toolMode, setToolMode,
         showOverlayLabels, setShowOverlayLabels,
     } = useJModellerContext();
@@ -235,6 +235,7 @@ const AppHeader = ({ onExitAction, panelOpen = false, onMenuHeightChangeAction, 
     const statsRef = useRef(stats);
     statsRef.current = stats;
 
+    // Measure and report the dropdown panel height whenever the open menu or relevant layout state changes
     useEffect(() => {
         if (!openMenu) {
             onMenuHeightChangeAction?.(0);
@@ -285,6 +286,7 @@ const AppHeader = ({ onExitAction, panelOpen = false, onMenuHeightChangeAction, 
         isConfigConfirmed,
     });
 
+    // Attach incoming-data handler on the client's peer connection to process host messages
     useEffect(() => {
         if (isHost) return;
         const conn = connections[0];
@@ -294,6 +296,7 @@ const AppHeader = ({ onExitAction, panelOpen = false, onMenuHeightChangeAction, 
         return () => { conn.off("data", handler); };
     }, [connections, isHost]);
 
+    // Send initial config to each newly connected peer (host only)
     useEffect(() => {
         if (!isHost) return;
         connections.forEach(conn => {
@@ -306,11 +309,13 @@ const AppHeader = ({ onExitAction, panelOpen = false, onMenuHeightChangeAction, 
         });
     }, [connections, isHost]);
 
+    // Broadcast updated config to all peers whenever junction, sim config, or confirmation state changes (host only)
     useEffect(() => {
         if (!isHost) return;
         send({ type: "INIT_CONFIG", appdata: buildSharedState() });
     }, [junction, simConfig, isConfigConfirmed]);
 
+    // Sync the session code URL parameter with the current host/client state
     useEffect(() => {
         if (isHost && hostId) {
             const url = new URL(window.location.href);
@@ -326,6 +331,7 @@ const AppHeader = ({ onExitAction, panelOpen = false, onMenuHeightChangeAction, 
     }, [isHost, hostId])
 
 
+    // Send periodic keep-alive pings to the host so it can detect disconnected clients
     useEffect(() => {
         if (isHost || connections.length === 0) return;
         const interval = setInterval(() => { send({ type: "PING" }); }, 3000);
@@ -334,6 +340,7 @@ const AppHeader = ({ onExitAction, panelOpen = false, onMenuHeightChangeAction, 
 
     // Reset state when a client loses connection
     const wasClientRef = useRef(false);
+    // Detect when this client disconnects from the host and reset simulation/config state
     useEffect(() => {
         const isClient = !isHost && connections.length > 0;
         if (isClient) {
@@ -480,7 +487,7 @@ const AppHeader = ({ onExitAction, panelOpen = false, onMenuHeightChangeAction, 
                         className="h-[26px] w-auto mr-4 select-none block"
                     />
 
-                    {(["session", "modes", "config"] as MenuId[]).map(id => {
+                    {(["modes", "session", "config"] as MenuId[]).map(id => {
                         const label = id === "config" ? "Sim Config" : id!.charAt(0).toUpperCase() + id!.slice(1);
                         const isOpen = openMenu === id;
                         const isClient = !isHost && connections.length > 0;
@@ -1027,8 +1034,19 @@ const AppHeader = ({ onExitAction, panelOpen = false, onMenuHeightChangeAction, 
                                 {followedVehicleStats?.segment ?? "—"}
                             </span>
                         </div>
-                        <div className="text-[11px] text-white/75 flex items-center gap-1.5">
-                            Press <Kbd>Backspace</Kbd> to exit first-person view
+                        <div className="flex items-center gap-4">
+                            <button
+                                onClick={() => resetFpvLook()}
+                                className="text-[11px] text-white/75 flex items-center gap-1.5 hover:text-white transition-colors cursor-pointer"
+                            >
+                                Press <Kbd>C</Kbd> to re-centre camera
+                            </button>
+                            <button
+                                onClick={() => setFollowedVehicleId(null)}
+                                className="text-[11px] text-white/75 flex items-center gap-1.5 hover:text-white transition-colors cursor-pointer"
+                            >
+                                Press <Kbd>Backspace</Kbd> to exit first-person view
+                            </button>
                         </div>
                     </div>
                 </DropdownPanel>

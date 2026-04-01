@@ -32,10 +32,12 @@ export const JunctionComponents = () => {
     const { camera, gl } = useThree();
     const controlRef = useRef<DragControls | null>(null);
 
-    // Keep a stable ref to snapToValidPosition so we don't recreate DragControls on every render
+    // Keep a stable ref to snapToValidPosition so DragControls callbacks always use the latest version
     const snapRef = useRef(snapToValidPosition);
+    // Sync the snap ref on every render
     useEffect(() => { snapRef.current = snapToValidPosition; });
 
+    // Initialise DragControls for junction objects with drag and escape-key listeners
     useEffect(() => {
         if (!camera || !gl) return;
 
@@ -80,7 +82,7 @@ export const JunctionComponents = () => {
     
     
 
-    // In the event of a object selection changing, register the correct one with the drag controls
+    // Update which objects are draggable whenever the selection, tool mode, or config confirmation changes
     useEffect(() => {
         const controls = controlRef.current;
         if (!controls)  {
