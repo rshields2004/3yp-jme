@@ -550,7 +550,7 @@ const AppHeader = ({ onExitAction, panelOpen = false, onMenuHeightChangeAction, 
                                 setSimConfig(save.simConfig);
                                 setOpenMenu(null);
                             } catch {
-                                // user cancelled or bad file — silently ignore
+                                // user cancelled or bad file - silently ignore
                             }
                         }}
                     >
@@ -851,7 +851,7 @@ const AppHeader = ({ onExitAction, panelOpen = false, onMenuHeightChangeAction, 
                 <DropdownPanel panelOpen={isPanelOpen} fullHeight>
                     {isClientConnected && (
                         <p className="text-xs text-zinc-500 mb-3 tracking-wide">
-                            VIEW ONLY — config is controlled by the host
+                            VIEW ONLY - config is controlled by the host
                         </p>
                     )}
                     <div
@@ -1015,12 +1015,12 @@ const AppHeader = ({ onExitAction, panelOpen = false, onMenuHeightChangeAction, 
                     <div className="flex flex-col items-center gap-3">
                         <div className="flex gap-10 items-end flex-wrap justify-center">
                             {[
-                                ["SPEED", followedVehicleStats ? `${(followedVehicleStats.speed * 3.6).toFixed(1)} km/h` : "—"],
-                                ["TARGET", followedVehicleStats ? `${(followedVehicleStats.preferredSpeed * 3.6).toFixed(1)} km/h` : "—"],
-                                ["ACCEL", followedVehicleStats ? `${followedVehicleStats.accel >= 0 ? "+" : ""}${followedVehicleStats.accel.toFixed(2)} m/s²` : "—"],
-                                ["PHASE", followedVehicleStats?.phase ?? "—"],
-                                ["TYPE", followedVehicleStats?.bodyType ?? "—"],
-                                ["ID", followedVehicleStats ? `#${followedVehicleStats.id}` : "—"],
+                                ["SPEED", followedVehicleStats ? `${(followedVehicleStats.speed * 3.6).toFixed(1)} km/h` : "-"],
+                                ["TARGET", followedVehicleStats ? `${(followedVehicleStats.preferredSpeed * 3.6).toFixed(1)} km/h` : "-"],
+                                ["ACCEL", followedVehicleStats ? `${followedVehicleStats.accel >= 0 ? "+" : ""}${followedVehicleStats.accel.toFixed(2)} m/s²` : "-"],
+                                ["PHASE", followedVehicleStats?.phase ?? "-"],
+                                ["TYPE", followedVehicleStats?.bodyType ?? "-"],
+                                ["ID", followedVehicleStats ? `#${followedVehicleStats.id}` : "-"],
                             ].map(([label, value]) => (
                                 <div key={String(label)} className="flex flex-col items-center gap-0.5">
                                     <span className="text-[11px] text-white/75 tracking-widest uppercase">{label}</span>
@@ -1031,7 +1031,7 @@ const AppHeader = ({ onExitAction, panelOpen = false, onMenuHeightChangeAction, 
                         <div className="flex items-center gap-2.5">
                             <span className="text-[11px] text-white/75 tracking-widest uppercase">ON</span>
                             <span className="text-[17px] font-semibold text-white/95">
-                                {followedVehicleStats?.segment ?? "—"}
+                                {followedVehicleStats?.segment ?? "-"}
                             </span>
                         </div>
                         <div className="flex items-center gap-4">

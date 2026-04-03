@@ -13,7 +13,7 @@ import { pointsEqual } from "./geometryUtils";
 
 /**
  * Concatenates all segment point arrays from a route into a single flat array.
- * Carefully avoids duplicating the shared boundary point between adjacent segments —
+ * Carefully avoids duplicating the shared boundary point between adjacent segments -
  * if the first point of a new segment equals the last point of the previous one, it is skipped.
  *
  * @param route - The route whose points should be extracted.
@@ -61,7 +61,7 @@ export const estimateRouteSpacing = (route: Route): number => {
 
 /**
  * Computes the cumulative start and end distance of each segment along the full route.
- * Think of this like mileage markers — segment 0 might span 0 m–15 m,
+ * Think of this like mileage markers - segment 0 might span 0 m–15 m,
  * segment 1 from 15 m–32 m, etc. Useful for vehicles that need to know their
  * absolute progress along a route.
  *

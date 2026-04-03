@@ -98,7 +98,7 @@ export const laneKeyForSegment = (
         if (isRoundabout) {
             return `lane:roundabout:${junctionId}`;
         }
-        return ""; // Normal intersection — ignore inside phase
+        return ""; // Normal intersection - ignore inside phase
     }
     const toKey = `${seg.to.structureID}-${seg.to.exitIndex}-${seg.to.direction}-${seg.to.laneIndex}`;
     const fromKey = `${seg.from.structureID}-${seg.from.exitIndex}-${seg.from.direction}-${seg.from.laneIndex}`;

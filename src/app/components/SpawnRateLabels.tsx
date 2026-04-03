@@ -115,7 +115,7 @@ export const SpawnRateLabels = ({ junctionGroups, stats, positionsCache, routes,
                                                 {(() => {
                                                     const obj = junction.junctionObjects.find(o => o.id === structureData.id);
                                                     return obj ? `${obj.type} ${obj.name}` : structureData.id.slice(0, 8);
-                                                })()} — Exit {exitIndex + 1}
+                                                })()} - Exit {exitIndex + 1}
                                             </div>
                                             <div style={{
                                                 display: "flex", justifyContent: "space-between",

@@ -85,7 +85,7 @@ export class Vehicle {
             this.currentSegment = route.segments[0];
         }
 
-        // Placeholder defaults — always overwritten by VehicleManager
+        // Placeholder defaults - always overwritten by VehicleManager
         // using the seeded RNG so behaviour is reproducible.
         this.maxAccel = 3.0;
         this.maxDecel = 6.0;

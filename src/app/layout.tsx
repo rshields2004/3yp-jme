@@ -1,6 +1,6 @@
 /**
  * layout.tsx
- * Root layout — sets the HTML shell, loads the JetBrains Mono font,
+ * Root layout - sets the HTML shell, loads the JetBrains Mono font,
  * applies the dark theme, and wraps children in a TooltipProvider.
  */
 import type { Metadata } from "next";

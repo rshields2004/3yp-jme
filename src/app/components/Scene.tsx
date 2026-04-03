@@ -242,7 +242,7 @@ const Scene = forwardRef<SceneHandle>((_, ref) => {
 
 
     useFrame((_, delta) => {
-        // FPV active: TrafficSimulation owns the camera — skip all
+        // FPV active: TrafficSimulation owns the camera - skip all
         //    OrbitControls updates & lerps to avoid fighting with it.
         //    Also force-disable the controls object so the drei internal
         //    useFrame (priority -1) won't call controls.update() either.
@@ -258,7 +258,7 @@ const Scene = forwardRef<SceneHandle>((_, ref) => {
             const ready = pendingFrameCount.current > 30; // ~500ms at 60fps, exceeds 300ms transition
 
             if (ready) {
-                // Canvas has resized — now compute the camera position
+                // Canvas has resized - now compute the camera position
                 const pending = pendingTopDownRef.current;
                 pendingTopDownRef.current = null;
 

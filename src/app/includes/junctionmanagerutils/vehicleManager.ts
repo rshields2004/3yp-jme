@@ -119,7 +119,7 @@ export class VehicleManager {
 
         this.cfg = { ...defaultSimConfig, ...cfg };
 
-        // Build spawn state — must come after cfg is set
+        // Build spawn state - must come after cfg is set
         this.spawnState = createSpawnState(this.routes);
     }
 
@@ -186,7 +186,7 @@ export class VehicleManager {
      * @returns the structure ID, or `null` if no ID could be resolved
      */
     private getGroupId(group: THREE.Group): string | null {
-        // New nested format — checked via getStructureData which already handles both types
+        // New nested format - checked via getStructureData which already handles both types
         const data = this.getStructureData(group);
         if (data) return data.id;
 
@@ -429,7 +429,7 @@ export class VehicleManager {
 
     /**
      * Main update loop of the simulation, handles all car movements.
-     * @param dt Time delta — change in time since last call
+     * @param dt Time delta - change in time since last call
      * @param junctionObjectRefs The refs of junction objects for controller construction
      */
     public update(dt: number, junctionObjectRefs: React.RefObject<THREE.Group<THREE.Object3DEventMap>[]>): void {
@@ -806,7 +806,7 @@ export class VehicleManager {
                 // Find position of stop point if we need to stop
                 if (vehicle.currentSegment?.phase === "approach" && stoplineSpeed < vehicle.preferredSpeed) {
                     // For roundabouts: a committed vehicle must NEVER be
-                    // clamped back to the stop line — that causes the
+                    // clamped back to the stop line - that causes the
                     // visual teleport-back glitch.
                     const jKey = vehicle.currentSegment?.to?.structureID;
                     const isCommittedRoundabout = jKey
@@ -1110,7 +1110,7 @@ export class VehicleManager {
     }
 
 
-    // computeIdmAccel removed — now using shared implementation from physics/idm.ts
+    // computeIdmAccel removed - now using shared implementation from physics/idm.ts
     // Call site: computeIdmAccel(v, desiredSpeed, leaderSpeed, gap, this.cfg)
 
 
@@ -1182,7 +1182,7 @@ export class VehicleManager {
             if (iAmRecentlyEnteredRL && myEntryKeyRL) {
                 const { recentlyEntered: otherRecentlyEntered, entryKey: otherEntryKey } = this.getRoundaboutEntryStatus(other);
                 if (otherRecentlyEntered && otherEntryKey === myEntryKeyRL) {
-                    continue; // both near entry — skip
+                    continue; // both near entry - skip
                 }
             }
 
@@ -1286,7 +1286,7 @@ export class VehicleManager {
      */
     private nearestRingLaneIndex(laneMidRadii: number[], radius: number): number {
         if (laneMidRadii.length <= 1) {
-            // Only one (or zero) rings — always index 0
+            // Only one (or zero) rings - always index 0
             return 0;
         }
 
@@ -1339,7 +1339,7 @@ export class VehicleManager {
     private roundaboutCoordFromS(v: Vehicle, sValue: number): number {
         const laneKey = v.laneKey;
         if (!laneKey || !isRoundaboutLaneKey(laneKey)) {
-            // Not a roundabout lane — fall back to linear s-coordinate
+            // Not a roundabout lane - fall back to linear s-coordinate
             return sValue;
         }
 
@@ -1347,7 +1347,7 @@ export class VehicleManager {
 
         const pos = this.getPointAtS(v.route, sValue);
         if (!pos) {
-            // Cannot determine world position at this s — return input
+            // Cannot determine world position at this s - return input
             return sValue;
         }
 
@@ -1365,7 +1365,7 @@ export class VehicleManager {
     private laneCoordFromS(v: Vehicle, sValue: number): number {
         const seg = v.currentSegment;
         if (!seg || !v.laneKey) {
-            // Missing segment or lane key — cannot convert, return sValue
+            // Missing segment or lane key - cannot convert, return sValue
             return sValue;
         }
 
@@ -1390,7 +1390,7 @@ export class VehicleManager {
     }
 
     // SEGMENT AND LANE-KEY TRACKING
-    // laneKeyForSegment removed — now using shared implementation from helpers/segmentHelpers.ts
+    // laneKeyForSegment removed - now using shared implementation from helpers/segmentHelpers.ts
     // Call site: laneKeyForSegment(seg, this.roundaboutControllers)
 
     /**
@@ -1816,7 +1816,7 @@ export class VehicleManager {
      *
      * KEY DESIGN: A vehicle commits to entering the roundabout once it is
      * within braking distance of the stop line AND a safe gap exists.
-     * Once committed the decision is IRREVERSIBLE — the vehicle will
+     * Once committed the decision is IRREVERSIBLE - the vehicle will
      * proceed through the entry smoothly.  Circulating traffic that
      * arrives after the commitment is handled by the circulating
      * give-way rules (inside-roundabout merge logic), NOT by yanking
@@ -1849,7 +1849,7 @@ export class VehicleManager {
 
         const distToStopline = stopS - v.s;
 
-        // Already committed — proceed unconditionally.
+        // Already committed - proceed unconditionally.
         // Once committed the vehicle MUST continue into the roundabout.
         // Re-checking the gap would cause the vehicle to oscillate
         // (cross the line → brake → snap back) which is exactly the
@@ -1860,7 +1860,7 @@ export class VehicleManager {
             return targetSpeed;
         }
 
-        // Not yet committed — evaluate gap.────
+        // Not yet committed - evaluate gap.────
         const entryAngle = this.getEntryAngleForRoundabout(junctionKey, entryKey);
         if (entryAngle === undefined) return targetSpeed;
 
@@ -1875,7 +1875,7 @@ export class VehicleManager {
             // COMMIT ZONE: commit as soon as the vehicle can no longer
             // comfortably stop before the stop line.  This prevents the
             // old behaviour where the car would coast up to the line,
-            // get hard-clamped, wait one frame, THEN commit — which
+            // get hard-clamped, wait one frame, THEN commit - which
             // looked like a stutter and was vulnerable to gap-flicker.
             const brakingDist = this.stoppingDistance(v.speed, v);
             const commitMargin = Math.max(brakingDist * 1.2, v.length);
@@ -1885,18 +1885,18 @@ export class VehicleManager {
                 controller.commitVehicle(v.id, entryPosition, entryKey);
             }
             // Whether just committed or still coasting toward the
-            // commit zone, allow full speed — the gap is clear.
+            // commit zone, allow full speed - the gap is clear.
             return targetSpeed;
         }
 
-        // Gap NOT clear — brake to stop at the line.
+        // Gap NOT clear - brake to stop at the line.
         if (distToStopline > 0) {
             const decel = v.maxDecel * 0.7;
             const stoppingSpeed = Math.sqrt(2 * decel * Math.max(0.1, distToStopline));
             return Math.min(targetSpeed, stoppingSpeed);
         }
 
-        // At or past the stop line with no clear gap — full stop.
+        // At or past the stop line with no clear gap - full stop.
         return 0;
     }
 

@@ -82,7 +82,7 @@ export type EdgePart = {
 };
 
 /**
- * An edge in the junction graph — either internal (within a junction) or a link (between junctions)
+ * An edge in the junction graph - either internal (within a junction) or a link (between junctions)
  */
 export type Edge = { kind: "internal"; to: Node; parts: EdgePart[] } | { kind: "link"; to: Node; points: Tuple3[] };
 

@@ -4,7 +4,7 @@
  * Computes longitudinal acceleration for a vehicle based on its current
  * speed, desired speed, and the gap to the vehicle ahead.
  *
- * Reference: Treiber, Hennecke & Helbing (2000) — "Congested Traffic States
+ * Reference: Treiber, Hennecke & Helbing (2000) - "Congested Traffic States
  * in Empirical Observations and Microscopic Simulations".
  */
 

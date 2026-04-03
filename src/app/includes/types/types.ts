@@ -16,7 +16,7 @@ import { SimulationStats, SimConfig, Tuple3, FollowedVehicleStats } from "./simu
  */
 export type LaneLineProperties = {
     /**
-     * Line pattern — solid or dashed
+     * Line pattern - solid or dashed
      */
     pattern: "solid" | "dashed";
     /**

@@ -248,7 +248,7 @@ export const IntersectionComponent = ({ id, intersectionConfig, name, initialTra
                 </mesh>
             ))}
 
-            {/* Bounding ring — visible in build mode */}
+            {/* Bounding ring - visible in build mode */}
             {toolMode === "build" && (
                 <mesh
                     key={`i-${id}-bounding`}

@@ -1,6 +1,6 @@
 /**
  * page.tsx
- * Root page component — orchestrates the cover page, mobile gate,
+ * Root page component - orchestrates the cover page, mobile gate,
  * and main application content (canvas, header, panels).
  */
 "use client";
@@ -118,7 +118,7 @@ const AppContent = ({ onExit, loadedSave }: { onExit: () => void; loadedSave?: S
                 <Scene ref={sceneRef} />
             </Canvas>
             <SelectionPanel />
-            {/* Zoom buttons — plain DOM, always bottom-right of viewport */}
+            {/* Zoom buttons - plain DOM, always bottom-right of viewport */}
             <div style={{ position: "fixed", bottom: "1.5rem", right: "1.5rem", display: "flex", flexDirection: "column", gap: 4, zIndex: 40 }}>
                 <button style={{ ...zoomBtnStyle, borderRadius: "6px 6px 2px 2px" }}
                     onMouseEnter={e => { e.currentTarget.style.color = "rgba(255,255,255,0.95)"; e.currentTarget.style.background = "rgba(255,255,255,0.07)"; }}

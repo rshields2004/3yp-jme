@@ -2,7 +2,7 @@
  * simulationHelpers.ts
  *
  * Visual side-effect helpers that synchronise the Three.js scene with the
- * simulation state — e.g. updating stop-line colours to reflect traffic
+ * simulation state - e.g. updating stop-line colours to reflect traffic
  * signal phases at intersections.
  */
 

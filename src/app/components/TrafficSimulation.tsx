@@ -20,6 +20,7 @@ import { SpawnRateLabels } from "./SpawnRateLabels";
 import { loadCarModels } from "../includes/junctionmanagerutils/helpers/carModelLoaders";
 import { getRoutePoints } from "../includes/junctionmanagerutils/routing/routeUtils";
 import { generateAllRoutes } from "../includes/junctionmanagerutils/routing/routeGeneration";
+import { graphToDot, buildNodePositions } from "../includes/junctionmanagerutils/routing/graphDebug";
 import { FIXED_DT, MAX_TICKS_PER_FRAME } from "../includes/constants";
 
 /**
@@ -171,11 +172,15 @@ export const TrafficSimulation = () => {
 
             junctionObjectRefs.current.forEach((g) => g.updateWorldMatrix(true, true));
 
-            const { routes: generatedRoutes } = generateAllRoutes(junction, junctionObjectRefs.current, {
+            const { routes: generatedRoutes, graph, starts, ends } = generateAllRoutes(junction, junctionObjectRefs.current, {
                 maxSteps: 30,
                 disallowUTurn: true,
                 spacing: 0.01,
             });
+
+            // DEBUG: copy DOT output from console, paste into https://dreampuf.github.io/GraphvizOnline/ (select neato engine)
+            const positions = buildNodePositions(junction, junctionObjectRefs.current);
+            console.log("[GraphDebug DOT]\n" + graphToDot(graph, starts, ends, positions, junction));
 
             setRoutes(generatedRoutes);
             console.log(`Generated ${generatedRoutes.length} routes`);
@@ -441,7 +446,7 @@ export const TrafficSimulation = () => {
     }, [simIsRunning, setFollowedVehicleId]);
 
     /**
-     * Main update loop — runs every rendered frame.
+     * Main update loop - runs every rendered frame.
      *
      * DETERMINISM NOTE:
      * The simulation is advanced in fixed-size FIXED_DT ticks rather than
@@ -450,7 +455,7 @@ export const TrafficSimulation = () => {
      * numerical updates and produce identical simulation state.
      *
      * Only the camera-follow and display-side work (stop-line colours,
-     * stats sampling) remain frame-rate dependent — they are purely visual
+     * stats sampling) remain frame-rate dependent - they are purely visual
      * and do not influence simulation state.
      */
     useFrame((_, delta) => {
@@ -528,11 +533,11 @@ export const TrafficSimulation = () => {
                 const accel = delta > 0 ? (vehicle.speed - prevSpeedRef.current) / delta : 0;
                 prevSpeedRef.current = vehicle.speed;
                 prevDtRef.current = delta;
-                const phaseRaw = (vehicle.currentSegment as { phase?: string } | null)?.phase ?? "—";
+                const phaseRaw = (vehicle.currentSegment as { phase?: string } | null)?.phase ?? "-";
                 const rawIdx: number = vehicle.model.userData?.carFileIndex ?? 0;
                 const segLabel = vehicle.currentSegment
                     ? buildSegmentLabel(vehicle.currentSegment, junction.junctionObjects)
-                    : "—";
+                    : "-";
                 vehicleStatsRef.current = {
                     id: vehicle.id,
                     speed: vehicle.speed,
@@ -566,7 +571,7 @@ export const TrafficSimulation = () => {
         }
 
         // Visual-only updates (after all ticks for this frame)
-        // Colouring stop lines is purely cosmetic — done once per rendered
+        // Colouring stop lines is purely cosmetic - done once per rendered
         // frame rather than once per sim tick for performance.
         applyIntersectionStopLineColours(junctionObjectRefs.current, vm);
 

@@ -580,7 +580,7 @@ const buildConfigPage = (pdf: jsPDF, junction: JunctionConfig, simConfig: SimCon
         pdf.setFontSize(7.5);
         setTextColor(pdf, COLOURS.white);
         const tag = obj.type === "roundabout" ? "RBT" : "INT";
-        pdf.text(`${tag} ${obj.name}  —  ${obj.config.numExits} exits`, cols[0] + 2, y);
+        pdf.text(`${tag} ${obj.name}  -  ${obj.config.numExits} exits`, cols[0] + 2, y);
         y += 5.5;
 
         let ri = 0;

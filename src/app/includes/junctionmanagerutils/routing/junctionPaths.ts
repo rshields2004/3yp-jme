@@ -184,7 +184,7 @@ export const generateRoundaboutPathParts = (
     if (entry.exitIndex === exit.exitIndex) {
         deltaCW = TAU;
     }
-    // Angles nearly identical but different exits means we wrapped around — treat as full loop
+    // Angles nearly identical but different exits means we wrapped around - treat as full loop
     if (deltaCW < 0.05 && entry.exitIndex !== exit.exitIndex) {
         deltaCW = TAU;
     }
@@ -225,7 +225,7 @@ export const generateRoundaboutPathParts = (
     const entryRadius = getStripMidRadius(entryStripIndex);
     const exitRadius = getStripMidRadius(exitStripIndex);
     const needsLaneChange = lanesCrossed > 0;
-    const y = midStartL.y; // Y coordinate stays flat — all ring travel is at road height
+    const y = midStartL.y; // Y coordinate stays flat - all ring travel is at road height
 
     const ringPoint = (angle: number, radius: number) =>
         new THREE.Vector3(Math.cos(angle) * radius, y, Math.sin(angle) * radius);
@@ -378,7 +378,7 @@ export const generateRoundaboutPathParts = (
         insidePoints.push(...exitBlend.getPoints(12).slice(1));
     }
     else {
-        // Very short path (e.g. adjacent exits) — direct Bézier
+        // Very short path (e.g. adjacent exits) - direct Bézier
         const chordLen = midStartL.distanceTo(midEndL) * 0.4;
         const directBlend = new THREE.CubicBezierCurve3(
             midStartL,

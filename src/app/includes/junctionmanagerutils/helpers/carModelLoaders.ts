@@ -18,7 +18,7 @@ import { carFiles } from "../../types/carTypes";
 let cachedCarModels: THREE.Group[] | null = null;
 
 /**
- * In-flight loading promise — prevents duplicate parallel fetches.
+ * In-flight loading promise - prevents duplicate parallel fetches.
  */
 let carModelsLoading: Promise<THREE.Group[]> | null = null;
 

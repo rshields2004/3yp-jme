@@ -13,6 +13,7 @@ import * as THREE from "three";
 import { useJModellerContext } from "../context/JModellerContext";
 import { Route, Tuple3 } from "../includes/types/simulation";
 import { generateAllRoutes } from "../includes/junctionmanagerutils/routing/routeGeneration";
+import { graphToDot, buildNodePositions } from "../includes/junctionmanagerutils/routing/graphDebug";
 import { getRoutePoints } from "../includes/junctionmanagerutils/routing/routeUtils";
 import { TRANSFORM_CHECK_INTERVAL } from "../includes/constants";
 
@@ -157,13 +158,17 @@ export const RouteDebug = ({
 
         junctionObjectRefs.current.forEach((g) => g.updateWorldMatrix(true, true));
 
-        const { routes } = generateAllRoutes(junction, junctionObjectRefs.current, {
+        const { routes, graph, starts, ends } = generateAllRoutes(junction, junctionObjectRefs.current, {
             maxSteps,
             disallowUTurn,
             spacing: 0.1,
             tension: 0.5,
             smoothPerSegment: true,
         });
+
+        // DEBUG: copy DOT output from console, paste into https://dreampuf.github.io/GraphvizOnline/ (select neato engine)
+        const positions = buildNodePositions(junction, junctionObjectRefs.current);
+        console.log("[GraphDebug DOT]\n" + graphToDot(graph, starts, ends, positions, junction));
 
         const filtered = routes.filter((r) => {
             const pts = getRoutePoints(r);

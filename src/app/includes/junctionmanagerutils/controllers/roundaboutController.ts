@@ -300,7 +300,7 @@ export class RoundaboutController {
         }
 
         // Entering vehicles cross ALL ring lanes, so every circulating
-        // vehicle — inner or outer — must be checked with the full gap
+        // vehicle - inner or outer - must be checked with the full gap
         // threshold.  We also check proximity at each lane radius so that
         // an inner-lane vehicle approaching from the right is detected
         // even when it is far from the outer-lane entry point.
@@ -331,7 +331,7 @@ export class RoundaboutController {
 
             const distance = info.position.distanceTo(laneEntryPos);
 
-            // Hard minimum gap — no vehicle may be this close regardless of
+            // Hard minimum gap - no vehicle may be this close regardless of
             // heading or speed.
             if (distance < this.MIN_GAP_DISTANCE) {
                 return false;

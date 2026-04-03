@@ -185,7 +185,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     {
         id: "explore-sim-config",
         title: "Customise Simulation Settings",
-        description: "Adjust any parameters you like — spawn rate, max vehicles, preferred speed, car class weights, and more. Close the menu when you're happy.",
+        description: "Adjust any parameters you like - spawn rate, max vehicles, preferred speed, car class weights, and more. Close the menu when you're happy.",
         target: "[data-dropdown-panel]",
         action: "interact",
         position: "top",
@@ -249,7 +249,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     {
         id: "tutorial-complete",
         title: "Tutorial Complete!",
-        description: "You've built and simulated your first junction network. Feel free to experiment — add more junctions, tweak the simulation config, or start a fresh layout.",
+        description: "You've built and simulated your first junction network. Feel free to experiment - add more junctions, tweak the simulation config, or start a fresh layout.",
         target: "",
         action: "none",
         position: "top-right",

@@ -242,7 +242,7 @@ export const RoundaboutComponent = ({ id, roundaboutConfig, name, initialTransfo
                 </mesh>
             ))}
 
-            {/* Bounding ring — visible in build mode */}
+            {/* Bounding ring - visible in build mode */}
             {toolMode === "build" && (
                 <mesh
                     key={`r-${id}-bounding`}

@@ -241,11 +241,11 @@ export function modelIndicesForClass(cc: CarClass): number[] {
 }
 
 /**
- * Pre-computed index list cache keyed by body type — avoids re-scanning on every call.
+ * Pre-computed index list cache keyed by body type - avoids re-scanning on every call.
  */
 const _modelIndicesCache = new Map<string, number[]>();
 /**
- * Cached version of {@link modelIndicesForClass} — avoids re-scanning on every call.
+ * Cached version of {@link modelIndicesForClass} - avoids re-scanning on every call.
  *
  * @param cc - car class definition
  * @returns the generated array

@@ -96,10 +96,10 @@ const buildRouteFromSegments = (
  * and enumerates every possible route through it via depth-first search.
  *
  * Runs in four passes:
- *  1. **Internal routing** — edges between every in/out lane pair within each junction.
- *  2. **Link edges** — connects junctions through JunctionLink road segments.
- *  3. **Start/end identification** — finds spawn (unlinked in-lanes) and despawn (unlinked out-lanes) points.
- *  4. **DFS enumeration** — traces every valid path from spawn to despawn, building Route objects.
+ *  1. **Internal routing** - edges between every in/out lane pair within each junction.
+ *  2. **Link edges** - connects junctions through JunctionLink road segments.
+ *  3. **Start/end identification** - finds spawn (unlinked in-lanes) and despawn (unlinked out-lanes) points.
+ *  4. **DFS enumeration** - traces every valid path from spawn to despawn, building Route objects.
  *
  * @param junction - The junction configuration containing all objects and links.
  * @param junctionObjectRefs - Three.js group refs for each junction object.
@@ -232,7 +232,7 @@ export const generateAllRoutes = (
                 }
             }
             else if (numIncomingLanes < totalOutgoingLanes) {
-                // Case 2: More outgoing lanes — last incoming lane fans out to remaining outgoing
+                // Case 2: More outgoing lanes - last incoming lane fans out to remaining outgoing
                 let globalOutLane = 0;
                 for (const eOUT of availableExitIndices) {
                     for (let lOUT = 0; lOUT < outCount(exitConfigs[eOUT]); lOUT++) {
@@ -241,7 +241,7 @@ export const generateAllRoutes = (
                     }
                 }
             } else {
-                // Case 3: More incoming lanes — excess carried forward to later exits
+                // Case 3: More incoming lanes - excess carried forward to later exits
                 let remainingIncomingLanes = numIncomingLanes;
                 let currentIncomingLaneStart = 0;
 
