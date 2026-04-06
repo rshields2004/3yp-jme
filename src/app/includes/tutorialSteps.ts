@@ -39,7 +39,7 @@ export type TutorialStep = {
  * Ordered list of steps shown by the interactive tutorial overlay.
  */
 export const TUTORIAL_STEPS: TutorialStep[] = [
-    // ── 1. Switch to Build mode ───────────────────────────────────────
+    // 1. Switch to Build mode
     {
         id: "open-modes",
         title: "Open the Modes Menu",
@@ -59,7 +59,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
         autoAdvance: true,
     },
 
-    // ── 2. Add an intersection ────────────────────────────────────────
+    // 2. Add an intersection
     {
         id: "add-intersection",
         title: "Add an Intersection",
@@ -70,7 +70,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
         autoAdvance: true,
     },
 
-    // ── 3. Move the intersection to the left ──────────────────────────
+    // 3. Move the intersection to the left 
     {
         id: "drag-intersection",
         title: "Move the Intersection",
@@ -81,7 +81,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
         autoAdvance: false,
     },
 
-    // ── 4. Customise the intersection (more exits) ────────────────────
+    // 4. Customise the intersection (more exits) 
     {
         id: "select-intersection",
         title: "Select the Intersection",
@@ -101,7 +101,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
         autoAdvance: false,
     },
 
-    // ── 5. Add a roundabout ───────────────────────────────────────────
+    // 5. Add a roundabout 
     {
         id: "deselect",
         title: "Deselect the Intersection",
@@ -121,7 +121,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
         autoAdvance: true,
     },
 
-    // ── 6. Drag the roundabout ────────────────────────────────────────
+    // 6. Drag the roundabout 
     {
         id: "drag-roundabout",
         title: "Move the Roundabout",
@@ -132,7 +132,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
         autoAdvance: false,
     },
 
-    // ── 7. Create a link ──────────────────────────────────────────────
+    // 7. Create a link 
     {
         id: "select-first-exit",
         title: "Select the First Exit",
@@ -161,7 +161,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
         autoAdvance: true,
     },
 
-    // ── 8. Confirm config ─────────────────────────────────────────────
+    // 8. Confirm config 
     {
         id: "confirm-config",
         title: "Confirm Configuration",
@@ -172,7 +172,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
         autoAdvance: true,
     },
 
-    // ── 9. Customise simulation config ────────────────────────────────
+    // 9. Customise simulation config 
     {
         id: "open-sim-config",
         title: "Open Simulation Config",
@@ -192,7 +192,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
         autoAdvance: false,
     },
 
-    // ── 10. Play the simulation ───────────────────────────────────────
+    // 10. Play the simulation 
     {
         id: "close-sim-config",
         title: "Close the Config Menu",
@@ -212,7 +212,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
         autoAdvance: true,
     },
 
-    // ── 11. Stop the simulation ───────────────────────────────────────
+    // 11. Stop the simulation 
     {
         id: "stop-simulation",
         title: "Stop the Simulation",
@@ -223,7 +223,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
         autoAdvance: true,
     },
 
-    // ── 12. Download a save file ──────────────────────────────────────
+    // 12. Download a save file 
     {
         id: "download-save",
         title: "Download a Save File",
@@ -234,7 +234,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
         autoAdvance: true,
     },
 
-    // ── 13. Download a report ─────────────────────────────────────────
+    // 13. Download a report 
     {
         id: "download-report",
         title: "Download a Report",
@@ -245,7 +245,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
         autoAdvance: true,
     },
 
-    // ── Done ──────────────────────────────────────────────────────────
+    // Done 
     {
         id: "tutorial-complete",
         title: "Tutorial Complete!",

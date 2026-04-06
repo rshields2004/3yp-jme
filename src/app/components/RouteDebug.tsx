@@ -99,57 +99,22 @@ export const RouteDebug = ({
     const { junction, junctionObjectRefs } = useJModellerContext();
 
     const routesRef = useRef<Route[]>([]);
-    const idxRef = useRef(0);
     const visibleRef = useRef(false);
 
     const groupRef = useRef<THREE.Group | null>(null);
-    const lineRef = useRef<THREE.Line | null>(null);
-
-    // instanced boxes for segment-end markers
-    const boxesRef = useRef<THREE.InstancedMesh | null>(null);
-    const tempObjRef = useRef(new THREE.Object3D());
+    const linesRef = useRef<THREE.Line[]>([]);
 
     // matrix snapshots to detect transform changes
     const lastMatricesRef = useRef<Map<string, Float32Array>>(new Map());
     // Throttle transform checking to avoid performance issues
     const transformCheckAccumRef = useRef(0);
 
-    const setBoxesFromRoute = (route: Route, color: THREE.Color) => {
-        const inst = boxesRef.current;
-        if (!inst) return;
-
-        const mat = inst.material as THREE.MeshBasicMaterial;
-        mat.color.copy(color);
-
-        const dummy = tempObjRef.current;
-
-        const segs = route.segments ?? [];
-        const ends: Tuple3[] = [];
-        ends.push(segs[0].points[0]);
-        // box at end of each segment
-        for (const s of segs) {
-            const pts = s.points;
-            if (pts && pts.length) ends.push(pts[pts.length - 1]);
+    const clearLines = () => {
+        for (const line of linesRef.current) {
+            disposeLine(line);
+            groupRef.current?.remove(line);
         }
-
-        const count = Math.min(ends.length, inst.count);
-
-        for (let i = 0; i < count; i++) {
-            const [x, y, z] = ends[i];
-            dummy.position.set(x, y + yLift, z);
-            dummy.rotation.set(0, 0, 0);
-            dummy.updateMatrix();
-            inst.setMatrixAt(i, dummy.matrix);
-        }
-
-        // hide remaining instances
-        for (let i = count; i < inst.count; i++) {
-            dummy.position.set(1e9, 1e9, 1e9);
-            dummy.updateMatrix();
-            inst.setMatrixAt(i, dummy.matrix);
-        }
-
-        inst.instanceMatrix.needsUpdate = true;
+        linesRef.current = [];
     };
 
     const rebuildRoutes = (opts?: { keepIndex?: boolean }) => {
@@ -176,94 +141,54 @@ export const RouteDebug = ({
         });
         routesRef.current = filtered;
 
-        if (!opts?.keepIndex) {
-            idxRef.current = 0;
-        } else {
-            if (filtered.length === 0) idxRef.current = 0;
-            else idxRef.current = Math.min(idxRef.current, filtered.length - 1);
-        }
-
         // reset transform snapshots so we don't immediately "change-detect" our own rebuild
         lastMatricesRef.current.clear();
 
         // create group if needed
         if (!groupRef.current) {
             const g = new THREE.Group();
-            g.name = "RouteDebugPressToCycleGroup";
+            g.name = "RouteDebugAllRoutesGroup";
             g.visible = false;
             scene.add(g);
             groupRef.current = g;
         }
-
-        // create line if needed
-        if (!lineRef.current) {
-            const dummyGeom = new THREE.BufferGeometry();
-            const dummyMat = new THREE.LineBasicMaterial({ transparent: true, opacity: 0.95 });
-            const line = new THREE.Line(dummyGeom, dummyMat);
-            line.frustumCulled = false;
-            line.name = "RouteDebugLine";
-            groupRef.current.add(line);
-            lineRef.current = line;
-        }
-
-        // create instanced boxes if needed
-        if (!boxesRef.current) {
-            const geom = new THREE.BoxGeometry(boxSize, boxSize, boxSize);
-            const mat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.95 });
-            const inst = new THREE.InstancedMesh(geom, mat, maxBoxes);
-            inst.name = "RouteDebugSegmentEndBoxes";
-            inst.frustumCulled = false;
-            groupRef.current.add(inst);
-            boxesRef.current = inst;
-
-            // start hidden until a route is shown
-            const dummy = tempObjRef.current;
-            for (let i = 0; i < maxBoxes; i++) {
-                dummy.position.set(1e9, 1e9, 1e9);
-                dummy.updateMatrix();
-                inst.setMatrixAt(i, dummy.matrix);
-            }
-            inst.instanceMatrix.needsUpdate = true;
-        }
     };
 
-    const showRouteAtIndex = (i: number) => {
+    const showAllRoutes = () => {
         const routes = routesRef.current;
-        const line = lineRef.current;
         const group = groupRef.current;
-        if (!routes.length || !line || !group) return;
+        if (!routes.length || !group) return;
 
-        const idx = ((i % routes.length) + routes.length) % routes.length;
-        idxRef.current = idx;
+        clearLines();
 
-        const r = routes[idx];
-        const routePoints = getRoutePoints(r);
+        for (let i = 0; i < routes.length; i++) {
+            const r = routes[i];
+            const routePoints = getRoutePoints(r);
+            if (routePoints.length < 2) continue;
 
-        // Build line geometry (WORLD points)
-        const positions = new Float32Array(routePoints.length * 3);
-        for (let p = 0; p < routePoints.length; p++) {
-            positions[p * 3 + 0] = routePoints[p][0];
-            positions[p * 3 + 1] = routePoints[p][1] + yLift;
-            positions[p * 3 + 2] = routePoints[p][2];
+            const positions = new Float32Array(routePoints.length * 3);
+            for (let p = 0; p < routePoints.length; p++) {
+                positions[p * 3 + 0] = routePoints[p][0];
+                positions[p * 3 + 1] = routePoints[p][1] + yLift;
+                positions[p * 3 + 2] = routePoints[p][2];
+            }
+            const geom = new THREE.BufferGeometry();
+            geom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+
+            const col = colourForIndex(i);
+            const mat = new THREE.LineBasicMaterial({
+                color: col,
+                transparent: true,
+                opacity: 0.95,
+                depthTest: true,
+            });
+
+            const line = new THREE.Line(geom, mat);
+            line.frustumCulled = false;
+            line.name = `RouteDebugLine_${i}`;
+            group.add(line);
+            linesRef.current.push(line);
         }
-        const geom = new THREE.BufferGeometry();
-        geom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-
-        const col = colourForIndex(idx);
-
-        const newMat = new THREE.LineBasicMaterial({
-            color: col,
-            transparent: true,
-            opacity: 0.95,
-            depthTest: true,
-        });
-
-        disposeLine(line);
-        line.geometry = geom;
-        line.material = newMat;
-
-        // place boxes at segment ends
-        setBoxesFromRoute(r, col);
 
         group.visible = true;
         visibleRef.current = true;
@@ -275,26 +200,18 @@ export const RouteDebug = ({
         rebuildRoutes();
 
         if (visibleRef.current && routesRef.current.length) {
-            showRouteAtIndex(idxRef.current);
+            showAllRoutes();
         }
 
         const lastMatrices = lastMatricesRef.current;
 
         return () => {
-            if (lineRef.current) {
-                disposeLine(lineRef.current);
-                lineRef.current = null;
-            }
-            if (boxesRef.current) {
-                disposeInstanced(boxesRef.current);
-                boxesRef.current = null;
-            }
+            clearLines();
             if (groupRef.current) {
                 scene.remove(groupRef.current);
                 groupRef.current = null;
             }
             routesRef.current = [];
-            idxRef.current = 0;
             visibleRef.current = false;
 
             lastMatrices.clear();
@@ -341,7 +258,7 @@ export const RouteDebug = ({
         if (changed) {
             rebuildRoutes({ keepIndex: true });
             if (routesRef.current.length) {
-                showRouteAtIndex(idxRef.current);
+                showAllRoutes();
             }
         }
     });
@@ -365,11 +282,12 @@ export const RouteDebug = ({
             }
 
             if (!visibleRef.current) {
-                showRouteAtIndex(idxRef.current);
-                return;
+                showAllRoutes();
+            } else {
+                clearLines();
+                if (groupRef.current) groupRef.current.visible = false;
+                visibleRef.current = false;
             }
-
-            showRouteAtIndex(idxRef.current + 1);
         };
 
         window.addEventListener("keydown", onKeyDown);
