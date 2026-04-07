@@ -17,7 +17,8 @@ import { carClasses } from "../includes/types/carTypes";
 import { generateReport } from "../includes/reportGenerator";
 import {
     Play, Pause, Square, Check, RotateCcw,
-    ChevronDown, ChevronUp, Link2, Trash2, PlusSquare, Copy, LogOut, Settings2,
+    ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
+    Link2, Trash2, PlusSquare, Copy, LogOut, Settings2,
     Eye, EyeOff, Hammer, HelpCircle, ExternalLink, BookOpen,
     Download,
     Upload,
@@ -644,6 +645,35 @@ const AppHeader = ({ onExitAction, panelOpen = false, onMenuHeightChangeAction, 
                     >
                         {showOverlayLabels ? <Eye size={17} /> : <EyeOff size={17} />}
                     </IconBtn>
+
+                    {/* speed multiplier (visible while sim is running) */}
+                    {simIsRunning && (
+                        <>
+                            <Separator orientation="vertical" className="h-5 mx-0.5 bg-white/[0.08]" />
+                            <div className="flex items-center gap-0.5">
+                                <span className="text-[11px] text-white/60 whitespace-nowrap mr-1">Speed</span>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="size-6 text-white/60 hover:text-white hover:bg-white/10"
+                                    onClick={() => setSimConfig(prev => ({ ...prev, speedMultiplier: Math.max(1, (prev.speedMultiplier ?? 1) / 2) }))}
+                                    disabled={(simConfig.speedMultiplier ?? 1) <= 1}
+                                >
+                                    <ChevronLeft size={14} />
+                                </Button>
+                                <span className="text-[11px] text-white/92 tabular-nums w-8 text-center select-none">{simConfig.speedMultiplier ?? 1}x</span>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="size-6 text-white/60 hover:text-white hover:bg-white/10"
+                                    onClick={() => setSimConfig(prev => ({ ...prev, speedMultiplier: Math.min(64, (prev.speedMultiplier ?? 1) * 2) }))}
+                                    disabled={(simConfig.speedMultiplier ?? 1) >= 64}
+                                >
+                                    <ChevronRight size={14} />
+                                </Button>
+                            </div>
+                        </>
+                    )}
                 </div>
             </div>
 
@@ -873,6 +903,45 @@ const AppHeader = ({ onExitAction, panelOpen = false, onMenuHeightChangeAction, 
                             <SliderRowUi label="Max Vehicles" min={10} max={500} step={10} value={simConfig.spawning.maxVehicles} onChange={v => handleN(["spawning", "maxVehicles"], v)} displayValue={String(simConfig.spawning.maxVehicles)} />
                             <SliderRowUi label="Max Spawn Attempts" min={1} max={50} step={1} value={simConfig.spawning.maxSpawnAttemptsPerFrame} onChange={v => handleN(["spawning", "maxSpawnAttemptsPerFrame"], v)} displayValue={String(simConfig.spawning.maxSpawnAttemptsPerFrame)} />
                             <SliderRowUi label="Max Spawn Queue" min={5} max={200} step={5} value={simConfig.spawning.maxSpawnQueue} onChange={v => handleN(["spawning", "maxSpawnQueue"], v)} displayValue={String(simConfig.spawning.maxSpawnQueue)} />
+                            <SectionTitle>Simulation</SectionTitle>
+                            <div className="mb-2">
+                                <Label className="text-xs text-white/92 mb-1 block">Max Sim Time (s)</Label>
+                                <Input
+                                    type="number"
+                                    min={1}
+                                    step={1}
+                                    value={simConfig.maxSimTime ?? 3600}
+                                    onChange={e => {
+                                        const v = Math.max(1, Math.round(parseFloat(e.target.value) || 1));
+                                        setSimConfig(prev => ({ ...prev, maxSimTime: v }));
+                                    }}
+                                    className="h-8 w-28 text-xs bg-white/[0.04] border-white/[0.12] text-white/92 focus-visible:ring-white/20 tabular-nums"
+                                />
+                            </div>
+                            <div className="mb-2">
+                                <Label className="text-xs text-white/92 mb-1 block">Speed Multiplier</Label>
+                                <div className="flex items-center gap-1">
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="size-7 text-white/60 hover:text-white hover:bg-white/10 border border-white/[0.12]"
+                                        onClick={() => setSimConfig(prev => ({ ...prev, speedMultiplier: Math.max(1, (prev.speedMultiplier ?? 1) / 2) }))}
+                                        disabled={(simConfig.speedMultiplier ?? 1) <= 1}
+                                    >
+                                        <ChevronLeft size={14} />
+                                    </Button>
+                                    <span className="text-xs text-white/92 tabular-nums w-10 text-center select-none">{simConfig.speedMultiplier ?? 1}x</span>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="size-7 text-white/60 hover:text-white hover:bg-white/10 border border-white/[0.12]"
+                                        onClick={() => setSimConfig(prev => ({ ...prev, speedMultiplier: Math.min(64, (prev.speedMultiplier ?? 1) * 2) }))}
+                                        disabled={(simConfig.speedMultiplier ?? 1) >= 64}
+                                    >
+                                        <ChevronRight size={14} />
+                                    </Button>
+                                </div>
+                            </div>
                             <SectionTitle>Motion</SectionTitle>
                             <SliderRowUi label="Initial Speed" min={0} max={20} step={0.5} value={simConfig.motion.initialSpeed} onChange={v => handleN(["motion", "initialSpeed"], v)} displayValue={simConfig.motion.initialSpeed.toFixed(1)} />
                             <SliderRowUi label="Preferred Speed" min={1} max={30} step={0.5} value={simConfig.motion.preferredSpeed} onChange={v => handleN(["motion", "preferredSpeed"], v)} displayValue={simConfig.motion.preferredSpeed.toFixed(1)} />

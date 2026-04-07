@@ -210,6 +210,9 @@ export type SimConfig = {
 
     carClassOverrides: Record<string, CarClassOverride>;
 
+    maxSimTime: number; // max simulation time in seconds
+    speedMultiplier: number; // simulation speed multiplier (1 = real-time)
+
     controllers: {
         roundabout: {
             roundaboutMinGap: number;

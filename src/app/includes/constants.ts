@@ -217,6 +217,9 @@ export const defaultSimConfig: SimConfig = {
         yOffset: 0.01,    
     },
 
+    maxSimTime: 3600,
+    speedMultiplier: 1,
+
     carClassOverrides: defaultCarClassOverrides(),
     
     controllers: {

@@ -59,7 +59,7 @@ const buildSegmentLabel = (
  * @returns the rendered traffic simulation overlay
  */
 export const TrafficSimulation = () => {
-    const { junction, junctionObjectRefs, simIsRunning, stats, setStats, carsReady, setCarsReady, followedVehicleId, setFollowedVehicleId, setFollowedVehicleStats, simIsPaused, simConfig, showOverlayLabels, fpvLookResetKey, resetFpvLook } = useJModellerContext();
+    const { junction, junctionObjectRefs, simIsRunning, stats, setStats, carsReady, setCarsReady, followedVehicleId, setFollowedVehicleId, setFollowedVehicleStats, simIsPaused, simConfig, showOverlayLabels, fpvLookResetKey, resetFpvLook, haltSim } = useJModellerContext();
     const { scene, camera, gl } = useThree();
     const simIsPausedRef = useRef(simIsPaused);
     const [isInitialised, setisInitialised] = useState(false);
@@ -556,15 +556,25 @@ export const TrafficSimulation = () => {
 
         if (simIsPausedRef.current) return;
 
+        // Auto-stop: halt when elapsed time exceeds maxSimTime
+        const maxTime = simConfig.maxSimTime ?? 3600;
+        const currentStats = vehicleManagerRef.current?.getStats();
+        if (currentStats && currentStats.elapsedTime >= maxTime) {
+            haltSim();
+            return;
+        }
+
         // Fixed-step simulation advance
-        // Accumulate real elapsed time, then drain it in exact FIXED_DT steps.
-        // Both a 60 Hz and a 144 Hz device will execute the same integer number
-        // of ticks over any given simulated time period, producing bit-identical
-        // vehicle positions, controller states, and spawn sequences.
-        fixedAccRef.current += delta;
+        // Accumulate real elapsed time (scaled by speed multiplier), then drain
+        // it in exact FIXED_DT steps. Both a 60 Hz and a 144 Hz device will
+        // execute the same integer number of ticks over any given simulated time
+        // period, producing bit-identical vehicle positions, controller states,
+        // and spawn sequences.
+        fixedAccRef.current += delta * (simConfig.speedMultiplier ?? 1);
 
         let ticks = 0;
-        while (fixedAccRef.current >= FIXED_DT && ticks < MAX_TICKS_PER_FRAME) {
+        const maxTicks = MAX_TICKS_PER_FRAME * Math.max(1, Math.ceil(simConfig.speedMultiplier ?? 1));
+        while (fixedAccRef.current >= FIXED_DT && ticks < maxTicks) {
             vm.update(FIXED_DT, junctionObjectRefs);
             fixedAccRef.current -= FIXED_DT;
             ticks++;

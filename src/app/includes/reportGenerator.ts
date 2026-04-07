@@ -572,7 +572,20 @@ const buildConfigPage = (pdf: jsPDF, junction: JunctionConfig, simConfig: SimCon
     y += 4;
     y = sectionLabel(pdf, "Junction Objects", y, cols[0], COL_W);
 
-    for (const obj of junction.junctionObjects) {
+    for (let oi = 0; oi < junction.junctionObjects.length; oi++) {
+        const obj = junction.junctionObjects[oi];
+
+        // Pre-calculate height for this object to check overflow BEFORE drawing
+        const objHeight = 5.5 + 2 * 5.5 + obj.config.exitConfig.length * 5.5 + 3;
+        if (y + objHeight > PDF_PAGE_HEIGHT - 20) {
+            pdf.addPage();
+            currentPage++;
+            pageBackground(pdf);
+            pageHeader(pdf, "Configuration (cont.)", `Junction Objects continued`, currentPage, totalPages);
+            y = TOP;
+            y = sectionLabel(pdf, "Junction Objects (cont.)", y, cols[0], COL_W);
+        }
+
         // Object header chip
         setFill(pdf, obj.type === "roundabout" ? [30, 50, 40] : [30, 35, 55]);
         pdf.rect(cols[0], y - 3.5, COL_W, 5.5, "F");
@@ -596,17 +609,12 @@ const buildConfigPage = (pdf: jsPDF, junction: JunctionConfig, simConfig: SimCon
                 cols[0], y, COL_W, ri++ % 2 === 0);
         }
         y += 3;
-
-        // Overflow: start a new page for remaining objects
-        if (y > PDF_PAGE_HEIGHT - 20 && junction.junctionObjects.indexOf(obj) < junction.junctionObjects.length - 1) {
-            pdf.addPage();
-            currentPage++;
-            pageBackground(pdf);
-            pageHeader(pdf, "Configuration (cont.)", `Junction Objects continued`, currentPage, totalPages);
-            y = TOP;
-            y = sectionLabel(pdf, "Junction Objects (cont.)", y, cols[0], COL_W);
-        }
     }
+
+    // Columns 2 & 3 always render on the first config page
+    const firstConfigPageIdx = startPage;  // 1-based page number
+    // jsPDF pages are 1-indexed; switch back to the first config page
+    pdf.setPage(firstConfigPageIdx);
 
     // Column 2: Spawning + Motion + Spacing
     y = TOP;
@@ -698,6 +706,11 @@ const buildConfigPage = (pdf: jsPDF, junction: JunctionConfig, simConfig: SimCon
         vals.forEach((v, i) => pdf.text(v, cols[2] + CC_COLS[i], y));
         y += 5;
         if (y > PDF_PAGE_HEIGHT - 12) break;
+    }
+
+    // Navigate back to the last page so subsequent addPage() calls work correctly
+    if (currentPage > firstConfigPageIdx) {
+        pdf.setPage(currentPage);
     }
     return currentPage;
 }
@@ -895,12 +908,12 @@ export const generateReport = async (
     for (let i = 0; i < junction.junctionObjects.length; i++) {
         const obj = junction.junctionObjects[i];
         const objHeight = OBJ_HEADER + 2 * ROW_H + obj.config.exitConfig.length * ROW_H + 3;
-        estY += objHeight;
-        // Match buildConfigPage: overflow checked after drawing, skipped for last object
-        if (estY > PDF_PAGE_HEIGHT - 20 && i < junction.junctionObjects.length - 1) {
+        // Match buildConfigPage: overflow checked BEFORE drawing
+        if (estY + objHeight > PDF_PAGE_HEIGHT - 20) {
             extraConfigPages++;
-            estY = TOP + 7; // reset for new page
+            estY = TOP + 7; // reset for new page (section label overhead)
         }
+        estY += objHeight;
     }
     // Estimate stats overflow pages for per-junction breakdown
     const JUNCTION_BLOCK_H = 5.5 + 9 * ROW_H + 4; // chip + 9 rows + gap
