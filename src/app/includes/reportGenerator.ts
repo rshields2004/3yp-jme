@@ -602,7 +602,7 @@ const buildConfigPage = (pdf: jsPDF, junction: JunctionConfig, simConfig: SimCon
         // Per-exit summary (compact)
         for (let ei = 0; ei < obj.config.exitConfig.length; ei++) {
             const ec = obj.config.exitConfig[ei];
-            const spawn = ec.spawnRate != null ? `${ec.spawnRate.toFixed(1)} v/s` : "global";
+            const spawn = ec.spawnRate != null ? `${ec.spawnRate.toFixed(2)} v/s` : "global";
             y = kvRow(pdf,
                 `  Exit ${ei}`,
                 `${ec.laneCount} lanes (${ec.numLanesIn} in) · ${ec.exitLength}wu · ${spawn}`,
