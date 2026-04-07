@@ -311,10 +311,10 @@ const ExitRow = ({ j, exit, obj, globalSpawnRate, onLaneCount, onExitLength, onN
                     <SliderRow label="Lanes in" min={1} max={exit.laneCount - 1} step={1} value={exit.numLanesIn} onChange={onNumLanesIn} display={String(exit.numLanesIn)} />
                     <SliderRow
                         label="Spawn Rate (veh/s)"
-                        min={0} max={10} step={0.1}
+                        min={0} max={4} step={0.01}
                         value={exit.spawnRate ?? globalSpawnRate}
                         onChange={onSpawnRate}
-                        display={exit.spawnRate != null ? exit.spawnRate.toFixed(1) : `${globalSpawnRate.toFixed(1)} (global)`}
+                        display={exit.spawnRate != null ? exit.spawnRate.toFixed(2) : `${globalSpawnRate.toFixed(2)} (global)`}
                     />
                     {exit.spawnRate != null && (
                         <Button

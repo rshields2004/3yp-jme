@@ -869,7 +869,7 @@ const AppHeader = ({ onExitAction, panelOpen = false, onMenuHeightChangeAction, 
                                     className="h-8 text-xs bg-white/[0.04] border-white/[0.12] text-white/92 focus-visible:ring-white/20"
                                 />
                             </div>
-                            <SliderRowUi label="Spawn Rate (veh/s)" min={0} max={10} step={0.1} value={simConfig.spawning.spawnRate} onChange={v => handleN(["spawning", "spawnRate"], v)} displayValue={simConfig.spawning.spawnRate.toFixed(1)} />
+                            <SliderRowUi label="Spawn Rate (veh/s)" min={0} max={4} step={0.01} value={simConfig.spawning.spawnRate} onChange={v => handleN(["spawning", "spawnRate"], v)} displayValue={simConfig.spawning.spawnRate.toFixed(2)} />
                             <SliderRowUi label="Max Vehicles" min={10} max={500} step={10} value={simConfig.spawning.maxVehicles} onChange={v => handleN(["spawning", "maxVehicles"], v)} displayValue={String(simConfig.spawning.maxVehicles)} />
                             <SliderRowUi label="Max Spawn Attempts" min={1} max={50} step={1} value={simConfig.spawning.maxSpawnAttemptsPerFrame} onChange={v => handleN(["spawning", "maxSpawnAttemptsPerFrame"], v)} displayValue={String(simConfig.spawning.maxSpawnAttemptsPerFrame)} />
                             <SliderRowUi label="Max Spawn Queue" min={5} max={200} step={5} value={simConfig.spawning.maxSpawnQueue} onChange={v => handleN(["spawning", "maxSpawnQueue"], v)} displayValue={String(simConfig.spawning.maxSpawnQueue)} />
