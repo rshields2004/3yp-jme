@@ -7,10 +7,16 @@
  */
 
 import { Vehicle } from "./vehicle";
-import { JunctionObjectTypes } from "../types/types";
-import { SimulationStats, JunctionStats, JunctionStatsGlobal, LevelOfService } from "../types/simulation";
+import { JunctionObjectTypes, JunctionObject } from "../types/types";
+import { SimulationStats, JunctionStats, JunctionStatsGlobal, LevelOfService, SimConfig } from "../types/simulation";
 import { IntersectionController } from "./controllers/intersectionController";
 import { RoundaboutController } from "./controllers/roundaboutController";
+
+/**
+ * Saturation flow per lane in vehicles/second.
+ * Equivalent to ~1 800 veh/hr/lane (standard HCM value).
+ */
+const SAT_FLOW_PER_LANE = 0.5;
 
 // TYPES
 
@@ -58,6 +64,8 @@ export interface StatsContext {
     intersectionControllers: Map<string, IntersectionController>;
     roundaboutControllers: Map<string, RoundaboutController>;
     getDistToSegmentEnd: (v: Vehicle) => number;
+    junctionObjects: JunctionObject[];
+    simConfig: SimConfig;
 }
 
 // LEVEL OF SERVICE
@@ -106,8 +114,33 @@ export const collectStats = (ctx: StatsContext): { snapshot: SimulationStats; gl
             const c = ctx.junctionCounters.get(jid) ?? defaultJunctionCounter();
             const avgWait = c.waitCount > 0 ? c.totalWaitTime / c.waitCount : 0;
             const arrivalRate = ctx.elapsedTime > 0 ? c.entered / ctx.elapsedTime : 0;
-            const departureRate = ctx.elapsedTime > 0 ? c.exited / ctx.elapsedTime : 0;
-            const dos = departureRate > 0 ? arrivalRate / departureRate : 0;
+
+            // Compute theoretical capacity from junction geometry (lanes × saturation flow × green ratio)
+            const jObj = ctx.junctionObjects.find(o => o.id === jid);
+            const totalLanesIn = jObj
+                ? jObj.config.exitConfig.reduce((sum, ec) => sum + ec.numLanesIn, 0)
+                : 0;
+
+            let capacity: number;
+            if (type === "intersection") {
+                const ic = ctx.simConfig.controllers.intersection;
+                const nPhases = ctx.intersectionControllers.get(jid)?.getNumPhases() ?? 1;
+                if (nPhases <= 1) {
+                    // Always green — full saturation flow
+                    capacity = totalLanesIn * SAT_FLOW_PER_LANE;
+                } else {
+                    const phaseTime = ic.intersectionGreenTime + ic.intersectionAmberTime
+                        + ic.intersectionAllRedTime + ic.intersectionRedAmberTime;
+                    const cycleTime = nPhases * phaseTime;
+                    const greenRatio = cycleTime > 0 ? ic.intersectionGreenTime / cycleTime : 1;
+                    capacity = totalLanesIn * SAT_FLOW_PER_LANE * greenRatio;
+                }
+            } else {
+                // Roundabout — no signal loss, use full saturation flow
+                capacity = totalLanesIn * SAT_FLOW_PER_LANE;
+            }
+
+            const dos = capacity > 0 ? arrivalRate / capacity : 0;
             byId[jid] = {
                 id: jid,
                 type,

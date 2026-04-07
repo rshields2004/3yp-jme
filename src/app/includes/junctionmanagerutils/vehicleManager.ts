@@ -2268,6 +2268,8 @@ export class VehicleManager {
             intersectionControllers: this.intersectionControllers,
             roundaboutControllers: this.roundaboutControllers,
             getDistToSegmentEnd: (v) => this.getDistToSegmentEnd(v),
+            junctionObjects: this.junction.junctionObjects,
+            simConfig: this.cfg,
         });
         this.globalMaxQueueLength = result.globalMaxQueueLength;
         this.statsSnapshot = result.snapshot;

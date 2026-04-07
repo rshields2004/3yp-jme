@@ -171,4 +171,12 @@ export class IntersectionController {
     canNewVehicleEnter(laneKey: string): boolean {
         return this.isGreen(laneKey);
     }
+
+    /**
+     * Return the number of distinct signal phases (approach groups).
+     * @returns phase count (0 = no lanes, 1 = always green, >1 = cycling)
+     */
+    getNumPhases(): number {
+        return this.laneKeys.length;
+    }
 }
