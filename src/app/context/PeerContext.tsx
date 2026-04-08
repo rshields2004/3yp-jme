@@ -9,7 +9,7 @@
 import Peer, { DataConnection } from "peerjs";
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { NetMessage, PeerContextType } from "../includes/types/peer";
-import { PEER_CONNECTION_TIMEOUT, PEER_PING_INTERVAL, PEER_DISCONNECT_THRESHOLD } from "../includes/constants";
+import { PEER_CONNECTION_TIMEOUT, PEER_PING_INTERVAL, PEER_DISCONNECT_THRESHOLD, PEER_CONFIG } from "../includes/constants";
 
 
 /**
@@ -44,23 +44,7 @@ export const PeerProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const createHost = () => {
         setConnectionError(null);
         const code = Math.floor(100000 + Math.random() * 900000).toString();
-        const peer = new Peer(code, {
-            host: "rshields.xyz",
-            port: 443,
-            path: "/peerjs",
-            secure: true,
-            debug: 3,
-            config: {
-                iceServers: [
-                    { urls: "stun:stun.l.google.com:19302" },
-                    {
-                        urls: "turn:rshields.xyz:3478",
-                        username: "peeruser",
-                        credential: "strongpassword123"
-                    }
-                ]
-            }
-        });
+        const peer = new Peer(code, PEER_CONFIG);
         peerRef.current = peer;
         setIsHost(true);
 
@@ -100,23 +84,7 @@ export const PeerProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setConnectionError(null);
         setIsConnecting(true);
         
-        const peer = new Peer({
-            host: "rshields.xyz",
-            port: 443,
-            path: "/peerjs",
-            secure: true,
-            debug: 3,
-            config: {
-                iceServers: [
-                { urls: "stun:stun.l.google.com:19302" },
-                    {
-                        urls: "turn:rshields.xyz:3478",
-                        username: "peeruser",
-                        credential: "strongpassword123"
-                    }
-                ]
-            }
-        });
+        const peer = new Peer(PEER_CONFIG);
         peerRef.current = peer;
 
         peer.on('open', () => {

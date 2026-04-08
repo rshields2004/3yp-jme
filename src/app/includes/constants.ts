@@ -87,6 +87,28 @@ export const PEER_PING_INTERVAL = 5000;
  */
 export const PEER_DISCONNECT_THRESHOLD = 8000;
 
+/**
+ * PeerJS connection configuration shared by host and client.
+ * Update these values to point to your own PeerJS signalling, STUN, and TURN servers.
+ */
+export const PEER_CONFIG = {
+    host: "rshields.xyz",
+    port: 443,
+    path: "/peerjs",
+    secure: true,
+    debug: 3,
+    config: {
+        iceServers: [
+            { urls: "stun:stun.l.google.com:19302" },
+            {
+                urls: "turn:rshields.xyz:3478",
+                username: "peeruser",
+                credential: "strongpassword123"
+            }
+        ]
+    }
+};
+
 // TUTORIAL
 
 /**

@@ -2,6 +2,8 @@
 
 A 3D traffic simulation platform for designing, analysing, and visualising junction networks. Build intersections and roundabouts, connect them with road links, run realistic traffic simulations, and evaluate performance with industry-standard metrics - all in the browser.
 
+> **Try it now:** A live version is hosted at [https://rshields.xyz](https://rshields.xyz).
+
 ![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
 ![Three.js](https://img.shields.io/badge/Three.js-0.182-black?logo=three.js)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript)
@@ -221,7 +223,7 @@ Click the **Upload** button and select a `.jme` file. The current layout is repl
 
 JME supports real-time peer-to-peer collaboration via WebRTC (PeerJS).
 
-> **Note:** P2P works out of the box over a **local network (LAN)**. For connections across the internet, you will need to configure **port forwarding** and set up a **TURN server** and **PeerJS signalling server**.
+> **Note:** An **internet connection** is required for P2P functionality, as the signalling and TURN servers are hosted externally. To use your own servers, update the `PEER_CONFIG` constant in `src/app/includes/constants.ts` with your **PeerJS signalling server**, **STUN server**, and **TURN server** details.
 
 ### Hosting
 
