@@ -657,7 +657,7 @@ const AppHeader = ({ onExitAction, panelOpen = false, onMenuHeightChangeAction, 
                                     size="icon"
                                     className="size-6 text-white/60 hover:text-white hover:bg-white/10"
                                     onClick={() => setSimConfig(prev => ({ ...prev, speedMultiplier: Math.max(1, (prev.speedMultiplier ?? 1) / 2) }))}
-                                    disabled={(simConfig.speedMultiplier ?? 1) <= 1}
+                                    disabled={(simConfig.speedMultiplier ?? 1) <= 1 || isClientConnected}
                                 >
                                     <ChevronLeft size={14} />
                                 </Button>
@@ -667,7 +667,7 @@ const AppHeader = ({ onExitAction, panelOpen = false, onMenuHeightChangeAction, 
                                     size="icon"
                                     className="size-6 text-white/60 hover:text-white hover:bg-white/10"
                                     onClick={() => setSimConfig(prev => ({ ...prev, speedMultiplier: Math.min(64, (prev.speedMultiplier ?? 1) * 2) }))}
-                                    disabled={(simConfig.speedMultiplier ?? 1) >= 64}
+                                    disabled={(simConfig.speedMultiplier ?? 1) >= 64 || isClientConnected}
                                 >
                                     <ChevronRight size={14} />
                                 </Button>
@@ -926,7 +926,7 @@ const AppHeader = ({ onExitAction, panelOpen = false, onMenuHeightChangeAction, 
                                         size="icon"
                                         className="size-7 text-white/60 hover:text-white hover:bg-white/10 border border-white/[0.12]"
                                         onClick={() => setSimConfig(prev => ({ ...prev, speedMultiplier: Math.max(1, (prev.speedMultiplier ?? 1) / 2) }))}
-                                        disabled={(simConfig.speedMultiplier ?? 1) <= 1}
+                                        disabled={(simConfig.speedMultiplier ?? 1) <= 1 || isClientConnected}
                                     >
                                         <ChevronLeft size={14} />
                                     </Button>
@@ -936,7 +936,7 @@ const AppHeader = ({ onExitAction, panelOpen = false, onMenuHeightChangeAction, 
                                         size="icon"
                                         className="size-7 text-white/60 hover:text-white hover:bg-white/10 border border-white/[0.12]"
                                         onClick={() => setSimConfig(prev => ({ ...prev, speedMultiplier: Math.min(64, (prev.speedMultiplier ?? 1) * 2) }))}
-                                        disabled={(simConfig.speedMultiplier ?? 1) >= 64}
+                                        disabled={(simConfig.speedMultiplier ?? 1) >= 64 || isClientConnected}
                                     >
                                         <ChevronRight size={14} />
                                     </Button>
