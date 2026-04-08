@@ -8,14 +8,12 @@
 
 "use client";
 
-import React, { createContext, useContext, useState, ReactNode, useRef, useEffect, useCallback } from "react";
-import { ExitRef, JModellerState, JunctionConfig, JunctionObjectTypes } from "../includes/types/types";
+import { createContext, useContext, useState, ReactNode, useRef, useEffect, useCallback } from "react";
+import { ExitRef, JModellerState, JunctionConfig } from "../includes/types/types";
 import { defaultJunctionConfig, defaultSimConfig, FLOOR_Y_OFFSET } from "../includes/constants";
 import * as THREE from "three";
 import { SimulationStats } from "../includes/types/simulation";
 import { FollowedVehicleStats } from "../includes/types/simulation";
-import { IntersectionStructure } from "../includes/types/intersection";
-import { RoundaboutStructure } from "../includes/types/roundabout";
 import { getStructureData } from "../includes/utils";
 import { usePeer } from "./PeerContext";
 import { NetMessage } from "../includes/types/peer";

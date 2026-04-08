@@ -5,10 +5,10 @@
  */
 
 import { DataConnection } from "peerjs";
-import { IntersectionObject, IntersectionStructure } from "./intersection";
+import { IntersectionStructure } from "./intersection";
 import { RoundaboutStructure } from "./roundabout";
 import { SimConfig } from "./simulation";
-import { JunctionConfig, JunctionObject } from "./types"
+import { JunctionConfig } from "./types"
 
 // EXPORTED STRUCTURES
 

@@ -9,7 +9,7 @@ import { Billboard, Html } from "@react-three/drei";
 import { Route, SimConfig, SimulationStats } from "../includes/types/simulation";
 import * as THREE from "three";
 import { useJModellerContext } from "../context/JModellerContext";
-import { IntersectionConfig, IntersectionStructure } from "../includes/types/intersection";
+import { IntersectionStructure } from "../includes/types/intersection";
 import { RoundaboutStructure } from "../includes/types/roundabout";
 import { getStructureData } from "../includes/utils";
 

@@ -14,9 +14,7 @@ import { useFrame } from "@react-three/fiber";
 import { getExitWorldPosition, getStructureData } from "../includes/utils";
 import { ThickLine, ThickLineHandle } from "./ThickLine";
 import type { ExitConfig, JunctionLink, LinkStructure } from "../includes/types/types";
-import type { ExitStructure } from "../includes/types/intersection";
 import React from "react"
-import { RoundaboutExitStructure } from "../includes/types/roundabout";
 import { Tuple3 } from "../includes/types/simulation";
 
 type LinkComponentProps = {

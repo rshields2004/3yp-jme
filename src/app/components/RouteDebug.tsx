@@ -11,7 +11,7 @@ import { useEffect, useRef } from "react";
 import { useThree, useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { useJModellerContext } from "../context/JModellerContext";
-import { Route, Tuple3 } from "../includes/types/simulation";
+import { Route } from "../includes/types/simulation";
 import { generateAllRoutes } from "../includes/junctionmanagerutils/routing/routeGeneration";
 import { graphToDot, buildNodePositions } from "../includes/junctionmanagerutils/routing/graphDebug";
 import { getRoutePoints } from "../includes/junctionmanagerutils/routing/routeUtils";

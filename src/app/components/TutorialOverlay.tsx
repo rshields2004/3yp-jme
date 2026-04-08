@@ -7,7 +7,7 @@
 
 "use client";
 
-import React, { CSSProperties, FC, useRef, useEffect, useState } from "react";
+import { CSSProperties, FC, useRef, useEffect, useState } from "react";
 import { TutorialStep, TooltipPosition } from "../includes/tutorialSteps";
 import { TOOLTIP_GAP, TOOLTIP_WIDTH, VIEWPORT_MARGIN } from "../includes/constants";
 

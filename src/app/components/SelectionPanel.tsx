@@ -14,7 +14,6 @@ import { ExitConfig, ExitRef } from "../includes/types/types";
 import { ChevronDown, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { usePeer } from "../context/PeerContext";
 import { HEADER_HEIGHT } from "../includes/constants";

@@ -12,7 +12,6 @@ import { usePeer } from "../context/PeerContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { Settings2 } from "lucide-react";
 import { loadSaveFromFile, SaveFile } from "../includes/saveLoad";

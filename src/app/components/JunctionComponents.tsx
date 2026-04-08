@@ -16,7 +16,6 @@ import { useThree } from "@react-three/fiber";
 import { IntersectionComponent } from "./IntersectionComponent";
 import { RoundaboutComponent } from "./RoundaboutComponent";
 import { LinkComponent } from "./LinkComponent";
-import { getStructureData } from "../includes/utils";
 
 
 /**

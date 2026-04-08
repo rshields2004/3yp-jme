@@ -19,7 +19,6 @@ import { TrafficSimulation } from "./TrafficSimulation";
 import { RouteDebug } from "./RouteDebug";
 import * as THREE from "three";
 import { useFrame, useThree } from "@react-three/fiber";
-import { lerp } from "three/src/math/MathUtils.js";
 
 export type SceneHandle = {
     zoom: (factor: number) => void;

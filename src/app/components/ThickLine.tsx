@@ -7,7 +7,7 @@
 
 "use client";
 
-import React, { forwardRef, useRef, useImperativeHandle, useEffect } from "react";
+import { forwardRef, useRef, useImperativeHandle, useEffect } from "react";
 import * as THREE from "three";
 import { useThree, useFrame } from "@react-three/fiber";
 import { Line2 } from "three/addons/lines/Line2.js";

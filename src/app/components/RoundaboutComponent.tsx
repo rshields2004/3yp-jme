@@ -13,7 +13,6 @@ import * as THREE from "three";
 import { useJModellerContext } from "../context/JModellerContext";
 import { ThickLine } from "./ThickLine";
 import { generateEdgeTubesRound, generateExitMesh, generateLaneLinesRound, generateRingLines, generateRoundaboutFloorMesh, generateStopLineRound, generateTextPosition, getStructureData } from "../includes/utils";
-import React from "react";
 import { Text } from "@react-three/drei";
 import { ThreeEvent } from "@react-three/fiber";
 
